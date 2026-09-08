@@ -1,14 +1,13 @@
-import { Geist, Geist_Mono } from "next/font/google"
-
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils";
+import localFont from "next/font/local"
+// import { ThemeProvider } from "@/components/theme-provider"
+import { cn } from "@/lib/utils"
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'})
-
-const fontMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
+const pretendard = localFont({
+  src: "../public/fonts/pretendard/PretendardVariable.woff2",
+  display: "swap",
+  weight: "100 900",
+  variable: "--font-pretendard",
 })
 
 export default function RootLayout({
@@ -18,12 +17,13 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ko"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", geist.variable)}
+      className={cn("antialiased", pretendard.variable, "font-sans")}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        {children}
+        {/* <ThemeProvider></ThemeProvider> */}
       </body>
     </html>
   )
