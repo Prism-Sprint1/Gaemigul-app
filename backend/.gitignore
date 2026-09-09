@@ -16,3 +16,6 @@ wheels/
 
 # Locally cached API tokens
 .cache/
+
+# macOS
+.DS_Store
