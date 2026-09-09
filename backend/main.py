@@ -1,10 +1,12 @@
 from fastapi import FastAPI
+from src.backend.domain.calendar.routers.calendar import router as calendar_router
 
-# FastAPI 인스턴스 생성
 app = FastAPI()
 
 
-# 기본 헬스 체크 엔드 포인트
 @app.get("/")
 def read_root():
-    return {"message": "hello world"}
+    return {"message": "hello world입니다."}
+
+
+app.include_router(calendar_router)
