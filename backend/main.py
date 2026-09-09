@@ -1,9 +1,4 @@
 # main.py
-# FastAPI 인스턴스 생성
-# CORS 및 미들웨어 설정
-# 생명주기 이벤트
-# 기본 헬스 체크 엔드 포인트
-# 라우터 등록
 
 from contextlib import asynccontextmanager
 from zoneinfo import ZoneInfo
