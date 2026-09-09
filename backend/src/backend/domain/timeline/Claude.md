@@ -36,11 +36,12 @@ backend/src/backend/domain/timeline/
 │   ├── market_indicator.py    (지표 바 응답 형태)
 │   └── timeline.py            (아직 빈 파일 - 타임라인 이벤트 기능용, 미착수)
 └── services/
-    ├── kis_client.py            (한국투자증권 API 직접 호출)
     ├── market_hours.py          (지표별 장 운영시간 판단)
     ├── market_indicator_service.py  (캐시 관리 + 데이터 가공)
     └── timeline.py             (아직 빈 파일 - 타임라인 이벤트 기능용, 미착수)
 ```
+
+`kis_client.py`는 여러 도메인이 같이 쓸 수 있게 `backend/src/backend/core/kis_client.py`로 옮겨져 있다 — API 호출 파일은 도메인 안에 두지 않고 core에 모아서 전역으로 쓰는 것으로 팀 규칙이 정해졌다(2026-09-10).
 
 ## 최상단 지표 바 — 지금까지 만든 부분이 동작하는 순서
 
