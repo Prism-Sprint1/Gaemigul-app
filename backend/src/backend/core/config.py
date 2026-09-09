@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     kis_app_secret: str
     kis_base_url: str = "https://openapi.koreainvestment.com:9443"
 
+    # 아직 안 만든 사람도 있을 수 있어서 필수값 아님 — 없으면 앱은 정상적으로 뜨고,
+    # database.py의 get_supabase()를 실제로 호출하는 시점에만 에러가 난다.
+    supabase_url: str | None = None
+    supabase_key: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

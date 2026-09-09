@@ -11,6 +11,7 @@ dependencies = [
     "apscheduler>=3.11.3",
     "fastapi[standard]>=0.141.1",
     "pydantic-settings>=2.15.0",
+    "supabase>=2.31.0",
 ]
 
 [project.scripts]
