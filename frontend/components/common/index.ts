@@ -1,1 +1,5 @@
 export { default as Header } from "./Header"
+export { default as Sidebar } from "./Sidebar"
+export { default as SidebarNav } from "./SidebarNav"
+export { sidebarNavItems } from "./sidebar-nav-items"
+export type { SidebarNavItem } from "./sidebar-nav-items"

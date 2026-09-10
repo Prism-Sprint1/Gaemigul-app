@@ -3,6 +3,9 @@ import localFont from "next/font/local"
 // import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 
+import { Header } from "@/components/common"
+import { Sidebar } from "@/components/common"
+
 const pretendard = localFont({
   src: "../public/fonts/pretendard/PretendardVariable.woff2",
   display: "swap",
@@ -22,7 +25,11 @@ export default function RootLayout({
       className={cn("antialiased", pretendard.variable, "font-sans")}
     >
       <body>
-        {children}
+        <Header />
+        <div className="pt- flex">
+          <Sidebar />
+          <main>{children}</main>
+        </div>
         {/* <ThemeProvider></ThemeProvider> */}
       </body>
     </html>

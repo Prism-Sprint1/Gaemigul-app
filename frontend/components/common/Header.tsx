@@ -9,7 +9,7 @@ import { Info } from "lucide-react"
 
 export default function Header() {
   return (
-    <header className="left-00 fixed top-0 flex w-full">
+    <header className="left-00 top-0 flex w-full">
       <Link
         href={"/"}
         className="flex min-w-67.5 items-center justify-between pl-5"
