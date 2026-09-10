@@ -10,6 +10,8 @@ import {
   addWeeks,
   addYears,
   differenceInMinutes,
+  endOfMonth,
+  endOfWeek,
   format,
   getMonth,
   isSameDay,
@@ -88,6 +90,8 @@ type ContextType = {
   onDateSelect?: (date: Date) => void;
   enableHotkeys?: boolean;
   today: Date;
+  /** 국내 증시 휴장일 (연보라 표시) */
+  holidays: Date[];
 };
 
 const Context = createContext<ContextType>({} as ContextType);
@@ -104,6 +108,7 @@ type CalendarProps = {
   children: ReactNode;
   defaultDate?: Date;
   events?: CalendarEvent[];
+  holidays?: Date[];
   view?: View;
   locale?: Locale;
   enableHotkeys?: boolean;
@@ -121,6 +126,7 @@ const Calendar = ({
   onEventClick,
   onDateSelect,
   events: defaultEvents = [],
+  holidays = [],
   onChangeView,
 }: CalendarProps) => {
   const [view, setView] = useState<View>(_defaultMode);
@@ -166,6 +172,7 @@ const Calendar = ({
         onDateSelect,
         onChangeView,
         today: new Date(),
+        holidays,
       }}
     >
       {children}
@@ -339,8 +346,16 @@ const CalendarWeekView = () => {
 };
 
 const CalendarMonthView = () => {
-  const { date, view, events, locale, selectedDate, setSelectedDate, onDateSelect } =
-    useCalendar();
+  const {
+    date,
+    view,
+    events,
+    locale,
+    selectedDate,
+    setSelectedDate,
+    onDateSelect,
+    holidays,
+  } = useCalendar();
 
   const monthDates = useMemo(() => getDaysInMonth(date), [date]);
   const weekDays = useMemo(() => generateWeekdays(locale), [locale]);
@@ -349,13 +364,14 @@ const CalendarMonthView = () => {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="grid grid-cols-7 gap-px sticky top-0 bg-background border-b">
+      <div className="grid grid-cols-7 gap-px sticky top-0 bg-card border-b">
         {weekDays.map((day, i) => (
           <div
             key={day}
             className={cn(
-              'mb-2 pr-1 text-right text-xs text-muted-foreground sm:pr-2 sm:text-sm',
-              [0, 6].includes(i) && 'text-muted-foreground/50'
+              'mb-2 text-center text-xs font-medium text-muted-foreground sm:text-sm',
+              i === 0 && 'text-red-500',
+              i === 6 && 'text-blue-500'
             )}
           >
             {day}
@@ -369,6 +385,10 @@ const CalendarMonthView = () => {
           );
 
           const isSelected = !!selectedDate && isSameDay(selectedDate, _date);
+          const dow = _date.getDay();
+          const isWeekend = dow === 0 || dow === 6;
+          const isHoliday = holidays.some((h) => isSameDay(h, _date));
+          const inMonth = isSameMonth(date, _date);
 
           return (
             <button
@@ -378,17 +398,20 @@ const CalendarMonthView = () => {
                 onDateSelect?.(_date);
               }}
               className={cn(
-                'ring-1 p-1 text-left text-xs text-muted-foreground ring-border overflow-auto cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-2 sm:text-sm',
-                !isSameMonth(date, _date) && 'text-muted-foreground/50',
-                isSelected && 'bg-muted/40'
+                'relative flex flex-col items-start ring-1 p-0.5 text-left text-xs text-muted-foreground ring-border bg-card overflow-auto cursor-pointer transition-colors hover:bg-muted/50 active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-1 sm:text-sm',
+                (isWeekend || isHoliday) && 'bg-muted/70',
+                !inMonth && 'text-muted-foreground/50',
+                isSelected && 'z-10 bg-primary/10 ring-2 ring-primary'
               )}
               key={_date.toString()}
             >
               <span
                 className={cn(
-                  'size-6 grid place-items-center rounded-full mb-1 sticky top-0',
+                  'size-5 grid place-items-center rounded-full mb-0.5 sticky top-0 self-start text-xs tabular-nums sm:size-6 sm:text-sm',
+                  dow === 0 && (inMonth ? 'text-red-500' : 'text-red-500/40'),
+                  dow === 6 && (inMonth ? 'text-blue-500' : 'text-blue-500/40'),
                   isToday(_date) && 'bg-primary text-primary-foreground',
-                  isSelected && !isToday(_date) && 'ring-2 ring-primary text-foreground'
+                  isSelected && !isToday(_date) && 'bg-primary/15 font-semibold text-primary ring-1 ring-primary'
                 )}
               >
                 {format(_date, 'd')}
@@ -629,15 +652,14 @@ const TimeTable = () => {
 };
 
 const getDaysInMonth = (date: Date) => {
-  const startOfMonthDate = startOfMonth(date);
-  const startOfWeekForMonth = startOfWeek(startOfMonthDate, {
-    weekStartsOn: 0,
-  });
+  // 해당 월이 걸쳐 있는 주까지만 표시 (다음 달만으로 채워지는 마지막 주는 제외)
+  const start = startOfWeek(startOfMonth(date), { weekStartsOn: 0 });
+  const end = endOfWeek(endOfMonth(date), { weekStartsOn: 0 });
 
-  let currentDate = startOfWeekForMonth;
+  let currentDate = start;
   const calendar = [];
 
-  while (calendar.length < 42) {
+  while (currentDate <= end) {
     calendar.push(new Date(currentDate));
     currentDate = addDays(currentDate, 1);
   }
