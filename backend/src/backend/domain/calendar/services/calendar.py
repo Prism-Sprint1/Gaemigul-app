@@ -27,10 +27,13 @@ _KST = ZoneInfo("Asia/Seoul")
 # 시각이 확인되지 않은 카테고리는 이 표에 넣지 않는다 - 그러면 time=None으로 처리된다.
 _RELEASE_TIME_ET: dict[str, dt_time] = {
     "CPI": dt_time(8, 30),
+    # PPI도 CPI와 같은 발표 기관(BLS)이 같은 고정 시각(08:30 ET)에 발표한다 - 임의 추정 아님
+    "PPI": dt_time(8, 30),
 }
 
 _TITLES: dict[str, str] = {
     "CPI": "미국 소비자물가지수(CPI)",
+    "PPI": "미국 생산자물가지수(PPI)",
 }
 
 _SUMMARIES: dict[str, str] = {
@@ -39,11 +42,23 @@ _SUMMARIES: dict[str, str] = {
         "대표적인 물가 지표입니다. 물가가 예상보다 높게 나오면 인플레이션 우려가 커지고 미국의 금리 "
         "인하 기대가 약해질 수 있어 주식시장에 부담으로 작용할 수 있습니다."
     ),
+    "PPI": (
+        "미국 생산자물가지수(PPI)는 기업이 상품과 서비스를 생산하면서 받는 가격의 변화를 보여주는 "
+        "지표입니다. 생산 단계의 물가 흐름을 확인할 수 있어 향후 소비자물가와 인플레이션 흐름을 "
+        "판단할 때 참고합니다."
+    ),
 }
 
 # summary 맨 앞에 "OOOO년 O월 OO 자료입니다."를 붙일 때 쓰는, "미국" 없는 지표 이름
 _PERIOD_LABELS: dict[str, str] = {
     "CPI": "소비자물가지수(CPI)",
+    "PPI": "생산자물가지수(PPI)",
+}
+
+# 카테고리별 FRED series_id
+_SERIES_IDS: dict[str, str] = {
+    "CPI": "CPIAUCSL",
+    "PPI": "PPIACO",
 }
 
 
@@ -74,11 +89,10 @@ def _clean_value(raw: str | None) -> str | None:
     return raw
 
 
-# FRED에서 CPI(CPIAUCSL)를 1회 가져와 Supabase calendar_events에 저장한다.
-# main.py 스케줄러에는 아직 연결하지 않는다 - scripts/seed_cpi.py로 수동 실행한다.
-async def ingest_cpi_from_fred() -> CalendarEvent:
-    series_id = "CPIAUCSL"
-    category = "CPI"
+# FRED에서 지정한 카테고리(CPI/PPI)의 최신 데이터를 1회 가져와 Supabase calendar_events에 저장한다.
+# main.py 스케줄러에는 아직 연결하지 않는다 - scripts/seed_cpi.py, scripts/seed_ppi.py로 수동 실행한다.
+async def _ingest_from_fred(category: str) -> CalendarEvent:
+    series_id = _SERIES_IDS[category]
 
     observations = fred_client.get_series_observations(series_id, limit=2)
     latest = observations[0]
@@ -111,6 +125,15 @@ async def ingest_cpi_from_fred() -> CalendarEvent:
         await session.commit()
 
     return event
+
+
+# 기존 호출부(scripts/seed_cpi.py 등)와의 호환을 위한 얇은 래퍼 - 동작은 이전과 동일
+async def ingest_cpi_from_fred() -> CalendarEvent:
+    return await _ingest_from_fred("CPI")
+
+
+async def ingest_ppi_from_fred() -> CalendarEvent:
+    return await _ingest_from_fred("PPI")
 
 
 # calendar_events에 upsert - id가 이미 있으면 UPDATE, 없으면 INSERT (36번 항목: 중복 방지)
