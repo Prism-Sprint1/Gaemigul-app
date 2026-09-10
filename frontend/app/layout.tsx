@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 
 import { Header } from "@/components/common"
 import { Sidebar } from "@/components/common"
+import ReportSidebar from "@/components/home/reportSidebar/ReportSidebar"
 
 const pretendard = localFont({
   src: "../public/fonts/pretendard/PretendardVariable.woff2",
@@ -29,6 +30,8 @@ export default function RootLayout({
         <div className="flex">
           <Sidebar />
           <main className="w-full px-12.5 py-10">{children}</main>
+
+          <ReportSidebar />
         </div>
         {/* <ThemeProvider></ThemeProvider> */}
       </body>
