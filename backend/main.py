@@ -19,11 +19,19 @@ _scheduler = BackgroundScheduler(timezone=ZoneInfo("Asia/Seoul"))
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 장이 닫혀있어도 서버가 켜질 땐 무조건 한 번 캐시를 채움
-    market_indicator_service.refresh_all(force=True)
-    _scheduler.add_job(market_indicator_service.refresh_all, CronTrigger(minute="0,30"))
-    _scheduler.start()
+    # KIS 키가 없으면 지표 바만 꺼두고 앱은 정상 기동한다 (다른 도메인 작업을 막지 않기 위함)
+    try:
+        market_indicator_service.refresh_all(force=True)
+    except RuntimeError as e:
+        print(f"[경고] 지표 바 비활성화 - {e}")
+    else:
+        _scheduler.add_job(market_indicator_service.refresh_all, CronTrigger(minute="0,30"))
+        _scheduler.start()
+
     yield
-    _scheduler.shutdown()
+
+    if _scheduler.running:
+        _scheduler.shutdown()
 
 
 # FastAPI 인스턴스 생성

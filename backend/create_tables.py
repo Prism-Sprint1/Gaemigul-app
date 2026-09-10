@@ -6,12 +6,12 @@ import sys
 
 sys.path.insert(0, "src")
 
-from backend.core.database import Base, engine
+from backend.core.database import Base, get_engine
 from backend.domain.timeline.models import timeline  # noqa: F401 - 모델 등록용
 
 
 async def main():
-    async with engine.begin() as conn:
+    async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("테이블 생성 완료")
 

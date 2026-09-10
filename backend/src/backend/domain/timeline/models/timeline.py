@@ -18,7 +18,12 @@
 #   - 부모 relationship : slot.insights 처럼 자식 목록을 바로 꺼내 씀
 #   - 자식 relationship : insight.slot 처럼 부모를 거꾸로 찾아감
 #   - back_populates   : 위 둘이 같은 관계의 양쪽 끝이라고 서로 지목해주는 값
-#   - cascade          : 부모를 지우면 딸린 자식 행도 같이 지워지게 함
+#   - cascade          : 부모를 지우면 딸린 자식 행도 같이 지워지게 함 (파이썬 코드로 지울 때)
+#   - ondelete=CASCADE : 같은 일을 DB가 직접 하게 함 (SQL로 지울 때)
+#
+# 둘을 같이 걸어둔 이유: cascade는 ORM으로 지울 때만(session.delete) 동작한다. Supabase 대시보드에서
+# DELETE FROM timeline_slot 같은 SQL을 직접 실행하면 ORM을 거치지 않아서 FK 제약에 막힌다.
+# DB에도 같이 걸어두면 어느 쪽으로 지워도 자식 행이 같이 정리된다
 
 from datetime import date, datetime
 
@@ -34,6 +39,9 @@ class TimelineSlot(Base):
     __tablename__ = "timeline_slot"
 
     # 같은 날짜에 같은 시간대가 두 번 저장되는 것 방지(테이블 전체 설정)
+    # 같은 날 같은 시간대가 두 번 저장되는 것을 DB에서 막는다
+    # 주의: 반드시 튜플로 감싸야 한다(뒤에 콤마). 제약 하나만 쓸 때도 마찬가지다 -
+    # 콤마가 없으면 모델을 읽는 순간 "__table_args__ value must be a tuple" 에러가 난다
     __table_args__ = (UniqueConstraint("trade_date", "time_slot", name="uq_timeline_slot_date_time"),)
 
     # 식별 번호
@@ -61,7 +69,7 @@ class TimelineSlot(Base):
     beginner_guides: Mapped[list["TimelineBeginnerGuide"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineBeginnerGuide.seq")
 
     # 주요 뉴스와 연결
-    news: Mapped[list["TimelineNews"]] = relationship(back_populates="slot", cascade="all, delete-orphan")
+    news: Mapped[list["TimelineNews"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineNews.seq")
 
     # 어제 마감 & 글로벌 현황과 연결 (07:30 슬롯만)
     indicators: Mapped[list["TimelineIndicator"]] = relationship(back_populates="slot", cascade="all, delete-orphan")
@@ -81,7 +89,7 @@ class TimelineBriefingInsight(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     # 어느 슬롯에 속한 요약인지 - 실제 연결은 이 컬럼이 담당
-    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id"))
+    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id", ondelete="CASCADE"))
 
     # 표시 순서 (1, 2, 3)
     seq: Mapped[int] = mapped_column()
@@ -104,7 +112,7 @@ class TimelineBeginnerGuide(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     # 어느 슬롯에 속한 해설인지 - 실제 연결은 이 컬럼이 담당
-    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id"))
+    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id", ondelete="CASCADE"))
 
     # 표시 순서 (1, 2, 3)
     seq: Mapped[int] = mapped_column()
@@ -130,7 +138,12 @@ class TimelineNews(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     # 어느 슬롯에 속한 뉴스인지 - 실제 연결은 이 컬럼이 담당
-    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id"))
+    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id", ondelete="CASCADE"))
+
+    # 화면에 뿌릴 순서 (1부터). 중요도가 높은 기사가 1번이다 (다른 테이블의 seq와 시작 번호를 맞춤)
+    # DB는 ORDER BY 없이 조회하면 행 순서를 보장하지 않는다. 이 컬럼이 없으면 애써 정한
+    # 중요도 순서가 조회할 때마다 뒤섞인다
+    seq: Mapped[int] = mapped_column(default=1)
 
     # 뉴스 타이틀
     title: Mapped[str] = mapped_column(String(500))
@@ -154,7 +167,7 @@ class TimelineIndicator(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     # 어느 슬롯에 속한 지표인지 - 실제 연결은 이 컬럼이 담당
-    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id"))
+    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id", ondelete="CASCADE"))
 
     # 지표 명칭 (예: "KOSPI")
     name: Mapped[str] = mapped_column(String(50))
@@ -177,7 +190,7 @@ class TimelineIntradayChange(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     # 어느 슬롯에 속한 값인지 - 실제 연결은 이 컬럼이 담당
-    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id"))
+    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id", ondelete="CASCADE"))
 
     # 지표 명칭 (예: "KOSPI")
     name: Mapped[str] = mapped_column(String(50))
@@ -203,7 +216,7 @@ class TimelineLeadingSector(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     # 어느 슬롯에 속한 섹터인지 - 실제 연결은 이 컬럼이 담당
-    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id"))
+    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id", ondelete="CASCADE"))
 
     # 섹터명 (예: "화학")
     name: Mapped[str] = mapped_column(String(100))
@@ -227,7 +240,7 @@ class TimelineLeadingSectorStock(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     # 어느 섹터에 속한 종목인지 - 실제 연결은 이 컬럼이 담당
-    sector_id: Mapped[int] = mapped_column(ForeignKey("timeline_leading_sector.id"))
+    sector_id: Mapped[int] = mapped_column(ForeignKey("timeline_leading_sector.id", ondelete="CASCADE"))
 
     # 종목명 (예: "롯데케미칼")
     name: Mapped[str] = mapped_column(String(100))
