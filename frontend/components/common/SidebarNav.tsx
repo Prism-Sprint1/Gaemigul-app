@@ -11,7 +11,7 @@ export default function SidebarNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="p-3">
+    <nav className="px-2.5 py-3">
       <ul className="flex flex-col gap-2.5">
         {sidebarNavItems.map(
           ({
@@ -23,7 +23,7 @@ export default function SidebarNav() {
             activeBadgeClassName,
           }) => {
             const isActive =
-              href === "/" ? pathname === href : pathname.startsWith(href)
+              pathname === href || pathname.startsWith(`${href}/`)
 
             return (
               <li key={href} className="flex items-center justify-between">

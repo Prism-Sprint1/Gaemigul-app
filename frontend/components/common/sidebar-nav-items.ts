@@ -15,7 +15,7 @@ export type SidebarNavItem = {
 
 export const sidebarNavItems: SidebarNavItem[] = [
   {
-    href: "/",
+    href: "/timeline",
     label: "실시간 페로몬",
     icon: Timeline,
     badge: "LIVE",
