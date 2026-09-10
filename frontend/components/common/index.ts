@@ -9,3 +9,5 @@ export { timelineItems } from "./timeline-items"
 export type { TimelineItem, TimelineStatus } from "./timeline-items"
 export { useTimelineSchedule } from "./use-timeline-schedule"
 export type { ScheduleItem } from "./use-timeline-schedule"
+
+export { default as PageTitle } from "./PageTitle"
