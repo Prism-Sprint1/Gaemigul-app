@@ -1,4 +1,5 @@
-import { timelineItems, PageTitle, Subtitle } from "@/components/common"
+import { timelineItems } from "@/lib/constant/timeline"
+import { PageTitle } from "@/components/common"
 
 export default function timeline() {
   return (

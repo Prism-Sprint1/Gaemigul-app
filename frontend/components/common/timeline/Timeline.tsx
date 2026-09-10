@@ -3,8 +3,8 @@
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "cn"
 
-import { Badge } from "../ui"
-import type { TimelineStatus } from "./timeline-items"
+import { Badge } from "../../ui"
+import type { TimelineStatus } from "@/lib/types/TimelineType"
 import { useTimelineSchedule } from "./use-timeline-schedule"
 
 const TIMELINE_PAGE_PATH = "/timeline"
@@ -55,7 +55,7 @@ export default function Timeline() {
               onClick={() => goToSection(item.id)}
               className={cn(
                 "flex w-full cursor-pointer items-start gap-3 rounded-lg py-1 text-left transition-colors duration-200",
-                item.status !== "current" && "hover:bg-neutral-100"
+                item.status !== "current" && "hover:bg-gray-100"
               )}
             >
               <div className="flex h-5 w-4 shrink-0 items-center justify-center">
@@ -77,7 +77,7 @@ export default function Timeline() {
                 className={cn(
                   "flex-1 rounded-lg",
                   item.status === "current" &&
-                    "border border-point/60 bg-point/5 p-3"
+                    "border border-point bg-white px-3 py-2"
                 )}
               >
                 <div className="flex items-center gap-1.5">

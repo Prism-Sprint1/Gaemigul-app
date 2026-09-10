@@ -4,8 +4,9 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "cn"
 
-import { sidebarNavItems } from "./sidebar-nav-items"
-import { Badge } from "../ui"
+import { sidebarNavItems } from "@/lib/constant/sidebar"
+
+import { Badge } from "../../ui"
 
 export default function SidebarNav() {
   const pathname = usePathname()

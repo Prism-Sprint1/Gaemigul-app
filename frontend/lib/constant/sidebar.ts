@@ -1,17 +1,10 @@
-import { Calendar, Lollipop, Timeline, type LucideIcon } from "lucide-react"
+import { Calendar, Lollipop, Timeline } from "lucide-react"
+
+import type { SidebarNavItem } from "@/lib/types/SidebarType"
 
 const date = new Date()
 
 const month = date.getMonth() + 1
-
-export type SidebarNavItem = {
-  href: string
-  label: string
-  icon: LucideIcon
-  badge: string
-  badgeClassName: string
-  activeBadgeClassName: string
-}
 
 export const sidebarNavItems: SidebarNavItem[] = [
   {
