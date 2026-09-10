@@ -1,4 +1,4 @@
-import { timelineItems, PageTitle } from "@/components/common"
+import { timelineItems, PageTitle, Subtitle } from "@/components/common"
 
 export default function timeline() {
   return (
@@ -10,6 +10,10 @@ export default function timeline() {
           따라갑니다.
         </PageTitle.Description>
       </PageTitle>
+      <Subtitle>
+        <Subtitle.Subtitle>글로벌 시황 요약</Subtitle.Subtitle>
+        <SubTitle.Time>07:30</SubTitle.Time>
+      </Subtitle>
       {timelineItems.map((item) => (
         <section
           key={item.id}
