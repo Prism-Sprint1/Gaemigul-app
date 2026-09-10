@@ -134,9 +134,9 @@ export default function ReportSidebar() {
                           type="button"
                           onClick={() => setActiveReportId(item.id)}
                           className={cn(
-                            "relative flex w-full cursor-pointer items-start gap-3 rounded-xl border bg-white px-2 py-3 text-left transition-colors duration-200",
+                            "relative flex w-full cursor-pointer items-start gap-3 rounded-xl border bg-white px-2 py-3 text-left shadow-sm transition-colors duration-200",
                             isActive
-                              ? "border-point"
+                              ? "border-point shadow-point/40"
                               : "border-neutral-200 hover:bg-neutral-50"
                           )}
                         >
