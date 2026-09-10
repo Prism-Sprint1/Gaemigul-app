@@ -1,11 +1,4 @@
-export type TimelineStatus = "past" | "current" | "next" | "upcoming"
-
-export type TimelineItem = {
-  id: string
-  time: string
-  title: string
-  description: string
-}
+import type { TimelineItem } from "@/lib/types/TimelineType"
 
 export const timelineItems: TimelineItem[] = [
   {
@@ -54,6 +47,6 @@ export const timelineItems: TimelineItem[] = [
     id: "schedule-8",
     time: "20:00",
     title: "오늘 시장 분석",
-    description: "지수/수급 총평, 섹터 총평 및 내일 체크포인트",
+    description: "섹터 총평 및 내일 체크포인트",
   },
 ]

@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react"
 
-import { timelineItems, type TimelineItem, type TimelineStatus } from "./timeline-items"
-
-export type ScheduleItem = TimelineItem & {
-  status: TimelineStatus
-  badgeLabel: string
-}
+import { timelineItems } from "@/lib/constant/timeline"
+import type {
+  ScheduleItem,
+  TimelineItem,
+  TimelineStatus,
+} from "@/lib/types/TimelineType"
 
 const STATUS_BADGE_LABEL: Record<TimelineStatus, string> = {
   past: "DONE",
