@@ -26,9 +26,9 @@ export default function RootLayout({
     >
       <body>
         <Header />
-        <div className="pt- flex">
+        <div className="flex">
           <Sidebar />
-          <main>{children}</main>
+          <main className="w-full px-12.5 py-10">{children}</main>
         </div>
         {/* <ThemeProvider></ThemeProvider> */}
       </body>
