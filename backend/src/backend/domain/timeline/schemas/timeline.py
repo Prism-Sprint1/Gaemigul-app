@@ -18,7 +18,6 @@ class LeadingSectorStockItem(BaseModel):
 
 # 주도 섹터 카드 하나 (timeline_leading_sector 테이블과 같은 구성)
 class LeadingSectorItem(BaseModel):
-    code: str  # 업종코드. 화면에는 안 쓰고 디버깅·조회용
     name: str  # 업종명
     change_rate: float  # 업종 등락률(%)
     stocks: list[LeadingSectorStockItem]  # 대표 종목 1~2개
@@ -49,8 +48,9 @@ class NewsItem(BaseModel):
 
 
 # 지표 한 줄 (timeline_indicator 테이블과 같은 구성). 07:30 슬롯에만 들어간다
+# 업종코드·지표코드는 테이블에 칸이 없어서 응답에도 넣지 않는다.
+# DB에서 읽을 때 항상 빈 값이 되는 필드를 두면 프런트가 헷갈린다
 class SlotIndicatorItem(BaseModel):
-    code: str
     name: str
     price: float
     change_rate: float

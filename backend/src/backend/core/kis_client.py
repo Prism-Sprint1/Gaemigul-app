@@ -32,6 +32,8 @@ _VOLUME_RANK_ENDPOINT = "/uapi/domestic-stock/v1/quotations/volume-rank"
 _VOLUME_RANK_TR_ID = "FHPST01710000"
 _INDEX_TICK_PRICE_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-index-timeprice"
 _INDEX_TICK_PRICE_TR_ID = "FHPUP02110200"
+_HOLIDAY_ENDPOINT = "/uapi/domestic-stock/v1/quotations/chk-holiday"
+_HOLIDAY_TR_ID = "CTCA0903R"
 
 # 조회 실패 시 재시도 설정 (토큰 발급에는 적용하지 않는다)
 _RETRY_COUNT = 3
@@ -277,4 +279,21 @@ def get_index_tick_price(index_code: str = "0001", interval_seconds: str = "60")
             "FID_INPUT_ISCD": index_code,
             "FID_INPUT_HOUR_1": interval_seconds,
         },
+    )
+
+
+# 국내 휴장일 조회 (기준일부터 앞으로 며칠치를 한 번에 준다)
+# base_date: "20260910" 형태의 기준일
+#
+# 응답 output의 각 행: bass_dt(날짜) / opnd_yn(개장일 여부 Y/N) / bzdy_yn(영업일) / tr_day_yn(거래일)
+# 우리가 볼 값은 opnd_yn 하나다. 주말이든 공휴일이든 장이 안 서는 날은 전부 "N"으로 온다.
+# 거래소가 정한 실제 휴장일이라 공휴일 달력보다 정확하다(임시공휴일·대체공휴일도 반영됨).
+#
+# 한 번에 20여 일치가 오므로 매번 부를 필요가 없다. 호출부에서 캐시해서 쓸 것
+def get_holiday_calendar(base_date: str) -> dict:
+    settings = _checked_settings()
+    return _get_with_retry(
+        f"{settings.kis_base_url}{_HOLIDAY_ENDPOINT}",
+        headers=_headers(settings, _HOLIDAY_TR_ID),
+        params={"BASS_DT": base_date, "CTX_AREA_NK": "", "CTX_AREA_FK": ""},
     )

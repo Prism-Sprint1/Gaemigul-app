@@ -8,9 +8,11 @@
 # gemini-3.6-flash에서 gemini-3.5-flash-lite로 바꾼 이유 (2026-09-10)
 #   1. 무료 한도: 3.6-flash는 하루 20회다(429 응답의 GenerateRequestsPerDayPerProjectPerModel-FreeTier).
 #      타임라인은 슬롯당 3회씩 8슬롯이면 하루 24회라 한도를 넘어서, 뒤쪽 슬롯 브리핑이 통째로 비었다.
-#   2. 속도: 브리핑 생성이 30초에서 2초로 줄었다. 슬롯 하나 만드는 시간이 72초에서 10초 안팎이 된다.
-#      슬롯 시각 5분 전에 수집하는 구조라, 빠를수록 실패했을 때 재시도할 여유가 커진다.
-#   품질은 실제 데이터로 확인했을 때 차이가 없었다. 우리 작업이 "준 데이터를 요약하기"라 난도가 낮아서다.
+#   2. 속도는 교체 이유가 못 된다. 짧은 프롬프트로 재면 30초에서 2초로 줄지만, 실제 브리핑
+#      프롬프트는 뉴스 30건이 들어가서 훨씬 길다. 슬롯 하나를 끝까지 만드는 시간은 실측 78초로
+#      교체 전(72~99초)과 큰 차이가 없다.
+#   품질은 대체로 비슷하지만 약점이 하나 있다. Lite가 "매도세"를 반대로 설명한 적이 있어서,
+#   용어 풀이는 prompts.GLOSSARY 표로 고정하고 LLM이 만들지 못하게 막았다.
 #
 # 한도는 모델별로 따로 잡힌다. 한 모델이 429가 나도 다른 모델은 쓸 수 있다.
 
@@ -40,17 +42,33 @@ def generate(prompt: str, timeout: float = 60.0) -> str:
     if not settings.gemini_api_key:
         raise RuntimeError("GEMINI_API_KEY가 .env에 없습니다. backend/.env에 추가해주세요.")
 
-    response = httpx.post(
-        _ENDPOINT,
-        headers={
-            "x-goog-api-key": settings.gemini_api_key,
-            "content-type": "application/json",
-        },
-        json={"contents": [{"parts": [{"text": prompt}]}]},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    last_error = None
+    for attempt in range(_RETRY_COUNT):
+        try:
+            response = httpx.post(
+                _ENDPOINT,
+                headers={
+                    "x-goog-api-key": settings.gemini_api_key,
+                    "content-type": "application/json",
+                },
+                json={"contents": [{"parts": [{"text": prompt}]}]},
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        except httpx.HTTPStatusError as error:
+            # 4xx는 프롬프트나 키가 잘못된 것이라 다시 보내도 같다. 429(호출 한도)만 예외로 재시도한다
+            if error.response.status_code < 500 and error.response.status_code != 429:
+                raise
+            last_error = error
+        except httpx.TransportError as error:
+            # 응답이 늦어 타임아웃이 나는 경우가 여기 걸린다
+            last_error = error
+
+        if attempt < _RETRY_COUNT - 1:
+            time.sleep(_RETRY_WAIT_SECONDS)
+
+    raise last_error
 
 
 # 프롬프트를 보내고 결과를 JSON(dict)으로 돌려받는다

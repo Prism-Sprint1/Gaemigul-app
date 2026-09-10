@@ -51,7 +51,8 @@ def get_slot(slot_key: str, with_briefing: bool = True) -> TimelineSlotResponse:
 # date를 안 주면 오늘. 예: /timeline?date=2026-09-11
 #
 # DB에서 읽기만 하므로 즉시 응답한다. 수집은 스케줄러가 미리 해둔다.
-# 오늘 날짜를 조회하면 아직 시간이 안 된 슬롯은 빠진다(슬롯 시각 5분 전에 미리 만들어두기 때문)
+# 오늘 날짜를 조회하면 아직 시간이 안 된 슬롯은 빠진다
+# 슬롯 시각에 수집을 시작해서 1~2분 뒤에 저장되므로, 슬롯은 시각이 조금 지난 뒤에 나타난다
 @router.get("", response_model=list[TimelineSlotResponse])
 async def get_day(date_: date | None = Query(default=None, alias="date"), session: AsyncSession = Depends(get_db)) -> list[TimelineSlotResponse]:
     return await timeline_service.get_day(session, date_ or datetime.now(_KST).date())

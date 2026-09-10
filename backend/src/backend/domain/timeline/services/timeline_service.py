@@ -20,8 +20,9 @@ from backend.domain.timeline.schemas.timeline import (
     SlotIndicatorItem,
     TimelineSlotResponse,
 )
+from backend.core.database import get_session_factory
 from backend.domain.timeline.models.timeline import TimelineSlot
-from backend.domain.timeline.services import briefing_service, leading_sector_service, market_indicator_service, news_service, prompts, timeline_repository
+from backend.domain.timeline.services import briefing_service, leading_sector_service, market_hours, market_indicator_service, news_service, prompts, timeline_repository
 
 # 슬롯 정의. (URL에 쓰는 값) -> (DB에 저장하는 값, 화면에 보여줄 명칭)
 #
@@ -32,8 +33,13 @@ from backend.domain.timeline.services import briefing_service, leading_sector_se
 _SLOT_DEFS = {time_slot.replace(":", ""): (time_slot, title) for time_slot, title in prompts.SLOT_TITLES.items()}
 
 # 주도 섹터를 뽑지 않는 슬롯
-# 이 시간대는 장이 열리기 전이라 업종 등락률이 전일 값 그대로다. 게다가 업종 지수 API는 프리마켓
-# (넥스트레이드)을 아예 지원하지 않아서(NX 코드 거부, 확인 완료) 가져올 값 자체가 없다
+#
+# 07:30 - 확정. 프리마켓(넥스트레이드 08:00~08:50)이 시작되기도 전이라 업종 등락률이 전일 값 그대로다.
+# 08:30 - 미확정. 프리마켓 시간대인데, 업종 지수가 그때 움직이는지 아직 확인하지 못했다.
+#         업종 목록 API가 NX(넥스트레이드) 코드를 거부하는 것은 확인했지만, 기본 U 코드로 조회했을 때
+#         프리마켓 체결이 반영되는지는 별개 문제다.
+#         확인 방법: check_sector_snapshot.py를 07:35(C_개장전)와 08:35(D_프리마켓)에 각각 실행해서
+#         마지막 체결 시각을 비교한다. 값이 달라지면 08:30을 이 목록에서 빼면 된다
 _SLOTS_WITHOUT_LEADING_SECTOR = {"0730", "0830"}
 
 # 지표 6종을 넣는 슬롯 (07:30 "어제 마감 & 글로벌 현황")
@@ -50,6 +56,32 @@ _SLOTS_WITH_INTRADAY = {"1530"}
 # market_indicator_service의 _INDICATOR_DEFS에 적힌 화면 이름과 같아야 한다
 _INTRADAY_TARGET_NAMES = ("KOSPI", "KOSDAQ", "USD/KRW")
 
+# 슬롯별 수집 시각. (slot_key) -> (시, 분)
+#
+# 슬롯 시각이 되면 그때 수집한다. 생성에 1~2분 걸리므로(실측 78초) 화면에는 그만큼 늦게 뜬다.
+#
+# 처음에는 5분 전에 미리 만들어두는 방식이었는데 바꿨다. 이유는 세 가지다.
+#   1. 데이터가 슬롯 시각과 어긋난다. "12:00 오전장 흐름"에 11:55 값이 들어간다.
+#      화면 노출은 지나가면 끝이지만 저장된 데이터는 영구히 남는다.
+#   2. 뉴스 구간이 잘린다. 12:00 슬롯의 구간은 09:30~12:00인데 11:55에 수집하면 마지막 5분이 빠진다.
+#   3. 미리 만드는 방식은 마감이 있다. 07:25에 실패하면 07:30까지 5분 안에 성공해야 한다.
+#      정시 수집은 마감이 없어서 실패해도 다시 시도하고 조금 늦게 올리면 된다.
+#
+# 15:30만 5분 뒤다. 코스피 종가는 15:30 동시호가가 끝나야 확정되므로, 정시에 수집하면
+# "장 마감" 슬롯에 마감 전 값이 들어간다.
+#
+# 수집 시각을 바꾸려면 이 표만 고치면 된다
+SLOT_COLLECT_TIMES = {
+    "0730": (7, 30),
+    "0830": (8, 30),
+    "0930": (9, 30),
+    "1200": (12, 0),
+    "1400": (14, 0),
+    "1530": (15, 35),
+    "1730": (17, 30),
+    "2000": (20, 0),
+}
+
 # 슬롯 하나에 넣을 뉴스 개수
 _NEWS_LIMIT = 10
 
@@ -60,7 +92,6 @@ _KST = ZoneInfo("Asia/Seoul")
 def _to_sector_items(collected: list[dict]) -> list[LeadingSectorItem]:
     return [
         LeadingSectorItem(
-            code=sector["code"],
             name=sector["name"],
             change_rate=sector["change_rate"],
             stocks=[LeadingSectorStockItem(**stock) for stock in sector["stocks"]],
@@ -123,7 +154,7 @@ async def _intraday_rows(session: AsyncSession, trade_date: date, current: list[
 # 슬롯 하나에 들어갈 데이터를 모은다 (DB 저장과 즉석 응답이 같이 쓴다)
 # slot_key: URL로 받은 값 ("0730" 등). _SLOT_DEFS에 없으면 ValueError를 낸다
 #
-# LLM을 두 번 부르기 때문에 1분 안팎 걸린다.
+# LLM을 세 번 부르기 때문에(뉴스 선별 + 브리핑 + 불개미 요약) 1~2분 걸린다.
 # with_briefing=False를 주면 LLM 단계를 통째로 건너뛴다 - 수집 결과만 빠르게 볼 때 쓴다
 #
 # 반환 형태: {"briefing": ..., "beginner_guides": [...], "news": [...], "indicators": [...], "leading_sectors": [...]}
@@ -167,7 +198,7 @@ def _to_response(slot_key: str, collected: dict) -> TimelineSlotResponse:
         beginner_guides=[BeginnerGuideItem(**guide) for guide in collected["beginner_guides"]],
         leading_sectors=_to_sector_items(collected["leading_sectors"]),
         news=[NewsItem(seq=seq, **item) for seq, item in enumerate(collected["news"], start=1)],
-        indicators=[SlotIndicatorItem(**row) for row in collected["indicators"]],
+        indicators=[SlotIndicatorItem(name=row["name"], price=row["price"], change_rate=row["change_rate"]) for row in collected["indicators"]],
         intraday_changes=[IntradayChangeItem(**row) for row in collected["intraday_changes"]],
     )
 
@@ -201,7 +232,6 @@ def _from_db(slot: TimelineSlot) -> TimelineSlotResponse:
         ],
         leading_sectors=[
             LeadingSectorItem(
-                code="",  # 업종코드는 저장하지 않는다(화면에 안 쓰는 값이라 테이블에 칸이 없음)
                 name=sector.name,
                 change_rate=sector.change_rate,
                 stocks=[LeadingSectorStockItem(name=stock.name, change_rate=stock.change_rate, label=stock.label) for stock in sector.stocks],
@@ -210,7 +240,7 @@ def _from_db(slot: TimelineSlot) -> TimelineSlotResponse:
         ],
         # published_at은 테이블에 칸이 없어서 저장한 시각으로 채운다
         news=[NewsItem(seq=row.seq, title=row.title, summary=row.summary or "", url=row.url, published_at=slot.created_at) for row in slot.news],
-        indicators=[SlotIndicatorItem(code="", name=row.name, price=row.price, change_rate=row.change_rate) for row in slot.indicators],
+        indicators=[SlotIndicatorItem(name=row.name, price=row.price, change_rate=row.change_rate) for row in slot.indicators],
         intraday_changes=[IntradayChangeItem(name=row.name, morning_price=row.morning_price, closing_price=row.closing_price, change_rate=row.change_rate) for row in slot.intraday_changes],
     )
 
@@ -235,9 +265,10 @@ async def collect_and_save(session: AsyncSession, slot_key: str, *, trade_date: 
 
 # 하루치 슬롯을 DB에서 꺼낸다. 프런트가 호출하는 조회용
 #
-# 오늘 날짜를 조회할 때는 아직 시간이 안 된 슬롯을 빼고 돌려준다.
-# 데이터는 슬롯 시각 5분 전에 미리 만들어두기 때문에, 이 필터가 없으면 07:26에 07:30 슬롯이
-# 먼저 보여버린다. 지난 날짜는 전부 내려준다
+# 오늘 날짜를 조회할 때는 아직 시간이 안 된 슬롯을 빼고 돌려준다. 지난 날짜는 전부 내려준다.
+#
+# 지금은 슬롯 시각에 수집을 시작하므로 시각보다 먼저 데이터가 생길 일이 없다. 그래도 이 필터를
+# 남겨두는 이유는, 확인용으로 미래 슬롯을 수동 수집(POST /timeline/collect)했을 때를 막기 위해서다
 def _visible(slots: list[TimelineSlot], trade_date: date, now: datetime) -> list[TimelineSlot]:
     if trade_date != now.date():
         return slots
@@ -255,3 +286,26 @@ async def get_day(session: AsyncSession, trade_date: date, *, now: datetime | No
 # 화면에 쓸 슬롯 목록 (어떤 slot_key를 호출하면 되는지 확인용)
 def get_slot_list() -> list[dict]:
     return [{"slot_key": key, "time_slot": time_slot, "title": title} for key, (time_slot, title) in _SLOT_DEFS.items()]
+
+
+# 스케줄러가 정해진 시각에 부르는 함수
+#
+# 여기서 세 가지를 처리한다
+#   1. 휴장일이면 아무것도 하지 않는다 (주말·공휴일에 빈 데이터가 쌓이는 것을 막는다)
+#   2. DB 세션을 직접 만든다 (엔드포인트와 달리 요청이 없으므로 Depends를 쓸 수 없다)
+#   3. 실패해도 예외를 밖으로 내보내지 않는다 - 한 슬롯이 실패해도 다른 슬롯 예약은 살아있어야 한다
+async def run_scheduled_collect(slot_key: str) -> None:
+    if not market_hours.is_trading_day():
+        print(f"[스케줄러] {slot_key} 건너뜀 - 오늘은 장이 열리지 않습니다.")
+        return
+
+    started = datetime.now(_KST)
+    try:
+        async with get_session_factory()() as session:
+            saved = await collect_and_save(session, slot_key)
+    except Exception as error:
+        print(f"[스케줄러] {slot_key} 수집 실패 - {type(error).__name__}: {error}")
+        return
+
+    seconds = (datetime.now(_KST) - started).total_seconds()
+    print(f"[스케줄러] {saved.time_slot} {saved.title} 저장 완료 ({seconds:.0f}초) - 뉴스 {len(saved.news)}건, 브리핑 {'있음' if saved.briefing_headline else '없음'}")

@@ -44,7 +44,13 @@ def take_snapshot() -> dict[str, float]:
 # 이 API는 지금 시점부터 거슬러 올라가며 최근 100틱만 준다. 과거 특정 시각은 지정할 수 없다
 def take_last_tick_hour() -> str | None:
     rows = kis_client.get_index_tick_price("0001").get("output") or []
-    return rows[0]["bsop_hour"] if rows else None
+
+    # 체결이 없는 자리는 "99:99:99" 같은 더미 값으로 채워져서 온다. 시(hour) 자리가 00~23이 아니면 버린다
+    for row in rows:
+        hour = row.get("bsop_hour", "")
+        if len(hour) == 6 and hour[:2].isdigit() and int(hour[:2]) <= 23:
+            return hour
+    return None
 
 
 # 두 스냅샷을 비교해서 값이 달라진 업종 수를 센다
