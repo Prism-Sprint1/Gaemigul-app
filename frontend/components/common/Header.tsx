@@ -5,6 +5,7 @@ import { Badge, Separator } from "@/components/ui"
 import Logo from "@/public/images/logo.svg"
 
 import Marquee from "../marquee/marquee"
+import HeaderTimer from "./HeaderTimer"
 import { Info } from "lucide-react"
 
 export default function Header() {
@@ -24,10 +25,7 @@ export default function Header() {
       </Link>
       <Marquee></Marquee>
       <div className="flex min-w-67.5 flex-col justify-center gap-0.5 px-3">
-        <strong className="flex items-center gap-1 text-[18px] text-point">
-          <Badge className="bg-point text-[12px] text-white">TIMER</Badge>
-          25:24
-        </strong>
+        <HeaderTimer />
         <p className="flex items-center gap-1 text-[10px] text-neutral-500">
           <Info size="14" />
           지수 데이터는 정시 기준 30분마다 갱신됩니다.
