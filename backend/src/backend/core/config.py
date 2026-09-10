@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     kis_app_secret: str
     kis_base_url: str = "https://openapi.koreainvestment.com:9443"
 
+#  Supabase Postgres 연결 문자열 (SQLAlchemy용, asyncpg 드라이버 사용) - 전체 공용
+    database_url: str | None = None
+
+    # FRED(미국 연준 경제 데이터) API - calendar 도메인에서 사용
+    fred_api_key: str | None = None
+
 
 # 설정값을 한 번만 읽어서 재사용 (설정값은 항상 이 함수로 가져올 것)
 @lru_cache

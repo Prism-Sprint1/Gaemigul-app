@@ -13,6 +13,7 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.domain.calendar.routers.calendar import router as calendar_router
 from backend.domain.timeline.routers.timeline import router as timeline_router
 from backend.domain.timeline.services import market_indicator_service
 
@@ -51,3 +52,4 @@ def read_root():
 
 # 라우터 등록
 app.include_router(timeline_router)
+app.include_router(calendar_router)
