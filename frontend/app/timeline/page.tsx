@@ -1,5 +1,5 @@
 import { timelineItems } from "@/lib/constant/timeline"
-import { PageTitle } from "@/components/common"
+import { PageTitle, Subtitle } from "@/components/common"
 
 export default function timeline() {
   return (
@@ -8,6 +8,7 @@ export default function timeline() {
         title="개미들을 위한 실시간 시장 신호"
         description="시장의 급박한 변화의 핵심 뉴스 요약을 페로몬 흔적처럼 빠르게 따라갑니다."
       ></PageTitle>
+      <Subtitle title="글로벌 시황 요약" time="07 : 30"></Subtitle>
       {timelineItems.map((item) => (
         <section
           key={item.id}
