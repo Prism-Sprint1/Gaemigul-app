@@ -1,6 +1,8 @@
 import axios from "axios"
 
-const INDICATORS_URL = "http://127.0.0.1:8000/timeline/indicators"
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "http://localhost:8000"
+const INDICATORS_URL = `${API_BASE_URL.replace(/\/$/, "")}/timeline/indicators`
 
 export interface MarketIndicatorItem {
   code: string
