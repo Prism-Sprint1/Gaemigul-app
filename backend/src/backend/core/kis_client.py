@@ -120,3 +120,7 @@ def get_overseas_index_or_fx_price(market_div_code: str, symbol: str) -> dict:
     )
     response.raise_for_status()
     return response.json()
+
+
+# calendar 일정 
+# 1. 국내휴장일조회, 2.국내주식 종목추정실적, 3.배당일정, 4.주주총회일정, 5.합병/분할일정, 6.공모주청약일정
