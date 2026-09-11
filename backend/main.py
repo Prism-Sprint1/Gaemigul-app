@@ -42,8 +42,8 @@ async def lifespan(app: FastAPI):
         _scheduler.shutdown()
 
 
-# 지표 바 갱신 예약 (매 시 0분/30분)
-# minute="0,30"을 바꾸면 갱신 주기가 바뀐다 (예: "0,15,30,45"면 15분마다)
+# 지표 바 갱신 예약 (매 시 0분/10분/20분/30분/40분/50분)
+# minute 값을 바꾸면 갱신 주기가 바뀐다 (예: "0,30"이면 30분마다)
 # 장이 닫혀있어도 서버가 켜질 땐 무조건 한 번 캐시를 채운다
 # KIS 키가 없으면 지표 바만 꺼두고 앱은 정상 기동한다 (다른 도메인 작업을 막지 않기 위함)
 def _register_indicator_job() -> None:
@@ -53,7 +53,7 @@ def _register_indicator_job() -> None:
         print(f"[경고] 지표 바 비활성화 - {error}")
         return
 
-    _scheduler.add_job(market_indicator_service.refresh_all, CronTrigger(minute="0,30"), id="indicator_bar")
+    _scheduler.add_job(market_indicator_service.refresh_all, CronTrigger(minute="0,10,20,30,40,50"), id="indicator_bar")
 
 
 # 타임라인 슬롯 수집 예약 (하루 8회)

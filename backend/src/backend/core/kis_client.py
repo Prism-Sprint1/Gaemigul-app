@@ -34,6 +34,8 @@ _INDEX_TICK_PRICE_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-index-t
 _INDEX_TICK_PRICE_TR_ID = "FHPUP02110200"
 _HOLIDAY_ENDPOINT = "/uapi/domestic-stock/v1/quotations/chk-holiday"
 _HOLIDAY_TR_ID = "CTCA0903R"
+_EXPECTED_RANK_ENDPOINT = "/uapi/domestic-stock/v1/ranking/exp-trans-updown"
+_EXPECTED_RANK_TR_ID = "FHPST01820000"
 
 # 조회 실패 시 재시도 설정 (토큰 발급에는 적용하지 않는다)
 _RETRY_COUNT = 3
@@ -202,21 +204,27 @@ def get_index_category_price(market_cls_code: str = "K", index_code: str = "0001
     )
 
 
-# 등락률 순위 조회 (업종 내 상승 1위 종목을 뽑는 데 사용)
+# 등락률 순위 조회 (업종 내 상승 1위 종목, 애프터마켓 급상승 종목을 뽑는 데 사용)
 # sector_code에 업종코드를 넣으면 그 업종 안에서만 순위가 나온다 - "0000"이면 시장 전체
 # FID_RANK_SORT_CLS_CODE "0" = 상승률순, "1"로 바꾸면 하락률순이 된다
+#
+# market_div_code로 어느 시장을 볼지 정한다
+#   "J"  거래소(KRX). 정규장 09:00~15:30에만 값이 움직이고 마감 후에는 종가에 멈춘다
+#   "NX" 넥스트레이드(NXT). 프리마켓 08:00~08:50, 애프터마켓 15:40~20:00에도 계속 거래된다
+#        17:30 / 20:00 슬롯의 급상승 종목은 이 값으로 뽑는다 (실측으로 10분 만에 순위가 바뀌는 것 확인)
+#   "UN" 통합(J+NX)
 #
 # 아래 나머지 파라미터는 KIS가 요구하는 필수값인데 전부 "조건 없음/전체"를 뜻하는 고정값이라 여기 박아뒀다
 # ("0"*9, "0"*10은 자릿수만큼 0을 채우라는 뜻으로, 대상 종목을 제한하지 않겠다는 의미)
 #
 # 응답 output의 각 행: hts_kor_isnm(종목명) / prdy_ctrt(등락률) / stck_shrn_iscd(종목코드)
-def get_fluctuation_ranking(sector_code: str = "0000") -> dict:
+def get_fluctuation_ranking(sector_code: str = "0000", market_div_code: str = "J") -> dict:
     settings = _checked_settings()
     return _get_with_retry(
         f"{settings.kis_base_url}{_FLUCTUATION_RANK_ENDPOINT}",
         headers=_headers(settings, _FLUCTUATION_RANK_TR_ID),
         params={
-            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_COND_MRKT_DIV_CODE": market_div_code,
             "FID_COND_SCR_DIV_CODE": "20170",
             "FID_INPUT_ISCD": sector_code,
             "FID_RANK_SORT_CLS_CODE": "0",
@@ -296,4 +304,39 @@ def get_holiday_calendar(base_date: str) -> dict:
         f"{settings.kis_base_url}{_HOLIDAY_ENDPOINT}",
         headers=_headers(settings, _HOLIDAY_TR_ID),
         params={"BASS_DT": base_date, "CTX_AREA_NK": "", "CTX_AREA_FK": ""},
+    )
+
+
+# 예상체결 상승/하락 순위 조회 (08:30 슬롯의 급상승 종목을 뽑는 데 사용)
+#
+# 08:30~09:00은 KRX 장전 동시호가 시간이라 이 시간대의 "예상 체결"이 잡힌다.
+# 정규장 밖이라 업종 지수는 안 도는데 이 값은 살아 있어서, 주도 섹터 대신 쓴다.
+#
+# market_open_code로 어느 동시호가를 볼지 정한다
+#   "0" 장전예상 (08:30~09:00)
+#   "1" 장마감예상 (15:20~15:30)
+# rank_sort_code: 0:상승률 1:상승폭 2:보합 3:하락율 4:하락폭 5:체결량 6:거래대금
+#
+# 장전예상 값은 그날 하루 종일 남아 있다(오후에 호출해도 아침 값이 나온다 - 실측 확인).
+# 08:30에 서버가 꺼져 있었어도 나중에 채울 수 있다는 뜻이다.
+#
+# 응답 output의 각 행: hts_kor_isnm(종목명) / prdy_ctrt(등락률) / stck_prpr(예상체결가)
+#                     stck_sdpr(기준가) / cntg_vol(예상체결량) / antc_tr_pbmn(예상거래대금)
+def get_expected_ranking(market_open_code: str = "0", rank_sort_code: str = "0", market_code: str = "0000") -> dict:
+    settings = _checked_settings()
+    return _get_with_retry(
+        f"{settings.kis_base_url}{_EXPECTED_RANK_ENDPOINT}",
+        headers=_headers(settings, _EXPECTED_RANK_TR_ID),
+        params={
+            "fid_rank_sort_cls_code": rank_sort_code,
+            "fid_cond_mrkt_div_code": "J",
+            "fid_cond_scr_div_code": "20182",
+            "fid_input_iscd": market_code,
+            "fid_div_cls_code": "0",
+            "fid_aply_rang_prc_1": "",
+            "fid_vol_cnt": "",
+            "fid_pbmn": "",
+            "fid_blng_cls_code": "0",
+            "fid_mkop_cls_code": market_open_code,
+        },
     )

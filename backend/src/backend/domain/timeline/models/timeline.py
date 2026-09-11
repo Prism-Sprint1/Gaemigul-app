@@ -26,11 +26,31 @@
 # DB에도 같이 걸어두면 어느 쪽으로 지워도 자식 행이 같이 정리된다
 
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.database import Base
+
+_KST = ZoneInfo("Asia/Seoul")
+
+
+# 이 테이블들의 시각은 전부 한국 시간으로 저장한다 (timezone 정보 없이 시계값만)
+#
+# 왜 이렇게 하는가: trade_date는 한국 기준 거래일이고 time_slot도 "09:30" 같은 한국 시간 문자열이다.
+# 여기에 created_at만 UTC로 저장하면 Supabase에서 열어봤을 때 time_slot="09:30"인 행의 생성 시각이
+# 00:30으로 보여서 어긋난다. 테이블 하나 안에서 기준이 두 개면 볼 때마다 헷갈린다.
+#
+# 대신 DB에는 시간대 정보가 없으므로, 꺼내서 화면에 내보낼 때는 한국 시간임을 붙여준다
+# (timeline_service._from_db 참고)
+#
+# DB 쪽에도 같은 기본값을 걸어뒀다: DEFAULT (now() AT TIME ZONE 'Asia/Seoul')
+#   파이썬에서 값을 넣으니 평소에는 안 쓰이지만, 코드와 스키마 버전이 어긋날 때를 위한 안전망이다.
+#   실제로 이것 때문에 슬롯 3개가 통째로 날아간 적이 있다. created_at을 DB 기본값에 맡기던
+#   옛날 코드가 돌고 있는 상태에서 DB 기본값만 지웠더니, 저장할 때마다 NOT NULL 위반이 났다.
+def _now_kst() -> datetime:
+    return datetime.now(_KST).replace(tzinfo=None)
 
 
 # 타임라인 슬롯 - 하루에 8행이 쌓인다
@@ -60,7 +80,7 @@ class TimelineSlot(Base):
     briefing_subtitle: Mapped[str | None] = mapped_column(String(300), default=None)
 
     # 생성 일시
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)
 
     # LLM 요약과 연결 (order_by - 꺼낼 때 seq 순서대로 정렬)
     insights: Mapped[list["TimelineBriefingInsight"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineBriefingInsight.seq")
@@ -79,6 +99,9 @@ class TimelineSlot(Base):
 
     # 주도 섹터와 연결
     leading_sectors: Mapped[list["TimelineLeadingSector"]] = relationship(back_populates="slot", cascade="all, delete-orphan")
+
+    # 급상승 종목과 연결 (08:30 / 17:30 / 20:00 슬롯만)
+    top_gainers: Mapped[list["TimelineTopGainer"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineTopGainer.seq")
 
 
 # LLM 요약 - 슬롯당 3행 (타이틀 + 설명)
@@ -99,6 +122,11 @@ class TimelineBriefingInsight(Base):
 
     # 요약 설명
     body: Mapped[str] = mapped_column(Text)
+
+    # 저장 시각 (한국 시간)
+    # 슬롯과 같은 트랜잭션에서 한 번에 들어가므로 timeline_slot.created_at과 거의 같은 값이다.
+    # 자식 테이블만 따로 열어봤을 때 언제 들어온 행인지 바로 보라고 둔 컬럼이다
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)
 
     # 역방향 연결
     slot: Mapped["TimelineSlot"] = relationship(back_populates="insights")
@@ -125,6 +153,11 @@ class TimelineBeginnerGuide(Base):
 
     # 태그 - 쉼표로 구분해서 한 칸에 저장 (예: "금리인하, 유동성공급")
     tags: Mapped[str | None] = mapped_column(String(200), default=None)
+
+    # 저장 시각 (한국 시간)
+    # 슬롯과 같은 트랜잭션에서 한 번에 들어가므로 timeline_slot.created_at과 거의 같은 값이다.
+    # 자식 테이블만 따로 열어봤을 때 언제 들어온 행인지 바로 보라고 둔 컬럼이다
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)
 
     # 역방향 연결
     slot: Mapped["TimelineSlot"] = relationship(back_populates="beginner_guides")
@@ -154,6 +187,17 @@ class TimelineNews(Base):
     # 기사 링크
     url: Mapped[str] = mapped_column(String(1000))
 
+    # 기사 발행 시각 (네이버가 주는 pubDate)
+    # 슬롯 구간을 나누고 LLM에 기사 시점을 알려주는 데 쓰는 값이라 수집 단계에서 이미 가지고 있다.
+    # 저장해두면 화면에서 "방금 들어온 뉴스"와 "두 시간 전 뉴스"를 구분해 보여줄 수 있다.
+    # 컬럼을 만들기 전에는 조회할 때 슬롯 저장 시각으로 채웠는데, 필드 이름과 값이 어긋나 혼란스러웠다
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), default=None)
+
+    # 저장 시각 (한국 시간)
+    # 슬롯과 같은 트랜잭션에서 한 번에 들어가므로 timeline_slot.created_at과 거의 같은 값이다.
+    # 자식 테이블만 따로 열어봤을 때 언제 들어온 행인지 바로 보라고 둔 컬럼이다
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)
+
     # 역방향 연결
     slot: Mapped["TimelineSlot"] = relationship(back_populates="news")
 
@@ -177,6 +221,11 @@ class TimelineIndicator(Base):
 
     # 등락폭(%)
     change_rate: Mapped[float] = mapped_column(Float)
+
+    # 저장 시각 (한국 시간)
+    # 슬롯과 같은 트랜잭션에서 한 번에 들어가므로 timeline_slot.created_at과 거의 같은 값이다.
+    # 자식 테이블만 따로 열어봤을 때 언제 들어온 행인지 바로 보라고 둔 컬럼이다
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)
 
     # 역방향 연결
     slot: Mapped["TimelineSlot"] = relationship(back_populates="indicators")
@@ -204,6 +253,11 @@ class TimelineIntradayChange(Base):
     # 07:30 대비 변동폭(%)
     change_rate: Mapped[float] = mapped_column(Float)
 
+    # 저장 시각 (한국 시간)
+    # 슬롯과 같은 트랜잭션에서 한 번에 들어가므로 timeline_slot.created_at과 거의 같은 값이다.
+    # 자식 테이블만 따로 열어봤을 때 언제 들어온 행인지 바로 보라고 둔 컬럼이다
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)
+
     # 역방향 연결
     slot: Mapped["TimelineSlot"] = relationship(back_populates="intraday_changes")
 
@@ -226,6 +280,11 @@ class TimelineLeadingSector(Base):
 
     # 이 섹터의 대표 종목 목록 - 코드에서는 sector.stocks 로 접근
     stocks: Mapped[list["TimelineLeadingSectorStock"]] = relationship(back_populates="sector", cascade="all, delete-orphan")
+
+    # 저장 시각 (한국 시간)
+    # 슬롯과 같은 트랜잭션에서 한 번에 들어가므로 timeline_slot.created_at과 거의 같은 값이다.
+    # 자식 테이블만 따로 열어봤을 때 언제 들어온 행인지 바로 보라고 둔 컬럼이다
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)
 
     # 역방향 연결
     slot: Mapped["TimelineSlot"] = relationship(back_populates="leading_sectors")
@@ -251,5 +310,47 @@ class TimelineLeadingSectorStock(Base):
     # 라벨 - "상승 1위", "거래대금 1위", "상승·거래 1위"
     label: Mapped[str] = mapped_column(String(30))
 
+    # 저장 시각 (한국 시간)
+    # 슬롯과 같은 트랜잭션에서 한 번에 들어가므로 timeline_slot.created_at과 거의 같은 값이다.
+    # 자식 테이블만 따로 열어봤을 때 언제 들어온 행인지 바로 보라고 둔 컬럼이다
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)
+
     # 역방향 연결
     sector: Mapped["TimelineLeadingSector"] = relationship(back_populates="stocks")
+
+
+# 급상승 종목 - 08:30 / 17:30 / 20:00 슬롯에만 3행
+#
+# 이 세 슬롯은 정규장 밖이라 주도 섹터(업종 등락률 TOP3)를 만들 수 없다.
+# 거래소가 업종 지수를 정규장에만 산출하기 때문이고, 어느 API로도 우회가 안 된다.
+# 대신 종목 단위 데이터는 그 시간대에도 살아 있어서 급상승 종목으로 대체한다.
+#
+# 주도 섹터와 테이블을 나눈 이유: 주도 섹터는 "업종 아래 종목"이 매달린 2단 구조인데
+# 급상승 종목은 종목 한 줄이면 끝이다. 한 테이블에 억지로 넣으면 업종명 칸에 종목명이
+# 들어가고 자식 테이블은 비는 형태가 된다
+class TimelineTopGainer(Base):
+    __tablename__ = "timeline_top_gainer"
+
+    # 식별 번호
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # 어느 슬롯에 속한 종목인지 - 실제 연결은 이 컬럼이 담당
+    timeline_slot_id: Mapped[int] = mapped_column(ForeignKey("timeline_slot.id", ondelete="CASCADE"))
+
+    # 표시 순서 (1, 2, 3)
+    seq: Mapped[int] = mapped_column()
+
+    # 종목명
+    name: Mapped[str] = mapped_column(String(100))
+
+    # 등락률(%)
+    change_rate: Mapped[float] = mapped_column(Float)
+
+    # 가격 (08:30은 예상체결가, 17:30/20:00은 애프터마켓 현재가)
+    price: Mapped[float] = mapped_column(Float)
+
+    # 저장 시각 (한국 시간)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)
+
+    # 역방향 연결
+    slot: Mapped["TimelineSlot"] = relationship(back_populates="top_gainers")

@@ -5,6 +5,7 @@
 # 바로 내려준다. Postman으로 값이 제대로 나오는지 확인하는 단계이기 때문이다.
 # 저장 로직(timeline_slot 테이블에 넣기)과 스케줄러 연결은 다음 단계에서 붙인다.
 
+import asyncio
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
@@ -19,10 +20,11 @@ from backend.domain.timeline.schemas.timeline import (
     NewsItem,
     SlotIndicatorItem,
     TimelineSlotResponse,
+    TopGainerItem,
 )
 from backend.core.database import get_session_factory
 from backend.domain.timeline.models.timeline import TimelineSlot
-from backend.domain.timeline.services import briefing_service, leading_sector_service, market_hours, market_indicator_service, news_service, prompts, timeline_repository
+from backend.domain.timeline.services import briefing_service, leading_sector_service, market_hours, market_indicator_service, news_service, prompts, timeline_repository, top_gainer_service
 
 # 슬롯 정의. (URL에 쓰는 값) -> (DB에 저장하는 값, 화면에 보여줄 명칭)
 #
@@ -32,15 +34,16 @@ from backend.domain.timeline.services import briefing_service, leading_sector_se
 # 명칭은 prompts.SLOT_TITLES 하나만 보고 만든다. 두 곳에 따로 적어두면 한쪽만 고쳐서 어긋난다
 _SLOT_DEFS = {time_slot.replace(":", ""): (time_slot, title) for time_slot, title in prompts.SLOT_TITLES.items()}
 
-# 주도 섹터를 뽑지 않는 슬롯
+# 주도 섹터를 뽑는 슬롯 (정규장 09:00~15:30 안에 있는 슬롯만)
 #
-# 07:30 - 확정. 프리마켓(넥스트레이드 08:00~08:50)이 시작되기도 전이라 업종 등락률이 전일 값 그대로다.
-# 08:30 - 미확정. 프리마켓 시간대인데, 업종 지수가 그때 움직이는지 아직 확인하지 못했다.
-#         업종 목록 API가 NX(넥스트레이드) 코드를 거부하는 것은 확인했지만, 기본 U 코드로 조회했을 때
-#         프리마켓 체결이 반영되는지는 별개 문제다.
-#         확인 방법: check_sector_snapshot.py를 07:35(C_개장전)와 08:35(D_프리마켓)에 각각 실행해서
-#         마지막 체결 시각을 비교한다. 값이 달라지면 08:30을 이 목록에서 빼면 된다
-_SLOTS_WITHOUT_LEADING_SECTOR = {"0730", "0830"}
+# 거래소가 업종 지수를 정규장에만 산출하기 때문이다. 2026-09-11에 실측으로 확인했다.
+#   07:46(프리마켓 전)과 08:56(프리마켓 후)에 업종 21개 등락률이 전부 0.00%로 동일했고,
+#   전날 23:36에는 마지막 체결이 15:32에 멈춰 있었다.
+#
+# 나머지 슬롯 처리
+#   07:30 - 아무것도 안 넣는다. 이 시간대는 "어제 마감 & 글로벌 현황"(지표 6종)이 그 자리를 대신한다
+#   08:30 / 17:30 / 20:00 - 급상승 종목으로 대체한다 (top_gainer_service 참고)
+_SLOTS_WITH_LEADING_SECTOR = {"0930", "1200", "1400", "1530"}
 
 # 지표 6종을 넣는 슬롯 (07:30 "어제 마감 & 글로벌 현황")
 # 이 시간에는 환율 빼고 전 시장이 닫혀 있어서 지표 캐시에 어제 국내 종가와 밤사이 미국 마감값이
@@ -164,7 +167,7 @@ def collect_slot(slot_key: str, *, with_briefing: bool = True) -> dict:
 
     time_slot, _ = _SLOT_DEFS[slot_key]
 
-    sectors = [] if slot_key in _SLOTS_WITHOUT_LEADING_SECTOR else leading_sector_service.collect()
+    sectors = leading_sector_service.collect() if slot_key in _SLOTS_WITH_LEADING_SECTOR else []
     indicators = _indicator_rows() if slot_key in _SLOTS_WITH_INDICATORS else []
     news = news_service.collect(time_slot, limit=_NEWS_LIMIT, use_llm=with_briefing)
 
@@ -177,6 +180,7 @@ def collect_slot(slot_key: str, *, with_briefing: bool = True) -> dict:
         "news": _news_fields(news),
         "indicators": indicators,
         "leading_sectors": sectors,
+        "top_gainers": top_gainer_service.collect(slot_key),
         # 장중 변화는 DB에서 07:30 값을 읽어야 만들 수 있어서 여기서는 비워두고 collect_and_save에서 채운다
         "intraday_changes": [],
     }
@@ -197,6 +201,7 @@ def _to_response(slot_key: str, collected: dict) -> TimelineSlotResponse:
         briefing_points=[BriefingPointItem(**point) for point in (briefing["points"] if briefing else [])],
         beginner_guides=[BeginnerGuideItem(**guide) for guide in collected["beginner_guides"]],
         leading_sectors=_to_sector_items(collected["leading_sectors"]),
+        top_gainers=[TopGainerItem(**row) for row in collected["top_gainers"]],
         news=[NewsItem(seq=seq, **item) for seq, item in enumerate(collected["news"], start=1)],
         indicators=[SlotIndicatorItem(name=row["name"], price=row["price"], change_rate=row["change_rate"]) for row in collected["indicators"]],
         intraday_changes=[IntradayChangeItem(**row) for row in collected["intraday_changes"]],
@@ -208,6 +213,14 @@ def get_slot(slot_key: str, *, with_briefing: bool = True) -> TimelineSlotRespon
     return _to_response(slot_key, collect_slot(slot_key, with_briefing=with_briefing))
 
 
+# DB에 저장된 시각에 한국 시간임을 붙여준다
+#
+# DB에는 시간대 정보 없이 한국 시간 시계값만 저장한다(models/timeline.py 참고).
+# 그대로 내보내면 프런트가 무슨 시간대인지 몰라서 UTC로 읽을 수 있으므로, 꺼낼 때 붙여준다
+def _with_kst(value: datetime | None) -> datetime | None:
+    return value.replace(tzinfo=_KST) if value is not None else None
+
+
 # DB에서 읽은 슬롯을 응답 형태로 바꾼다
 def _from_db(slot: TimelineSlot) -> TimelineSlotResponse:
     slot_key = slot.time_slot.replace(":", "")
@@ -216,7 +229,7 @@ def _from_db(slot: TimelineSlot) -> TimelineSlotResponse:
         slot_key=slot_key,
         time_slot=slot.time_slot,
         title=prompts.SLOT_TITLES.get(slot.time_slot, slot.time_slot),
-        collected_at=slot.created_at,
+        collected_at=_with_kst(slot.created_at),
         briefing_headline=slot.briefing_headline,
         briefing_subtitle=slot.briefing_subtitle,
         briefing_points=[BriefingPointItem(seq=row.seq, title=row.title, body=row.body) for row in slot.insights],
@@ -238,8 +251,8 @@ def _from_db(slot: TimelineSlot) -> TimelineSlotResponse:
             )
             for sector in slot.leading_sectors
         ],
-        # published_at은 테이블에 칸이 없어서 저장한 시각으로 채운다
-        news=[NewsItem(seq=row.seq, title=row.title, summary=row.summary or "", url=row.url, published_at=slot.created_at) for row in slot.news],
+        top_gainers=[TopGainerItem(seq=row.seq, name=row.name, change_rate=row.change_rate, price=row.price) for row in slot.top_gainers],
+        news=[NewsItem(seq=row.seq, title=row.title, summary=row.summary or "", url=row.url, published_at=_with_kst(row.published_at)) for row in slot.news],
         indicators=[SlotIndicatorItem(name=row.name, price=row.price, change_rate=row.change_rate) for row in slot.indicators],
         intraday_changes=[IntradayChangeItem(name=row.name, morning_price=row.morning_price, closing_price=row.closing_price, change_rate=row.change_rate) for row in slot.intraday_changes],
     )
@@ -253,7 +266,11 @@ async def collect_and_save(session: AsyncSession, slot_key: str, *, trade_date: 
 
     time_slot, _ = _SLOT_DEFS[slot_key]
     day = trade_date or datetime.now(_KST).date()
-    collected = collect_slot(slot_key, with_briefing=with_briefing)
+
+    # 수집은 동기 함수라 별도 스레드에서 돌린다
+    # 그냥 부르면 KIS·네이버·LLM 요청(1~2분)이 이벤트 루프를 통째로 막아서, 그동안 서버가
+    # 아무 요청도 못 받고 다른 예약 작업도 멈춘다
+    collected = await asyncio.to_thread(collect_slot, slot_key, with_briefing=with_briefing)
 
     # 장중 변화는 그날 07:30 슬롯을 읽어야 하므로 저장 직전에 채운다
     if slot_key in _SLOTS_WITH_INTRADAY:

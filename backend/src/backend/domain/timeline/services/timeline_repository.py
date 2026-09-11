@@ -8,7 +8,8 @@
 #   조회할 때 selectinload로 자식 테이블을 미리 같이 읽어와야 한다. 동기 ORM처럼 나중에
 #   slot.news를 꺼내려 하면 MissingGreenlet 에러가 난다(비동기에서는 뒤늦은 조회가 안 됨).
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +24,18 @@ from backend.domain.timeline.models.timeline import (
     TimelineLeadingSectorStock,
     TimelineNews,
     TimelineSlot,
+    TimelineTopGainer,
 )
+
+_KST = ZoneInfo("Asia/Seoul")
+
+
+# 시각을 한국 시간 시계값으로 바꾼다 (DB에는 시간대 정보 없이 저장한다 - models/timeline.py 참고)
+def _to_naive_kst(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value.astimezone(_KST).replace(tzinfo=None)
+
 
 # 조회할 때 같이 읽어올 자식 테이블 목록
 # 테이블을 추가하면 여기에도 넣어야 한다. 빠뜨리면 그 값만 조용히 비어 보인다
@@ -34,6 +46,7 @@ _EAGER_LOAD = (
     selectinload(TimelineSlot.indicators),
     selectinload(TimelineSlot.intraday_changes),
     selectinload(TimelineSlot.leading_sectors).selectinload(TimelineLeadingSector.stocks),
+    selectinload(TimelineSlot.top_gainers),
 )
 
 
@@ -96,9 +109,14 @@ async def save_slot(session: AsyncSession, trade_date: date, time_slot: str, col
         for guide in guides
     ]
 
-    slot.news = [TimelineNews(seq=seq, title=item["title"], summary=item["summary"], url=item["url"]) for seq, item in enumerate(collected.get("news", []), start=1)]
+    slot.news = [TimelineNews(seq=seq, title=item["title"], summary=item["summary"], url=item["url"], published_at=_to_naive_kst(item.get("published_at"))) for seq, item in enumerate(collected.get("news", []), start=1)]
 
     slot.indicators = [TimelineIndicator(name=item["name"], price=item["price"], change_rate=item["change_rate"]) for item in collected.get("indicators", [])]
+
+    slot.top_gainers = [
+        TimelineTopGainer(seq=item["seq"], name=item["name"], change_rate=item["change_rate"], price=item["price"])
+        for item in collected.get("top_gainers", [])
+    ]
 
     slot.intraday_changes = [
         TimelineIntradayChange(name=item["name"], morning_price=item["morning_price"], closing_price=item["closing_price"], change_rate=item["change_rate"])

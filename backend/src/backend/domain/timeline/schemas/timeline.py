@@ -44,7 +44,7 @@ class NewsItem(BaseModel):
     title: str
     summary: str
     url: str
-    published_at: datetime  # 확인용. 지금 테이블에는 저장하지 않는다
+    published_at: datetime | None  # 기사 발행 시각. 컬럼 추가 전에 저장된 행은 비어 있을 수 있다
 
 
 # 지표 한 줄 (timeline_indicator 테이블과 같은 구성). 07:30 슬롯에만 들어간다
@@ -54,6 +54,15 @@ class SlotIndicatorItem(BaseModel):
     name: str
     price: float
     change_rate: float
+
+
+# 급상승 종목 한 줄 (timeline_top_gainer 테이블과 같은 구성)
+# 08:30 / 17:30 / 20:00 슬롯에만 들어간다. 그 시간대는 업종 지수가 안 돌아서 주도 섹터를 못 만든다
+class TopGainerItem(BaseModel):
+    seq: int  # 표시 순서 (1, 2, 3)
+    name: str  # 종목명
+    change_rate: float  # 등락률(%)
+    price: float  # 가격 (08:30은 예상체결가, 17:30/20:00은 애프터마켓 현재가)
 
 
 # 장중 변화 한 줄 (timeline_intraday_change 테이블과 같은 구성). 15:30 슬롯에만 들어간다
@@ -74,7 +83,8 @@ class TimelineSlotResponse(BaseModel):
     briefing_subtitle: str | None
     briefing_points: list[BriefingPointItem]  # 최대 3개
     beginner_guides: list[BeginnerGuideItem]  # 최대 3개
-    leading_sectors: list[LeadingSectorItem]  # 07:30 / 08:30 슬롯은 빈 배열
+    leading_sectors: list[LeadingSectorItem]  # 정규장 슬롯(09:30~15:30)에만 채워진다
+    top_gainers: list[TopGainerItem]  # 08:30 / 17:30 / 20:00 슬롯에만 채워진다
     news: list[NewsItem]
     indicators: list[SlotIndicatorItem]  # 07:30 슬롯 외에는 빈 배열
     intraday_changes: list[IntradayChangeItem]  # 15:30 슬롯 외에는 빈 배열
