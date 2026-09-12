@@ -1,11 +1,16 @@
 # timeline_service.py
 # 슬롯 하나에 들어갈 데이터를 모아서 응답 형태로 조립한다
 #
-# 지금은 DB를 거치지 않는다. 요청이 올 때마다 주도 섹터·뉴스를 새로 수집하고 지표는 캐시에서 읽어서
-# 바로 내려준다. Postman으로 값이 제대로 나오는지 확인하는 단계이기 때문이다.
-# 저장 로직(timeline_slot 테이블에 넣기)과 스케줄러 연결은 다음 단계에서 붙인다.
+# 경로가 두 개다
+#   collect_and_save()  스케줄러가 정해진 시각에 부른다. 수집 -> DB 저장 -> 저장된 값을 응답
+#   get_day()           프런트가 부른다. DB에서 읽기만 한다
+#
+# get_slot()은 DB를 거치지 않고 즉석 수집해서 돌려주는 확인용 경로다.
+# 값이 호출할 때마다 조금씩 달라지므로 화면용으로 쓰지 말 것
 
 import asyncio
+import logging
+import time
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
@@ -46,8 +51,19 @@ _SLOT_DEFS = {time_slot.replace(":", ""): (time_slot, title) for time_slot, titl
 _SLOTS_WITH_LEADING_SECTOR = {"0930", "1200", "1400", "1530"}
 
 # 지표 6종을 넣는 슬롯 (07:30 "어제 마감 & 글로벌 현황")
-# 이 시간에는 환율 빼고 전 시장이 닫혀 있어서 지표 캐시에 어제 국내 종가와 밤사이 미국 마감값이
-# 그대로 남아 있다. 슬롯 성격과 정확히 맞으므로 KIS를 다시 부르지 않고 캐시를 그대로 쓴다
+#
+# 이 시간에는 환율 빼고 전 시장이 닫혀 있어서, 지수 5종은 어제 국내 종가와 밤사이 미국 마감값이
+# 그대로 남아 있다. 슬롯 성격과 정확히 맞는다.
+#
+# 그래도 캐시를 읽지 않고 새로 받는다(force_refresh=True). 환율 때문이다.
+#   환율은 24시간 움직여서 캐시 값이 최대 10분 낡을 수 있다. 게다가 지표 바 갱신 작업이
+#   07:30 정각에 같이 예약돼 있어서(cron minute=0,10,...,30,...) 어느 쪽이 먼저 끝날지 모른다.
+#   캐시를 읽으면 07:20 환율이 "07:30 가격"으로 저장될 수 있다.
+#
+#   이 값은 15:30 장중 변화의 기준점이고, **그 시점을 놓치면 되살릴 방법이 없다**
+#   (코스피·코스닥은 07:30 값이 곧 전일 종가라 복원되지만 환율은 안 된다).
+#   15:30 슬롯도 같은 이유로 새로 받으므로, 두 시점을 같은 방식으로 재는 것이 맞다.
+#   대가는 하루 6회 추가 호출이다
 _SLOTS_WITH_INDICATORS = {"0730"}
 
 # 장중 변화를 넣는 슬롯 (15:30 "장 마감")
@@ -61,7 +77,8 @@ _INTRADAY_TARGET_NAMES = ("KOSPI", "KOSDAQ", "USD/KRW")
 
 # 슬롯별 수집 시각. (slot_key) -> (시, 분)
 #
-# 슬롯 시각이 되면 그때 수집한다. 생성에 1~2분 걸리므로(실측 78초) 화면에는 그만큼 늦게 뜬다.
+# 여덟 슬롯 모두 슬롯 시각 정시에 수집한다. 생성에 1~2분 걸리므로(거래일 실측 78초)
+# 화면에는 그만큼 늦게 뜬다.
 #
 # 처음에는 5분 전에 미리 만들어두는 방식이었는데 바꿨다. 이유는 세 가지다.
 #   1. 데이터가 슬롯 시각과 어긋난다. "12:00 오전장 흐름"에 11:55 값이 들어간다.
@@ -70,8 +87,15 @@ _INTRADAY_TARGET_NAMES = ("KOSPI", "KOSDAQ", "USD/KRW")
 #   3. 미리 만드는 방식은 마감이 있다. 07:25에 실패하면 07:30까지 5분 안에 성공해야 한다.
 #      정시 수집은 마감이 없어서 실패해도 다시 시도하고 조금 늦게 올리면 된다.
 #
-# 15:30만 5분 뒤다. 코스피 종가는 15:30 동시호가가 끝나야 확정되므로, 정시에 수집하면
-# "장 마감" 슬롯에 마감 전 값이 들어간다.
+# 15:30도 정시로 통일했다 (2026-09-12)
+#   전에는 15:35였다. 코스피 종가는 15:20~15:30 마감 동시호가로 정해지므로 정시에 조회하면
+#   마감 전 값이 들어갈 수 있다는 우려였는데, 그 차이가 실제로 있는지는 재본 적이 없다.
+#   슬롯 여덟 개 중 하나만 규칙이 다른 상태를 유지하는 대가가 더 크다고 판단했다.
+#   장중 변화는 캐시가 아니라 새로 받아오므로(_indicator_rows(force_refresh=True)) 15:30:00
+#   시점의 최신 값이 들어간다.
+#
+#   월요일(9/14) 실데이터에서 15:30 슬롯의 closing_price와 실제 종가를 비교해볼 것.
+#   다르면 이 표의 "1530"만 (15, 35)로 되돌리면 된다
 #
 # 수집 시각을 바꾸려면 이 표만 고치면 된다
 SLOT_COLLECT_TIMES = {
@@ -80,15 +104,29 @@ SLOT_COLLECT_TIMES = {
     "0930": (9, 30),
     "1200": (12, 0),
     "1400": (14, 0),
-    "1530": (15, 35),
+    "1530": (15, 30),
     "1730": (17, 30),
     "2000": (20, 0),
 }
 
-# 슬롯 하나에 넣을 뉴스 개수
-_NEWS_LIMIT = 10
+# 슬롯 하나에 넣을 뉴스 개수 (최대 8건, 최소 5건)
+# 두 곳에 숫자를 따로 적어두면 한쪽만 고쳐서 어긋나므로 news_service의 상한을 그대로 가져다 쓴다
+_NEWS_LIMIT = news_service._PICK_MAX
 
 _KST = ZoneInfo("Asia/Seoul")
+
+logger = logging.getLogger(__name__)
+
+
+# 단계별 소요 시간을 재서 찍고 결과를 그대로 돌려준다
+#
+# 슬롯 하나를 만드는 데 1~2분이 걸리는데(거래일 실측 78초), 어디서 시간을 쓰는지 총시간만으로는
+# 모른다. 느려지거나 실패했을 때 KIS인지 네이버인지 제미나이인지 바로 가르려면 단계별로 필요하다
+def _timed(label: str, func, *args, **kwargs):
+    started = time.monotonic()
+    result = func(*args, **kwargs)
+    logger.info("  [%s] %.1f초", label, time.monotonic() - started)
+    return result
 
 
 # 주도 섹터 수집 결과를 응답 형태로 바꾼다
@@ -108,8 +146,14 @@ def _to_sector_items(collected: list[dict]) -> list[LeadingSectorItem]:
 # 캐시가 비어 있으면 먼저 채운다. 캐시는 서버가 뜰 때(main.py의 lifespan) 채워지는데,
 # 스케줄러가 아닌 다른 경로로 이 함수가 불릴 수 있다(스크립트 실행, 서버 기동 직후 등).
 # 이 처리가 없으면 07:30 슬롯의 지표가 조용히 빈 채로 저장된다 - 실제로 그렇게 저장된 적이 있다
-def _indicator_rows() -> list[dict]:
-    if not market_indicator_service.get_cache_snapshot():
+#
+# force_refresh=True면 캐시가 차 있어도 KIS를 다시 부른다. 15:30 슬롯의 장중 변화에 쓴다.
+# 그 슬롯은 15:35에 수집하는데 캐시는 15:30에 갱신된 뒤 15:40에는 장마감으로 건너뛰므로,
+# 캐시를 그대로 읽으면 마감 동시호가 전 값이 "종가"로 저장된다.
+# 15:30을 5분 미뤄둔 이유 자체가 확정된 종가를 받기 위해서라서, 여기서는 새로 불러야 한다.
+# KIS를 6번 부르므로 이벤트 루프를 막지 않도록 호출하는 쪽에서 asyncio.to_thread로 감쌀 것
+def _indicator_rows(*, force_refresh: bool = False) -> list[dict]:
+    if force_refresh or not market_indicator_service.get_cache_snapshot():
         market_indicator_service.refresh_all(force=True)
 
     return [{"code": cached["code"], "name": cached["name"], "price": cached["price"], "change_rate": cached["change_rate"]} for cached in market_indicator_service.get_cache_snapshot().values()]
@@ -129,7 +173,7 @@ def _news_fields(rows: list[dict]) -> list[dict]:
 async def _intraday_rows(session: AsyncSession, trade_date: date, current: list[dict]) -> list[dict]:
     morning = await timeline_repository.load_slot(session, trade_date, "07:30")
     if morning is None:
-        print(f"[경고] {trade_date} 07:30 슬롯이 없어 장중 변화를 만들 수 없습니다.")
+        logger.warning("%s 07:30 슬롯이 없어 장중 변화를 만들 수 없습니다.", trade_date)
         return []
 
     morning_prices = {row.name: row.price for row in morning.indicators}
@@ -160,19 +204,41 @@ async def _intraday_rows(session: AsyncSession, trade_date: date, current: list[
 # LLM을 세 번 부르기 때문에(뉴스 선별 + 브리핑 + 불개미 요약) 1~2분 걸린다.
 # with_briefing=False를 주면 LLM 단계를 통째로 건너뛴다 - 수집 결과만 빠르게 볼 때 쓴다
 #
-# 반환 형태: {"briefing": ..., "beginner_guides": [...], "news": [...], "indicators": [...], "leading_sectors": [...]}
-def collect_slot(slot_key: str, *, with_briefing: bool = True) -> dict:
+# 반환 형태: {"briefing": ..., "beginner_guides": [...], "news": [...], "indicators": [...],
+#             "leading_sectors": [...], "top_gainers": [...], "intraday_changes": [...]}
+def collect_slot(slot_key: str, *, with_briefing: bool = True, intraday_changes: list[dict] | None = None) -> dict:
     if slot_key not in _SLOT_DEFS:
         raise ValueError(f"'{slot_key}'는 없는 슬롯입니다. 가능한 값: {', '.join(_SLOT_DEFS)}")
 
-    time_slot, _ = _SLOT_DEFS[slot_key]
+    # 장중 변화는 DB에서 07:30 값을 읽어야 만들 수 있어서 여기서 만들지 않고 넘겨받는다.
+    # 브리핑이 이 값을 재료로 써야 하므로 브리핑보다 먼저 준비돼 있어야 한다(collect_and_save 참고)
+    intraday_changes = intraday_changes or []
 
-    sectors = leading_sector_service.collect() if slot_key in _SLOTS_WITH_LEADING_SECTOR else []
-    indicators = _indicator_rows() if slot_key in _SLOTS_WITH_INDICATORS else []
-    news = news_service.collect(time_slot, limit=_NEWS_LIMIT, use_llm=with_briefing)
+    time_slot, _ = _SLOT_DEFS[slot_key]
+    logger.info("[수집] %s 시작", time_slot)
+    total_started = time.monotonic()
+
+    sectors = _timed("주도 섹터", leading_sector_service.collect) if slot_key in _SLOTS_WITH_LEADING_SECTOR else []
+    indicators = _timed("지표 6종", _indicator_rows, force_refresh=True) if slot_key in _SLOTS_WITH_INDICATORS else []
+    top_gainers = _timed("급상승 종목", top_gainer_service.collect, slot_key) if slot_key in top_gainer_service.SOURCE_BY_SLOT else []
+    news = _timed("뉴스", news_service.collect, time_slot, limit=_NEWS_LIMIT, use_llm=with_briefing)
 
     # 브리핑은 위에서 모은 값을 재료로 쓴다. 그래서 수집이 끝난 뒤에 부른다
-    briefing, guides = briefing_service.generate(time_slot, indicators=indicators, sectors=sectors, news=news) if with_briefing else (None, [])
+    if with_briefing:
+        briefing, guides = _timed(
+            "LLM 브리핑·해설",
+            briefing_service.generate,
+            time_slot,
+            indicators=indicators,
+            sectors=sectors,
+            top_gainers=top_gainers,
+            intraday_changes=intraday_changes,
+            news=news,
+        )
+    else:
+        briefing, guides = None, []
+
+    logger.info("[수집] %s 완료 - 총 %.1f초", time_slot, time.monotonic() - total_started)
 
     return {
         "briefing": briefing,
@@ -180,9 +246,8 @@ def collect_slot(slot_key: str, *, with_briefing: bool = True) -> dict:
         "news": _news_fields(news),
         "indicators": indicators,
         "leading_sectors": sectors,
-        "top_gainers": top_gainer_service.collect(slot_key),
-        # 장중 변화는 DB에서 07:30 값을 읽어야 만들 수 있어서 여기서는 비워두고 collect_and_save에서 채운다
-        "intraday_changes": [],
+        "top_gainers": top_gainers,
+        "intraday_changes": intraday_changes,
     }
 
 
@@ -267,14 +332,24 @@ async def collect_and_save(session: AsyncSession, slot_key: str, *, trade_date: 
     time_slot, _ = _SLOT_DEFS[slot_key]
     day = trade_date or datetime.now(_KST).date()
 
+    # 장중 변화를 먼저 만든다 (15:30 슬롯만)
+    #
+    # 순서가 중요하다. 이 값이 브리핑의 재료이기 때문이다. 예전에는 수집·브리핑이 끝난 뒤에
+    # 채웠는데, 그러면 "장 마감" 브리핑이 07:30 대비 하루 움직임을 못 보고 뉴스와 섹터만 보고
+    # 글을 썼다. 그날 시장이 얼마나 움직였는지가 마감 브리핑의 핵심 재료다.
+    #
+    # 지표는 캐시에서 읽지 않고 새로 부른다(force_refresh=True). 캐시는 10분 주기로 갱신되는데,
+    # 지표 바 갱신 작업과 이 슬롯이 15:30 정각에 동시에 예약돼 있어서 어느 쪽이 먼저 끝날지
+    # 알 수 없다. 캐시를 읽으면 15:20 값이 종가로 저장될 수 있다
+    intraday = []
+    if slot_key in _SLOTS_WITH_INTRADAY:
+        closing = await asyncio.to_thread(_indicator_rows, force_refresh=True)
+        intraday = await _intraday_rows(session, day, closing)
+
     # 수집은 동기 함수라 별도 스레드에서 돌린다
     # 그냥 부르면 KIS·네이버·LLM 요청(1~2분)이 이벤트 루프를 통째로 막아서, 그동안 서버가
     # 아무 요청도 못 받고 다른 예약 작업도 멈춘다
-    collected = await asyncio.to_thread(collect_slot, slot_key, with_briefing=with_briefing)
-
-    # 장중 변화는 그날 07:30 슬롯을 읽어야 하므로 저장 직전에 채운다
-    if slot_key in _SLOTS_WITH_INTRADAY:
-        collected["intraday_changes"] = await _intraday_rows(session, day, _indicator_rows())
+    collected = await asyncio.to_thread(collect_slot, slot_key, with_briefing=with_briefing, intraday_changes=intraday)
 
     saved = await timeline_repository.save_slot(session, day, time_slot, collected)
     return _from_db(saved)
@@ -313,7 +388,7 @@ def get_slot_list() -> list[dict]:
 #   3. 실패해도 예외를 밖으로 내보내지 않는다 - 한 슬롯이 실패해도 다른 슬롯 예약은 살아있어야 한다
 async def run_scheduled_collect(slot_key: str) -> None:
     if not market_hours.is_trading_day():
-        print(f"[스케줄러] {slot_key} 건너뜀 - 오늘은 장이 열리지 않습니다.")
+        logger.info("[스케줄러] %s 건너뜀 - 오늘은 장이 열리지 않습니다.", slot_key)
         return
 
     started = datetime.now(_KST)
@@ -321,8 +396,12 @@ async def run_scheduled_collect(slot_key: str) -> None:
         async with get_session_factory()() as session:
             saved = await collect_and_save(session, slot_key)
     except Exception as error:
-        print(f"[스케줄러] {slot_key} 수집 실패 - {type(error).__name__}: {error}")
+        # exc_info=True로 스택까지 남긴다. 슬롯이 통째로 실패한 경우라 원인 추적이 필요하다
+        logger.error("[스케줄러] %s 수집 실패 - %s: %s", slot_key, type(error).__name__, error, exc_info=True)
         return
 
     seconds = (datetime.now(_KST) - started).total_seconds()
-    print(f"[스케줄러] {saved.time_slot} {saved.title} 저장 완료 ({seconds:.0f}초) - 뉴스 {len(saved.news)}건, 브리핑 {'있음' if saved.briefing_headline else '없음'}")
+    logger.info(
+        "[스케줄러] %s %s 저장 완료 (%.0f초) - 뉴스 %d건, 브리핑 %s",
+        saved.time_slot, saved.title, seconds, len(saved.news), "있음" if saved.briefing_headline else "없음",
+    )

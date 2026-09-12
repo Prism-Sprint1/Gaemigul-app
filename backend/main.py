@@ -1,5 +1,6 @@
 # main.py
 
+import logging
 from contextlib import asynccontextmanager
 from zoneinfo import ZoneInfo
 
@@ -9,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import get_settings
+from backend.core.logging_config import setup_logging
 from backend.domain.timeline.routers.timeline import router as timeline_router
 from backend.domain.timeline.services import market_indicator_service, timeline_service
 
@@ -24,22 +26,32 @@ from backend.domain.timeline.services import market_indicator_service, timeline_
 #   반대로 너무 길게 잡으면 안 된다. 맥이 잠들었다 몇 시간 뒤에 깨어났을 때 07:30 슬롯이
 #   09시에 뒤늦게 실행되면, 그때 환율이 "07:30 가격"으로 저장돼 장중 변화가 틀린 값이 된다.
 #   없는 것보다 틀린 게 나쁘므로 짧게 잡는다
+logger = logging.getLogger(__name__)
+
 _scheduler = AsyncIOScheduler(timezone=ZoneInfo("Asia/Seoul"), job_defaults={"misfire_grace_time": 10})
 
 
 # 생명주기 이벤트
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 로그 설정을 가장 먼저 한다. 아래 작업 등록에서 나오는 경고도 파일에 남아야 한다
+    setup_logging()
+
     _register_indicator_job()
     _register_slot_jobs()
 
-    if _scheduler.get_jobs():
+    jobs = _scheduler.get_jobs()
+    if jobs:
         _scheduler.start()
+        logger.info("스케줄러 시작 - 작업 %d개 (%s)", len(jobs), ", ".join(job.id for job in jobs))
+    else:
+        logger.warning("등록된 예약 작업이 없습니다. .env의 KIS 키와 DATABASE_URL을 확인해주세요.")
 
     yield
 
     if _scheduler.running:
         _scheduler.shutdown()
+        logger.info("스케줄러 종료")
 
 
 # 지표 바 갱신 예약 (매 시 0분/10분/20분/30분/40분/50분)
@@ -49,8 +61,11 @@ async def lifespan(app: FastAPI):
 def _register_indicator_job() -> None:
     try:
         market_indicator_service.refresh_all(force=True)
-    except RuntimeError as error:
-        print(f"[경고] 지표 바 비활성화 - {error}")
+    except Exception as error:
+        # RuntimeError(키 없음)뿐 아니라 KIS 장애·타임아웃(httpx 예외)도 여기서 막는다.
+        # 예외가 lifespan 밖으로 나가면 앱이 통째로 기동 실패한다. 지표 바 하나 때문에
+        # API 서버 전체가 안 뜨는 건 과하므로, 지표 바만 끄고 앱은 띄운다
+        logger.warning("지표 바 비활성화 - %s: %s", type(error).__name__, error)
         return
 
     _scheduler.add_job(market_indicator_service.refresh_all, CronTrigger(minute="0,10,20,30,40,50"), id="indicator_bar")
@@ -61,7 +76,7 @@ def _register_indicator_job() -> None:
 # 휴장일 판단은 각 작업 안에서 한다(주말·공휴일이면 아무것도 하지 않는다)
 def _register_slot_jobs() -> None:
     if not get_settings().database_url:
-        print("[경고] 타임라인 슬롯 수집 비활성화 - DATABASE_URL이 .env에 없습니다.")
+        logger.warning("타임라인 슬롯 수집 비활성화 - DATABASE_URL이 .env에 없습니다.")
         return
 
     for slot_key, (hour, minute) in timeline_service.SLOT_COLLECT_TIMES.items():
@@ -80,7 +95,7 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # 프론트 로컬 개발 서버 주소만 허용
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],  # POST /timeline/collect/{slot_key} 수동 수집용
     allow_headers=["*"],
 )
 

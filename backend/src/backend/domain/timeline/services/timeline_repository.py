@@ -8,6 +8,7 @@
 #   조회할 때 selectinload로 자식 테이블을 미리 같이 읽어와야 한다. 동기 ORM처럼 나중에
 #   slot.news를 꺼내려 하면 MissingGreenlet 에러가 난다(비동기에서는 뒤늦은 조회가 안 됨).
 
+import logging
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -28,6 +29,8 @@ from backend.domain.timeline.models.timeline import (
 )
 
 _KST = ZoneInfo("Asia/Seoul")
+
+logger = logging.getLogger(__name__)
 
 
 # 시각을 한국 시간 시계값으로 바꾼다 (DB에는 시간대 정보 없이 저장한다 - models/timeline.py 참고)
@@ -77,7 +80,7 @@ async def save_slot(session: AsyncSession, trade_date: date, time_slot: str, col
             "subtitle": existing.briefing_subtitle,
             "points": [{"seq": row.seq, "title": row.title, "body": row.body} for row in existing.insights],
         }
-        print(f"[안내] {trade_date} {time_slot} - 새 브리핑이 없어서 기존 브리핑을 유지합니다.")
+        logger.info("%s %s - 새 브리핑이 없어서 기존 브리핑을 유지합니다.", trade_date, time_slot)
 
     if not guides and existing is not None and existing.beginner_guides:
         guides = [

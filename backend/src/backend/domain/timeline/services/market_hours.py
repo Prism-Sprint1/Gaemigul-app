@@ -1,7 +1,10 @@
 # market_hours.py
-# 지표별 장 운영시간 판단 (장마감이면 갱신을 멈추는 데 사용)
-# 국내 개장일 판단 (주말·공휴일이면 슬롯 수집을 건너뛰는 데 사용)
+# 지표별 장 운영시간 판단 - 지표 바가 장마감 시 갱신을 멈추는 데 쓴다
+# 국내 개장일 판단 - 두 곳에서 쓴다
+#   1. 슬롯 수집: 휴장일이면 아무것도 하지 않는다 (timeline_service.run_scheduled_collect)
+#   2. 지표 바: 휴장일이면 코스피·코스닥을 갱신하지 않는다 (is_market_open)
 
+import logging
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
@@ -10,31 +13,60 @@ from backend.core import kis_client
 _KST = ZoneInfo("Asia/Seoul")
 _US_EASTERN = ZoneInfo("America/New_York")
 
-# 지표별 개장/마감 시간. 여기 시간을 바꾸면 그 지표의 개장/마감 시간이 바뀐다.
+logger = logging.getLogger(__name__)
+
+# 지표별 개장/마감 시간과 휴장일 판정 기준.
+# (시간대, 개장, 마감, 국내 휴장일을 따르는지) - 여기를 바꾸면 그 지표의 갱신 조건이 바뀐다.
+#
 # 코스피/코스닥/니케이는 한국 시간 기준(한국이랑 일본이 시차가 없어서 같이 씀)
 # 나스닥/S&P500은 미국 동부시간 기준 - 이 시간대는 미국 서머타임을 자동으로 반영해준다
-_MARKET_HOURS: dict[str, tuple[ZoneInfo, time, time]] = {
-    "kospi": (_KST, time(9, 0), time(15, 30)),
-    "kosdaq": (_KST, time(9, 0), time(15, 30)),
-    "nikkei": (_KST, time(9, 0), time(15, 30)),
-    "sp500": (_US_EASTERN, time(9, 30), time(16, 0)),
-    "nasdaq": (_US_EASTERN, time(9, 30), time(16, 0)),
+#
+# 마지막 값은 국내휴장일 조회(CTCA0903R)를 적용할지 여부다.
+# 국내 지표만 True고, 해외 지표는 주말과 시간대만 본다(아래 is_market_open 주석 참고)
+_MARKET_HOURS: dict[str, tuple[ZoneInfo, time, time, bool]] = {
+    "kospi": (_KST, time(9, 0), time(15, 30), True),
+    "kosdaq": (_KST, time(9, 0), time(15, 30), True),
+    "nikkei": (_KST, time(9, 0), time(15, 30), False),
+    "sp500": (_US_EASTERN, time(9, 30), time(16, 0), False),
+    "nasdaq": (_US_EASTERN, time(9, 30), time(16, 0), False),
 }
 
 # 환율(usdkrw)은 정해진 마감시간이 없어서 위 목록에 안 넣고, 항상 갱신하도록 여기 따로 뺐다
 ALWAYS_REFRESH_CODES = {"usdkrw"}
 
 
-# 지금 이 지표의 시장이 열려있는지 확인 (주말이면 무조건 닫힘)
-# 공휴일은 따로 체크하지 않음 - 공휴일에도 "열려있다"고 잘못 판단할 수 있음(알려진 한계)
+# 지금 이 지표의 시장이 열려있는지 확인
+#
+# 국내 지표는 주말 -> 국내 휴장일 -> 개장 시간 순으로 세 가지를 본다.
+# 해외 지표는 주말과 개장 시간만 본다.
+#
+# 해외 공휴일은 보지 않는다 (알려진 한계, 의도한 선택)
+#   KIS에 해외 개장일을 알 수 있는 API가 있다(CTOS5011R "해외결제일자조회").
+#   거래가 있는 시장만 행으로 오는 성질을 쓰면 미국·일본 휴장을 실제로 가려낼 수 있고,
+#   2026-09-23 일본 추분에 JP만 빠지는 것까지 확인했다. 그런데 붙이지 않기로 했다.
+#
+#   이유는 이득이 비용에 비해 작다는 것이다.
+#     아끼는 호출    연간 약 1,000회 = 하루 3회 (미국 9일 + 일본 17일 x 10분 주기)
+#     드는 비용      개장 여부 필드가 없어서 "행이 있으면 개장"으로 해석해야 하고,
+#                   조회 범위가 당월 말까지라 0행이 "휴장"인지 "데이터 없음"인지 구분이 안 된다.
+#                   0행을 휴장으로 믿으면 10월 1일에 해외 지표 갱신이 통째로 멈춘다
+#                   (실제로 그렇게 짰다가 발견해서 고쳤다)
+#   KIS 호출 한도는 초당 기준이라 하루 3회는 의미가 없다. 애매한 API를 하나 더 물고
+#   조용히 멈출 위험을 안는 것보다, 해외 공휴일에 값 안 변하는 호출을 몇 번 더 하는 편이 낫다.
+#
+#   해외 공휴일에 갱신을 시도해도 화면은 틀어지지 않는다. KIS가 마지막 종가를 주므로
+#   캐시 값이 그대로 유지된다. 낭비되는 것은 호출 횟수뿐이다.
 def is_market_open(code: str, now: datetime | None = None) -> bool:
     if code not in _MARKET_HOURS:
         raise ValueError(f"'{code}'는 market_hours 대상이 아닙니다 (ALWAYS_REFRESH_CODES 확인).")
 
-    tz, open_time, close_time = _MARKET_HOURS[code]
+    tz, open_time, close_time, follows_domestic_holiday = _MARKET_HOURS[code]
     local_now = now.astimezone(tz) if now else datetime.now(tz)
 
     if local_now.weekday() >= 5:  # 5=토요일, 6=일요일
+        return False
+
+    if follows_domestic_holiday and not is_trading_day(local_now.date()):
         return False
 
     return open_time <= local_now.time() <= close_time
@@ -68,7 +100,7 @@ def is_trading_day(day: date | None = None) -> bool:
         try:
             _load_open_days(day)
         except Exception as error:
-            print(f"[경고] 휴장일 조회 실패, 개장일로 보고 진행합니다 - {type(error).__name__}: {error}")
+            logger.warning("휴장일 조회 실패, 개장일로 보고 진행합니다 - %s: %s", type(error).__name__, error)
             return True
 
     return _open_day_cache.get(day, True)

@@ -11,6 +11,7 @@
 #   중요도 점수순으로 고른다.
 
 import html
+import logging
 import re
 
 import httpx
@@ -22,6 +23,8 @@ from backend.core import llm_client, naver_client
 from backend.domain.timeline.services import prompts
 
 _KST = ZoneInfo("Asia/Seoul")
+
+logger = logging.getLogger(__name__)
 
 # 슬롯별 검색어. 이 표만 고치면 어느 시간대에 어떤 기사를 모을지 바뀐다
 #
@@ -58,6 +61,15 @@ _FETCH_PER_KEYWORD = {"07:30": 50}
 # 10건 중 9건 같은 기사를 보여줬다(실제 측정값).
 #
 # 07:30만 전날 20:00부터 잡는다. 밤사이 해외장 기사를 담아야 하기 때문이다.
+#
+# 구간은 [시작, 끝) - 시작은 포함, 끝은 배타다. 네이버 pubDate가 분 단위라서(표본 400건 전부
+# 초가 00) 실제로는 아래와 같이 잘린다. 빈틈도 겹침도 없다.
+#
+#   07:30 슬롯   전날 20:00 ~ 07:29      08:30 슬롯   07:30 ~ 08:29
+#   09:30 슬롯   08:30 ~ 09:29           12:00 슬롯   09:30 ~ 11:59
+#   14:00 슬롯   12:00 ~ 13:59           15:30 슬롯   14:00 ~ 15:29
+#   17:30 슬롯   15:30 ~ 17:29           20:00 슬롯   17:30 ~ 19:59
+#
 # 구간을 바꾸려면 이 표만 고치면 된다
 _SLOT_WINDOW = {
     "07:30": ("20:00", True),
@@ -97,8 +109,12 @@ _CANDIDATE_LIMITS = {"07:30": 60}
 # 한 슬롯에 실을 기사 수의 하한과 상한
 # 하한을 둔 이유: 후보가 전부 같은 사건이면 LLM이 중복을 걸러내다가 2건만 남기는 경우가 있는데,
 # 화면에 뉴스 카드가 두 장만 뜨면 허전하다. 모자라면 점수 상위 기사로 채운다
+#
+# 상한을 10에서 8로 줄였다 (2026-09-12). 한 슬롯에 10건이면 스크롤이 길어지는데,
+# 하루 8슬롯이면 최대 80건이라 타임라인 전체로 보면 너무 많다.
+# 이 값만 고치면 수집·저장·응답에 전부 반영된다(timeline_service._NEWS_LIMIT이 이 값을 쓴다)
 _PICK_MIN = 5
-_PICK_MAX = 10
+_PICK_MAX = 8
 
 
 # 제목/요약에 섞여 오는 태그와 HTML 특수문자를 없앤다
@@ -141,11 +157,11 @@ def _select_with_llm(time_slot: str, candidates: list[dict], limit: int) -> list
         seen = set()
         chosen = [index for index in answer.get("selected", []) if isinstance(index, int) and 0 <= index < len(candidates) and not (index in seen or seen.add(index))]
     except (RuntimeError, ValueError, KeyError, httpx.HTTPError) as error:
-        print(f"[경고] 뉴스 LLM 선별 실패, 점수순으로 대체합니다 - {error}")
+        logger.warning("뉴스 LLM 선별 실패, 점수순으로 대체합니다 - %s: %s", type(error).__name__, error)
         return candidates[:limit]
 
     if not chosen:
-        print("[경고] 뉴스 LLM이 아무것도 고르지 않아 점수순으로 대체합니다.")
+        logger.warning("뉴스 LLM이 아무것도 고르지 않아 점수순으로 대체합니다.")
         return candidates[:limit]
 
     selected = [candidates[index] for index in chosen[:limit]]
@@ -177,7 +193,7 @@ def _window(time_slot: str, trade_day: date, now: datetime) -> tuple[datetime, d
 
 # 한 슬롯에 넣을 뉴스를 모아서 돌려준다
 # time_slot: "07:30" 같은 슬롯 값. _SLOT_KEYWORDS에 없는 값을 넣으면 에러가 난다
-# limit: 최종적으로 남길 기사 수의 상한 (기본 10). 하한 5건은 점수 상위 기사로 채워서 맞춘다
+# limit: 최종적으로 남길 기사 수의 상한 (기본 8). 하한 5건은 점수 상위 기사로 채워서 맞춘다
 # trade_date: 어느 날의 슬롯인지. 안 넣으면 오늘
 # now: 테스트할 때 특정 시각을 넣어보기 위한 값 - 평소에는 안 넣어도 된다
 # use_llm: False로 주면 LLM 선별을 건너뛰고 점수 상위 N건을 그대로 쓴다 (키가 없거나 빠르게 확인할 때)
@@ -190,8 +206,8 @@ def _window(time_slot: str, trade_day: date, now: datetime) -> tuple[datetime, d
 #   [{"title": 제목, "summary": 요약, "url": 링크, "published_at": 발행시각, "score": 중요도}, ...]
 #   score는 어떤 기사를 남길지 고를 때 쓴 값이다. 화면에는 안 쓰지만 왜 이 기사가 뽑혔는지
 #   확인할 때 필요해서 같이 돌려준다
-#   published_at은 정렬용이자 LLM에 기사 시점을 알려주는 용도다.
-#   지금 DB 테이블(timeline_news)에는 저장하지 않는다
+#   published_at은 기사 발행 시각이다. LLM에 기사 시점을 알려주는 데 쓰고,
+#   timeline_news.published_at 칼럼에 저장해서 화면에도 내려간다
 def collect(time_slot: str, *, limit: int = _PICK_MAX, trade_date: date | None = None, now: datetime | None = None, use_llm: bool = True) -> list[dict]:
     if time_slot not in _SLOT_KEYWORDS:
         raise ValueError(f"'{time_slot}'는 뉴스 검색어가 정해지지 않은 슬롯입니다 (_SLOT_KEYWORDS 확인).")
@@ -221,10 +237,16 @@ def collect(time_slot: str, *, limit: int = _PICK_MAX, trade_date: date | None =
             }
 
     # 구간에 드는 기사만 남긴다. 너무 적으면 시작을 앞으로 당겨서 한 번 더 걸러본다
-    picked = [item for item in collected.values() if start <= item["published_at"] <= end]
+    #
+    # 끝을 배타적으로(< end) 잡는 이유
+    #   양쪽을 포함으로 두면 슬롯 시각 정각에 발행된 기사가 두 슬롯에 모두 들어간다.
+    #   예: 08:30:00 기사가 08:30 슬롯(07:30~08:30)과 09:30 슬롯(08:30~09:30)에 중복된다.
+    #   구간을 나눠 중복을 0건으로 만든 설계인데 경계에 구멍이 남아 있었다.
+    #   시작은 포함, 끝은 배타로 두면 [20:00, 07:30) [07:30, 08:30) 처럼 빈틈도 겹침도 없다
+    picked = [item for item in collected.values() if start <= item["published_at"] < end]
     if len(picked) < _MIN_ITEMS:
         widened = end - timedelta(hours=_FALLBACK_HOURS)
-        picked = [item for item in collected.values() if widened <= item["published_at"] <= end]
+        picked = [item for item in collected.values() if widened <= item["published_at"] < end]
 
     # 점수순으로 후보를 좁힌다
     #
