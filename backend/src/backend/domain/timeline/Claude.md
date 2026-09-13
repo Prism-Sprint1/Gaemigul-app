@@ -3,6 +3,12 @@
 > 이 문서는 작업을 재개할 때 가장 먼저 읽는 문서다. 새 작업을 시작하기 전에 '다음 작업'과
 > '결정된 설계 방향'을 확인하고, 작업이 끝나면 바뀐 내용을 여기에 반영한다.
 
+> **코드 주석 방침**: 파일 최상단에는 그 파일의 역할, 각 코드 위에는 "무엇에 쓰는지 + 어디를 고치면
+> 어떻게 바뀌는지"만 적는다. 버그를 막는 주의사항은 현재형 한 줄로 쓴다. **날짜·실측 경위·"예전에
+> ~해서 ~했다" 같은 이력은 코드에 쓰지 않고 이 문서에만 남긴다.**
+> 동작을 바꾸면 그 동작을 설명하는 주석을 **모든 파일에서** 찾아 같이 고친다
+> (`grep -rn "옛 동작 키워드" src main.py`).
+
 ## 담당 범위
 
 - 메인 페이지 백엔드 구현 (`src/backend/domain/timeline`)
@@ -15,7 +21,7 @@
   - ~~나스닥 선물, 유가, 금~~ 은 제외함. 한국투자증권 API로 조회는 되지만, 지금 쓰는 계좌에 CME/NYMEX/COMEX 거래소 이용 권한이 없어서 호출하면 에러가 남(계좌 권한 문제라 코드로 해결 불가)
 - **좌측 사이드바**: 실시간 타임라인 피드. 사이드바 껍데기는 전 페이지 고정이고, 캘린더/히트맵 페이지로 이동 시 내부 콘텐츠만 바뀜(다른 도메인 담당)
 - **메인 섹션(시황 탭)**: 8개 시간대 타임라인 콘텐츠. **수집·LLM 생성·DB 저장·조회·스케줄러 구현 완료**
-- **메인 섹션(브리핑 탭)**: AI가 당일 시황 데이터로 일간 보고서 작성 → 그 주 일간 보고서를 모아 주간 보고서 작성. **미착수**
+- **메인 섹션(브리핑 탭)**: AI가 당일 시황 데이터로 일간 보고서 작성 → 그 주 일간 보고서를 모아 주간 보고서 작성. **구현 완료(2026-09-13), 사용자 확인 전**
 
 ## 브랜치
 
@@ -95,7 +101,7 @@ timeline_slot ──┬── timeline_briefing_insight    LLM 요약 3행
   옛 코드일 때 NOT NULL 위반이 난다 — 실제로 슬롯 3개를 날린 적이 있다)
 - `trade_date` + `time_slot` 조합에 유니크 제약 (같은 날 같은 시간대 중복 저장 방지)
 - 하루 전체 약 217행 / 연간 약 5만 행 수준 — 용량·성능상 문제 없음
-- 브리핑 탭(일간/주간 보고서)은 슬롯에 속하지 않으므로, 구현 시 `timeline_daily_report` / `timeline_weekly_report` 테이블을 별도로 추가하면 됨
+- 브리핑 탭(일간/주간 보고서)은 슬롯에 속하지 않으므로 별도 테이블로 둔다 — 아래 '보고서(브리핑 탭) 설계 — 확정 > 테이블 설계안'
 
 **API 엔드포인트는 테이블 수와 무관하다.** 화면이 하루 단위로 렌더링되므로 `GET /timeline?date=...` 하나로 8슬롯 전체를 중첩 JSON으로 내려주고, 여러 테이블을 읽어 조립하는 것은 services 계층이 담당한다.
 
@@ -220,7 +226,7 @@ KIS는 초당 한도를 넘기면 HTTP 500 + `EGW00201`을 준다. 지금도 7�
   17:30  15:30 ~ 17:29          20:00  17:30 ~ 19:59
   ```
 - **무엇을 남길지는 최신순이 아니라 중요도 점수로 정한다.** 07:30은 구간이 11시간이 넘어서, 최신순으로 자르면 밤사이 나온 중요한 기사가 아침의 자잘한 기사에 밀려 잘려나간다. 점수는 검색어별 정확도 순위를 `1/(60+순위)`로 바꿔 합산한 값이다. 여러 검색어에 동시에 걸린 기사일수록, 각 검색어에서 위에 있을수록 높아진다. 남길 것을 고른 뒤 화면 순서는 최신순으로 되돌린다
-- 이 점수는 순위를 합칠 뿐 내용의 중요도를 판단하지는 못한다. 스펙상 최종 형태는 'AI가 주요 뉴스만 선별'이므로, LLM을 붙일 때 후보를 넉넉히 넘겨 고르게 하는 단계를 추가한다
+- 이 점수는 순위를 합칠 뿐 내용의 중요도를 판단하지는 못한다. 그래서 점수 상위 후보(30건, 07:30은 60건)를 LLM에 넘겨 실을 기사를 고르게 한다(`prompts.NEWS_SELECT_PROMPT`). LLM이 실패하면 점수 상위로 대체
 - `link`와 `originallink`는 같은 값이 아니다. `originallink`는 항상 언론사 원문이고, `link`는 네이버 제휴 기사면 `n.news.naver.com` 주소, 아니면 원문 주소다. 60건 표본에서 네이버 도메인은 25%였다. **`link`를 쓰되 없으면 `originallink`로 넘긴다**
 - 검색어 고르는 기준: 단어가 짧고 하나일수록 잘 맞는다. `개장시황`/`마감시황`처럼 기사 제목 말머리로 실제 쓰이는 말이 정확도가 높다. `환율`처럼 일상어이기도 한 단어는 제품 가격 기사를 물어오므로 `원달러 환율`로 좁힌다
 - 슬롯당 **최소 5건 / 최대 8건**을 싣는다(`news_service._PICK_MIN` / `_PICK_MAX`).
@@ -303,21 +309,25 @@ NXT를 쓰는 이유가 이것이다.
 ```
 backend/
 ├── main.py                     FastAPI 진입점 (라우터 등록, CORS, 스케줄러 9개 작업)
-├── create_tables.py            Supabase 테이블 생성용 (보고서 테이블 추가 때 다시 쓴다)
+├── create_tables.py            Supabase 테이블 생성용 (없는 테이블만 만든다)
 ├── logs/timeline.log           로그 (git에 올리지 않음. 14일치 보관)
 └── src/backend/
     ├── core/                   전 도메인 공용 (팀 규칙)
     │   ├── config.py             .env 값 로드
     │   ├── logging_config.py     로그 설정 (터미널 + logs/timeline.log)
     │   ├── database.py           Supabase 연결 (get_engine / get_session_factory / Base / get_db)
-    │   ├── kis_client.py         한국투자증권 API 호출 (지수·환율·업종·종목순위·지수틱)
+    │   ├── kis_client.py         한국투자증권 API 호출 (지수·환율·업종·종목순위·지수틱·투자자 매매동향·기간별 시세)
     │   ├── naver_client.py       네이버 뉴스 검색 API 호출 (NCP)
-    │   └── llm_client.py         제미나이 API 호출 (모델 gemini-3.5-flash-lite)
+    │   ├── llm_client.py         제미나이 API 호출 (모델 gemini-3.5-flash-lite)
+    │   ├── image_client.py       Cloudflare Workers AI 이미지 생성 (보고서 이미지)
+    │   └── storage_client.py     Supabase Storage 업로드 (보고서 이미지)
     └── domain/timeline/
         ├── models/timeline.py            타임라인 콘텐츠 9개 테이블
-        ├── routers/timeline.py           GET /timeline, /indicators, /slots, /glossary, /slot/{key} + POST /collect/{key}
+        ├── models/report.py              일간·주간 보고서 7개 테이블
+        ├── routers/timeline.py           GET /timeline, /indicators, /slots, /glossary, /slot/{key}, /report + POST /collect/{key}, /report/daily, /report/weekly
         ├── schemas/market_indicator.py   지표 바 응답 형태
         ├── schemas/timeline.py           슬롯 응답 형태 (DTO)
+        ├── schemas/report.py             보고서 응답 형태 (DTO)
         ├── services/market_hours.py      지표별 장 운영시간 + 개장일 판단
         ├── services/market_indicator_service.py   지표 바 캐시 관리 + 가공
         ├── services/leading_sector_service.py     주도 섹터 수집 (업종 화이트리스트 포함)
@@ -327,6 +337,9 @@ backend/
         ├── services/glossary.py                   주식 입문자용 용어 사전 (프런트 호버용)
         ├── services/top_gainer_service.py         급상승 종목 TOP3 수집 (정규장 밖 슬롯)
         ├── services/timeline_repository.py        슬롯 DB 저장·조회
+        ├── services/report_repository.py          보고서 DB 저장(수치·문구·이미지 3단계)·조회
+        ├── services/report_data_service.py        일간·주간 보고서 수치 수집 (투자자·VKOSPI·분기 차트·섹터 카드)
+        ├── services/report_service.py             보고서 생성 흐름 (문구 LLM·섹터 선택·용어·이미지·주간·스케줄러 진입점·응답 변환)
         └── services/timeline_service.py           슬롯 조립 (시간대 정의 포함)
 ```
 
@@ -432,6 +445,8 @@ KIS 호출 한도는 초당 기준이라 하루 3회는 의미가 없다. 애매
 | `GET /timeline/slots` | 호출 가능한 슬롯 목록 |
 | `GET /timeline/glossary` | 용어 사전 `{용어: 설명}` 19개. 프런트가 호버 설명에 쓴다 |
 | `GET /timeline/slot/{slot_key}` | DB를 거치지 않고 즉석 수집 (확인용) |
+| `GET /timeline/report?type=daily\|weekly&date=` | 보고서 조회 (프런트용). 없으면 `null` — 아래 '보고서' 섹션 |
+| `POST /timeline/report/daily?date=` / `POST /timeline/report/weekly?date=` | 보고서 수동 생성 |
 
 `GET /timeline`은 오늘 날짜를 조회하면 아직 시간이 안 된 슬롯을 빼고 준다. 지난 날짜는 전부 내려준다.
 슬롯 시각에 수집을 시작하므로 데이터가 시각보다 먼저 생길 일은 없지만, 확인용으로 미래 슬롯을
@@ -444,11 +459,12 @@ LLM을 건너뛰어 1~2초에 끝난다.
 
 슬롯별로 채워지는 항목이 다르다.
 
-- 주도 섹터: 07:30 / 08:30은 빈 배열. 정규장 밖에는 업종 지수가 돌지 않는 것을 실측으로 확인했다
+- 주도 섹터: 09:30 / 12:00 / 14:00 / 15:30만 채워지고 나머지는 빈 배열. 정규장 밖에는 업종 지수가 돌지 않는 것을 실측으로 확인했다
+- 급상승 종목: 08:30 / 17:30 / 20:00만 채워진다
 - 지표 6종: 07:30에만 채워진다. 그 시간에는 환율 빼고 전 시장이 닫혀 있어서 지수 5종은 어제 국내 종가와 밤사이 미국 마감값이고, 슬롯 성격("어제 마감 & 글로벌 현황")과 정확히 맞는다.
   **캐시를 읽지 않고 새로 받는다**(`force_refresh=True`). 환율은 24시간 움직여서 캐시가 최대 10분 낡을 수 있고, 지표 바 갱신이 07:30 정각에 같이 예약돼 있어 순서를 보장할 수 없다. 이 값이 15:30 장중 변화의 기준점이고 놓치면 되살릴 수 없다. 15:30 슬롯도 같은 이유로 새로 받으므로 두 시점을 같은 방식으로 잰다
-- 브리핑·주린이 해설: LLM이 아직 없어서 응답 필드 자체를 넣지 않았다. 빈 배열로 자리만 두면 프런트가 오해할 수 있어서 LLM 붙일 때 필드째로 추가한다
-- 장중 변화(15:30): 07:30 시점 값이 저장돼 있어야 만들 수 있어서 저장 로직이 붙은 뒤에 넣는다
+- 브리핑·주린이 해설: 모든 슬롯. LLM이 실패하면 `briefing_headline`이 `null`, 목록은 빈 배열
+- 장중 변화: 15:30만. 그날 07:30 슬롯이 DB에 있어야 만들어진다
 
 ### 단계별 소요 시간
 
@@ -505,10 +521,27 @@ KIS·네이버 수집만 보면 슬롯당 1초 안팎이다(8슬롯 전체 0.5~1
 ### 두 단계로 부른다
 
 1. **브리핑** — 수집 데이터 → 헤드라인 + 부제 + 포인트 3개
-2. **불개미 요약** — 위 브리핑 → 같은 내용을 입문자용으로 다시 쓴 것 3개
+2. **불개미 해설** — 수집 데이터 + 브리핑 → 왜 그런지 풀어 설명한 문단 3개
 
-순서가 중요하다. 각각 원본 데이터에서 따로 만들면 두 요약이 서로 다른 얘기를 할 수 있다.
-2단계 입력이 원본이 아니라 1단계 결과이므로 새로운 사실이 끼어들 여지가 없다.
+스펙("위 세 데이터를 바탕으로 주린이 해설")에 맞춰 해설도 원본 데이터를 받는다(2026-09-13).
+처음에는 브리핑만 넘겼는데, 그러면 브리핑이 한 줄로 넘어간 배경을 해설이 설명할 재료가 없었다.
+브리핑과 다른 얘기를 하지 않도록 [데이터]·[브리핑]에 없는 사실은 금지하고, 뉴스에서 온 내용은
+출처를 밝히게 했다.
+
+### 슬롯별 LLM 재료 (스펙 대조 완료)
+
+| 슬롯 | 브리핑 재료 | 해설 재료 |
+|---|---|---|
+| 07:30 | 지표 6종 + 뉴스 | 지표 + 뉴스 + 브리핑 |
+| 08:30 | NXT 프리마켓 급상승 TOP3 + 뉴스 | 급상승 + 뉴스 + 브리핑 |
+| 09:30 / 12:00 / 14:00 | 코스피 업종 TOP3 + 뉴스 | 업종 + 뉴스 + 브리핑 |
+| 15:30 | 장중 변화 + 업종 TOP3 + 뉴스 | 장중 변화 + 업종 + 뉴스 + 브리핑 |
+| 17:30 / 20:00 | NXT 애프터마켓 급상승 TOP3 + 뉴스 | 급상승 + 뉴스 + 브리핑 |
+
+**`prompts.SLOT_FOCUS`에도 슬롯별 재료를 문장으로 적어뒀다.** 데이터만 넘기고 그게 무엇인지 안
+알려주면 LLM이 급상승 종목을 정규장 결과처럼 쓸 수 있다. 재료를 명시한 뒤 17:30 브리핑이
+"넥스트레이드 애프터마켓 동향"으로 정확히 짚는 것을 확인했다. **슬롯에 넣는 데이터를 바꾸면
+`SLOT_FOCUS` 문장도 같이 고칠 것.**
 
 뉴스 선별도 LLM이 한다(`news_service`). 그래서 슬롯당 LLM 호출은 3회다.
 
@@ -580,7 +613,7 @@ LLM이 실패하면 경고만 찍고 나머지는 정상 저장된다.
 
 - 뉴스 선별 실패 → 점수 상위 N건으로 대체
 - 브리핑 실패 → `briefing_headline`이 `None`. 지표·뉴스·주도 섹터는 그대로 나간다
-- 불개미 요약은 브리핑을 재료로 쓰므로, 브리핑이 없으면 빈 배열
+- 불개미 해설은 브리핑도 재료로 쓰므로, 브리핑이 없으면 빈 배열
 
 결과를 눈으로 확인하려면 저장하지 않는 즉석 조회를 쓴다. **라이브 데이터를 건드리지 않는다.**
 
@@ -635,13 +668,18 @@ ORM 쪽 `cascade="all, delete-orphan"`과 DB 쪽 `ON DELETE CASCADE`를 둘 다 
 Supabase 대시보드에서 SQL을 직접 실행하면 ORM을 거치지 않아서 FK 제약에 막혀
 `ForeignKeyViolationError`가 났다.
 
-id를 1번부터 다시 시작하려면 삭제 후 9개 테이블의 시퀀스를 각각 초기화한다.
+보고서도 같다. `DELETE FROM timeline_report;`면 자식 6개 테이블이 같이 지워진다.
+Storage 이미지(`report-images` 버킷)는 DB와 따로라 대시보드나 API로 따로 지운다.
+
+**`DELETE`는 id 번호를 되돌리지 않는다.** 1번부터 다시 쌓으려면 삭제 후 16개 테이블의 시퀀스를 초기화한다
+(`{테이블명}_id_seq`). 2026-09-13 밤 테스트 데이터를 지운 뒤 16개 모두 초기화했다.
 
 ```sql
 ALTER SEQUENCE timeline_slot_id_seq RESTART WITH 1;
 -- timeline_briefing_insight / timeline_beginner_guide / timeline_news / timeline_indicator
--- timeline_intraday_change / timeline_top_gainer
--- timeline_leading_sector / timeline_leading_sector_stock 도 동일하게
+-- timeline_intraday_change / timeline_top_gainer / timeline_leading_sector / timeline_leading_sector_stock
+-- timeline_report / timeline_report_section / timeline_report_point / timeline_report_quarter
+-- timeline_report_sector / timeline_report_keyword / timeline_report_term 도 동일하게
 ```
 
 ### 갱신 타이밍 — 타임라인 시각에 바로 반영한다
@@ -775,6 +813,8 @@ DB에서 읽기만 해서 0.2초에 응답하므로 1분 폴링은 부담이 없
 
 등록되는 작업은 9개다(지표 바 1 + 슬롯 8). `DATABASE_URL`이 없으면 슬롯 작업은 등록하지 않고
 경고만 남긴다. KIS 키가 없으면 지표 바 작업을 등록하지 않는다.
+보고서는 따로 예약하지 않는다. 20:00 슬롯 작업(`run_scheduled_collect("2000")`)이 끝나면 같은 작업 안에서
+`report_service.run_scheduled_reports()`를 이어서 부른다.
 
 `misfire_grace_time`을 10초로 뒀다. 기본값 1초는 너무 빡빡해서 서버가 잠깐 버벅이기만 해도
 그 슬롯이 통째로 날아간다. 반대로 길게 잡으면 안 된다. 맥이 잠들었다 몇 시간 뒤에 깨어났을 때
@@ -809,7 +849,7 @@ DB에서 읽기만 해서 0.2초에 응답하므로 1분 폴링은 부담이 없
 |---|---|---|
 | INFO | 정상 흐름 | 수집 시작·완료, 단계별 소요 시간, 휴장일 건너뜀, 기존 브리핑 유지 |
 | WARNING | 일부 실패했지만 슬롯은 만들어짐 | LLM 실패, 뉴스 선별 실패, 휴장일 조회 실패, 07:30 없어서 장중 변화 못 만듦 |
-| ERROR | 슬롯이 통째로 실패 | 수집 실패. `exc_info=True`로 스택까지 남긴다 |
+| ERROR | 슬롯·보고서가 통째로 실패 | 수집 실패, 보고서 생성 실패. `exc_info=True`로 스택까지 남긴다 |
 
 운영 중에는 이 한 줄만 보면 된다.
 
@@ -884,6 +924,8 @@ f-string 대신 `%s`로 넘긴다. 그 레벨이 꺼져 있으면 문자열을 �
 | 08:30 슬롯 이름과 데이터 출처가 어긋남 | 슬롯 이름은 "NXT 프리마켓"인데 KRX 장전 예상체결을 썼다. 게다가 KRX 동시호가는 08:30에 시작해서 정각 조회 시 비어 있을 수 있다 | 세 슬롯 모두 NXT로 통일. 예상체결 함수는 대체 수단으로 남겨뒀다 |
 | 07:30 지표가 10분 낡을 수 있었음 | 캐시를 읽는데 지표 바 갱신이 07:30 정각에 같이 예약돼 있어 순서를 보장할 수 없다. 지수 5종은 시장이 닫혀 같은 값이지만 **환율은 24시간 움직인다** | 이 슬롯도 `force_refresh=True`. 15:30 장중 변화의 기준점이고 놓치면 되살릴 수 없다 |
 | 서버를 닫으면 실패 원인이 사라짐 | 전부 `print`였다. 슬롯 3개가 날아간 원인을 찾는 데 한참 걸렸다 | `logging`으로 전환(16곳) + 파일 보관. 레벨·스택·KST 시각이 남는다 |
+| 주린이 해설이 스펙과 다른 재료를 씀 | 스펙은 "원본 데이터 + 브리핑"인데 브리핑만 넘겼다. 스펙 검토(7건 보고)에서도 놓쳤다 | 해설에 [데이터]를 추가. 슬롯별 재료 표를 만들어 스펙과 한 줄씩 대조했다 |
+| 전체 점검을 여러 번 했는데 틀린 주석이 계속 남음 | 동작을 한 파일에서 바꾸고 **다른 파일의 설명은 안 찾았다**. 08:30을 NXT로 바꾼 뒤에도 `kis_client`·모델·스키마에 "08:30은 예상체결", `_indicator_rows`에 "15:35에 수집", `get_index_category_price`에 "코스닥은 파생지수만 온다"가 남아 있었다. 점검도 버그·실행 위주로 해서 주석 정합성은 체계적으로 보지 않았다 | 주석을 경위 없이 역할·사용법만 남기도록 전면 재작성(1,050줄 -> 433줄). 코드는 AST 비교로 한 글자도 안 바뀐 것을 확인. 이력은 이 문서로 옮김. **동작을 바꾸면 전 파일에서 관련 키워드를 grep할 것** |
 | 로그가 apscheduler 잡음에 묻힘 | 작업 등록마다 두 줄씩 INFO를 남긴다. 작업이 9개라 기동 로그 23줄 중 19줄이 그것이었다 | `apscheduler`/`httpx`를 WARNING으로 낮췄다(23줄 -> 3줄). 경고·오류는 남겨둔다 |
 
 반복해서 물린 것 두 가지는 따로 적어둔다.
@@ -910,12 +952,150 @@ f-string 대신 `%s`로 넘긴다. 그 레벨이 꺼져 있으면 문자열을 �
 |---|---|
 | `core/logging_config.py` | **새로 추가.** 로그 설정. 각 파일에서 `logger = logging.getLogger(__name__)`로 쓰면 된다. `setup_logging()`은 `main.py` lifespan에서 이미 부른다 |
 | `core/database.py` | **사용법이 바뀜.** `engine` 직접 참조 -> `get_engine()` / `get_session_factory()` |
-| `core/kis_client.py` | 함수 추가(업종·종목순위·휴장일·예상체결), 재시도·토큰 캐시 |
+| `core/kis_client.py` | 함수 추가(업종·종목순위·휴장일·예상체결·투자자 매매동향·업종 일/주별·해외 기간별), 재시도·토큰 캐시 |
 | `core/naver_client.py` | 새로 추가. 네이버 뉴스 검색 |
 | `core/llm_client.py` | 새로 추가. 제미나이 (모델 `gemini-3.5-flash-lite`) |
-| `core/config.py` | 키 필드 추가. **여러 명이 같이 건드리는 파일이라 충돌 주의** |
+| `core/image_client.py` | 새로 추가. Cloudflare Workers AI 이미지 생성 (FLUX.1 schnell) |
+| `core/storage_client.py` | 새로 추가. Supabase Storage 업로드 → 공개 URL |
+| `core/config.py` | 키 필드 추가(Cloudflare·Supabase Storage 포함). **여러 명이 같이 건드리는 파일이라 충돌 주의** |
 
-Supabase 테이블 9개도 이 브랜치에서 만들었다. `created_at`은 전 테이블 한국 시간이다.
+Supabase 테이블 16개(타임라인 9 + 보고서 7)와 Storage 공개 버킷 `report-images`도 이 브랜치에서 만들었다. `created_at`은 전 테이블 한국 시간이다.
+`.env`에 추가된 키: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`(`.env.example`에 발급 위치 적음).
+
+---
+
+## 보고서(브리핑 탭) 설계 — 확정 (2026-09-13)
+
+> 아래 스펙과 데이터 출처는 전부 실제 호출로 확인했고, 2026-09-13에 1~6단계 코드로 구현했다.
+> 구현 결과와 확인할 것은 맨 아래 '다음 작업 > 보고서 구현 진행 상황'을 본다.
+
+### 원칙
+
+1. **타임라인 수집 구조(07:30~20:00)는 바꾸지 않는다.**
+2. **20:00 슬롯이 끝나면 이어서 바로** 보고서용 수치를 조회·저장하고 LLM이 보고서를 쓴다.
+3. **LLM 문구는 반드시 수집한 데이터를 기반으로 쓴다 — 타임라인 브리핑과 같은 로직.**
+   먼저 데이터를 모아 저장하고, 그 데이터를 `확정 수치`(API 값)와 `뉴스`로 나눠 넘기며, 없는 수치·종목을 만들지 못하게 한다.
+   카드·차트의 숫자는 LLM이 쓰지 않고 코드가 채운다.
+4. 일간 = 그날 하루 기준. 주간 = 그 주 거래일 기준(거래일이 적은 주는 있는 날만). 주간은 그 주 일간 보고서에 저장된 값을 모아 만든다.
+
+### 필요한 데이터와 출처
+
+| 섹션 | 항목 | 일간 | 주간 |
+|---|---|---|---|
+| 메인 | 타입 | `DAILY` | `WEEKLY` |
+| 메인 | 발행 시각(KST) | 코드 | 코드 |
+| 메인 | 제목 · 한 줄 요약 · 섹션 타이틀 3개 | LLM (그날 슬롯 데이터 + 아래 수치) | LLM (그 주 일간 보고서) |
+| 메인 | 메인 이미지 | **한 줄 요약** → 이미지 생성 | 같음 |
+| 섹션1 | 타이틀 · 설명 · 핵심 요약 3개 | LLM (뉴스·브리핑·해설) | LLM |
+| 섹션1 | 섹션 이미지 | **섹션1 타이틀·설명** → 이미지 생성 | 같음 |
+| 섹션2 | 타이틀 · 설명 · 핵심 요약 3개 | LLM | LLM |
+| 섹션2 | 외국인 순매도 | 당일 값 | 그 주 일간 값 합계 |
+| 섹션2 | VKOSPI | 당일 종가 · 전일 대비 | 주 마지막 거래일 종가 · 전주 대비 |
+| 섹션2 | 차트 분기 데이터 | 현 분기 포함 **6개** · 분기별 환율 · 외국인 순매도 | 같음 (현 분기 = 그 주까지) |
+| 섹션3 | 타이틀 · 설명 · 핵심 요약 3개 | LLM | LLM |
+| 섹션3 | 주목할 섹터 카드 3개 | 15:30 주도 섹터 중 선택 | 그 주 일간 보고서의 섹터 중 선택 |
+| 결론 | 한 줄 요약 · 키워드 3개(타이틀·설명) | LLM | LLM |
+| 결론 | 어려운 용어 3개(용어명·설명) | 사전 우선 (아래) | 같음 |
+
+**API별 확인 결과**
+
+| 데이터 | API | 확인한 것 |
+|---|---|---|
+| 외국인·기관·개인 순매수 | `시장별 투자자매매동향(일별)` `FHPTJ04040000` | 단위 **백만원**. 9/11 -2,298,412 = -2조 2,984억(보도 2조 3,040억). 300거래일씩, 기준일을 옮기면 이전 구간. 날짜 지정 조회 → **나중에도 복구 가능** |
+| VKOSPI 일간 | 업종 `0503` (`get_domestic_index_price` / `국내업종 일자별지수` `FHPUP02120000` D) | 9/11 46.28, -2.12% |
+| VKOSPI 주간 | 같은 API `W` | 9/7주 46.28, 전주 대비 +17.67% |
+| 차트 외국인 분기 | 위 투자자 API 3회 호출 → 분기 합산 | 25/Q1~26/Q3. 월별 달러 환산이 보도와 일치(7월 69억달러 vs 66억, 8월 74억 vs 72억) |
+| 차트 환율 분기 | `해외 기간별시세` `FHKST03030100` X / `FX@KRW` M | 월별 33개월(2024-01~). 분기 마지막 달 값 사용 |
+| 섹터 카드 (일간) | `국내업종 일자별지수` output1 | 등락률, 상승·하락·보합 종목 수, 거래대금, 전일 거래대금 |
+| 섹터 카드 (주간) | 같은 API `W` output2 | 주간 등락률, 주간 거래대금(9/7주 건설 +11.03%, 3조 2,927억, 전주 대비 +28%). **상승 종목 수는 주간 값이 없음** |
+
+**차트 분기 창** — 보고서 날짜로 "현 분기 + 직전 5개"를 계산한다. 코드에 분기를 적지 않으므로 자동으로 밀린다.
+
+```
+2026-09-11  25/Q2 25/Q3 25/Q4 26/Q1 26/Q2 [26/Q3]
+2026-10-01        25/Q3 25/Q4 26/Q1 26/Q2  26/Q3 [26/Q4]
+2027-01-04              25/Q4 26/Q1 26/Q2  26/Q3  26/Q4 [27/Q1]
+```
+
+과거 분기는 배경 데이터라 **이 부분만 보고서 생성 때 API로 조회**한다(타임라인 전제의 유일한 예외).
+
+**섹터 카드** — 종목 카드는 쓰지 않는다(급상승 종목은 증권사 커버리지가 없어 카드가 빈다).
+LLM이 섹션1 이슈와 가장 관련된 업종을 후보 중에서 고르고, 값은 코드가 채운다. 비율은 기준을 같이 표기한다.
+
+```
+┌ 업종 등락률 ┐ ┌ 상승 종목 비율          ┐ ┌ 거래대금 (전일 대비)     ┐
+│ +1.90%     │ │ 74%                    │ │ +30%                   │
+│ 건설       │ │ 업종 35개 중 26개 상승   │ │ 6,075억 (전일 4,669억)  │
+```
+
+- 저장된 업종명 → 코드: `KOSPI_SECTOR_CODES`와 API 업종명 21개 전부 일치(확인함). 이름이 바뀌면 경고 로그 + 그 카드만 비움
+- **주의: 일자별지수 output1은 요청 날짜를 무시하고 항상 최근 거래일 값**을 준다(9/9·9/4를 요청해도 9/11 값).
+  상승 종목 수·전일 거래대금은 **당일에 받아야 하고, 실패하면 다음 날 09:00 개장 전까지만 복구 가능**
+- 주간 카드의 "상승 종목 비율"은 주간 값이 없다 → 주 마지막 거래일 값으로 할지 **미정**
+
+**용어 3개** — `glossary.py`에 있는 용어 중 보고서 본문에 나온 것을 중요도 순(결론·핵심 요약에 나온 것 우선)으로 3개.
+모자라면 본문의 다른 용어로 채우고, 그 설명(LLM 작성)은 따로 기록해 검토 후 사전에 정식 등록한다.
+**사전 확장이 필요하다**(9/10~11 콘텐츠에서 사전 19개 중 13개만 등장, 사전 밖 용어 41개 등장).
+
+### 이미지 (메인 · 섹션1, 보고서당 2장)
+
+- **Cloudflare Workers AI `@cf/black-forest-labs/flux-1-schnell`** — 무료 하루 10,000 뉴런(장당 약 58뉴런 추정). 생성 1.5~4.7초
+- 키: `.env`의 `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` (`config.py` 필드 추가 완료)
+- 요청: `POST https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell`, body `{"prompt", "steps": 4}` → `result.image`(base64 JPEG)
+- **정사각형 1024×1024만** 된다(`width`/`height`는 400). 프런트가 가운데를 잘라 쓰므로 주요 사물은 가운데
+- **한국어 문장을 그대로 넣으면 무관한 그림**이 나온다 → LLM이 영어 장면 묘사로 바꾸는 단계 필수
+- **글자 금지 유지**(이미지 AI가 한글을 못 씀). 지폐·칩처럼 원래 글자가 있는 사물은 깨진 글자가 섞일 수 있다
+- 스타일: 디자인 톤(흰 바탕, 네이비, 붉은 포인트) **미니멀 일러스트**가 가장 맞고 글자 섞임도 적었다
+- 프롬프트 조정 과제: 예시 사물 목록을 넣으면 LLM이 끌려간다(급락 요약에 배가 나옴) → "요약에 나온 대상만". 상승·하락 분위기는 조명으로 구분
+- 저장: **Supabase Storage에 올리고 URL만 DB에 저장**. `.env`의 `SUPABASE_URL` / `SUPABASE_SERVICE_KEY`, 공개 버킷 `report-images` (준비 완료)
+- 기각: 제미나이 이미지(무료 한도 0), ChatGPT Plus(API 별도 과금), Pollinations(품질), 뉴스 사진 og:image(저작권), Hugging Face(월 $0.10)
+
+### 생성 시점
+
+- 일간: **20:00 슬롯 완료 직후** 이어서 실행 (휴장일에는 슬롯과 함께 건너뜀)
+- 주간: **그 주의 마지막 거래일** 일간 보고서 직후 (추석 주처럼 금요일이 휴장이면 목요일) — 판정은 `is_trading_day`로
+
+### 미정
+
+1. 주간 섹터 카드의 상승 종목 비율 기준
+2. VIX 사용 여부 — 해외지수 API 심볼 `VIX`로 조회됨(9/11 15.84, -11.21%, 보도와 일치). 미국 종가라 한국 시간 다음 날 새벽 확정.
+   **틀린 심볼도 `rt_cd=0`에 0.00을 주므로** 종목명·값 검증 필요
+
+### 테이블 설계 (1단계 — 구현·Supabase 생성 완료, 2026-09-13)
+
+`models/report.py` + `create_tables.py` import 추가. 테이블 7개 생성, 기존 타임라인 테이블·데이터는 그대로.
+테스트 행으로 확인함: ORM 저장, `created_at` DB 기본값(SQL로 넣어도 채워짐), SQL로 부모 삭제 시 자식 6개 테이블 연쇄 삭제. 테스트 행은 지웠다.
+
+**프런트 조회 기준 (타임라인과 같은 방식 — 날짜를 주면 그 데이터)**
+- 일간: `report_type="DAILY"` and `start_date = 날짜`
+- 주간: `report_type="WEEKLY"` and `start_date <= 날짜 <= end_date` (그 날짜가 속한 주)
+- 새 테이블은 `created_at`에 `server_default`를 모델에 직접 걸었다(타임라인 테이블은 SQL로 따로 걸었음)
+
+```
+timeline_report ──┬── timeline_report_section        섹션 3행 (seq 1~3)
+                  │       └── timeline_report_point  핵심 요약 3행씩
+                  ├── timeline_report_quarter        차트 분기 6행
+                  ├── timeline_report_sector         섹터 카드 3행
+                  ├── timeline_report_keyword        결론 키워드 3행
+                  └── timeline_report_term           어려운 용어 3행
+```
+
+| 테이블 | 칼럼 | 비고 |
+|---|---|---|
+| `timeline_report` | `report_type`(DAILY/WEEKLY), `start_date`, `end_date`, `title`, `summary`(한 줄 요약), `main_image_url`, `conclusion`(결론 한 줄 요약), `foreign_net_buy`, `institution_net_buy`, `individual_net_buy`(백만원), `vkospi`, `vkospi_change_rate`, `published_at`, `created_at` | 유니크 (`report_type`, `start_date`). 일간은 start=end=그날, 주간은 그 주 첫·마지막 거래일 |
+| `timeline_report_section` | `report_id`, `seq`, `title`, `description`, `image_url`(섹션1만) | |
+| `timeline_report_point` | `section_id`, `seq`, `body` | 핵심 요약 |
+| `timeline_report_quarter` | `report_id`, `seq`, `label`("26/Q3"), `usd_krw`, `foreign_net_buy`(백만원), `is_current` | 현 분기는 보고서 날짜까지 |
+| `timeline_report_sector` | `report_id`, `seq`, `sector_name`, `change_rate`, `rising_count`, `total_count`, `trade_amount`, `prev_trade_amount` | 주간은 `rising_count`/`total_count` NULL 가능(미정 1) |
+| `timeline_report_keyword` | `report_id`, `seq`, `title`, `description` | |
+| `timeline_report_term` | `report_id`, `seq`, `term`, `description`, `source`(GLOSSARY/LLM) | LLM 작성분은 검토 후 사전 등록 |
+
+- 일간·주간은 화면 구조가 같아서 **한 테이블 + `report_type`** 으로 둔다(조회 API·저장 코드 하나)
+- 수치(투자자 순매수·VKOSPI·분기·섹터)를 먼저 저장하고 LLM 문구 칼럼은 나중에 채운다 → 문구 칼럼은 전부 NULL 허용(LLM 실패 시 슬롯과 같은 처리)
+- 기관·개인 순매수는 카드에는 안 쓰지만 같은 API 응답에 있어 LLM 근거용으로 저장
+- 금액은 `BigInteger`(분기 합산이 수십조 = 수천만 백만원). 섹터 거래대금도 백만원(2단계 실호출로 확정)
+- 타임라인 규칙 그대로: FK `ondelete="CASCADE"` + ORM `cascade`, `created_at` 파이썬 기본값 + DB `DEFAULT`
+- **재실행은 타임라인과 다르다.** 슬롯은 지우고 다시 넣지만, 보고서는 같은 행을 고쳐 쓴다(LLM이 실패해도 기존 문구가 남도록 — '3단계 결과')
 
 ---
 
@@ -923,9 +1103,9 @@ Supabase 테이블 9개도 이 브랜치에서 만들었다. `created_at`은 전
 
 **2026-09-14(월) 07:30부터 실데이터를 쌓는다.**
 
-9/10~9/11 데이터는 저장 로직 테스트용이라 불완전하다(브리핑 누락 다수, 9/11은 14:00/15:30/20:00
-없음). **9/13(일) 보고서 작업 마무리 시점에 지운다** — 보고서 로직을 시험할 재료로 쓰고 있어서
-그때까지 남겨둔다. 지우는 방법은 위 '테스트 데이터 지우기' 참고.
+**9/13(일) 밤 테스트 데이터를 전부 지웠다.** 타임라인 16개 테이블 0행, Storage `report-images` 비움.
+지우기 전에 9/10 일간·9/7주 주간 테스트 보고서를 `backend/logs/report_sample_20260913.json`,
+이미지 4장을 `backend/logs/report_sample_images/`에 백업했다(깃 제외 폴더, 9/14 사용자 확인용).
 
 ### 월요일 아침 체크리스트
 
@@ -948,6 +1128,8 @@ cd backend && caffeinate -dis uv run fastapi run main.py
    NXT만 보는 지금 방식이 달라질 수 있다
 5. **제미나이 한도 200회가 맞는지.** `브리핑 생성 실패` 로그가 몇 번째 슬롯부터 나오는지 본다
 6. **뉴스 구간별 기사 수.** 08:30 / 09:30은 구간이 1시간이라 부족할 수 있다
+7. **20:00 슬롯 뒤 일간 보고서.** `[스케줄러] 일간 보고서 … 저장 완료` 로그와 `GET /timeline/report?type=daily`.
+   실패하면 20:00~다음 날 09:00 사이에 `POST /timeline/report/daily`로 다시 만든다(상승 종목 수가 그때까지만 받아진다)
 
 로그로 한 번에 확인한다.
 
@@ -959,14 +1141,106 @@ grep -E "WARNING|ERROR" logs/timeline.log
 
 ## 다음 작업
 
-1. **브리핑 탭(일간/주간 보고서)** — 9/13(일) 작업. `timeline_daily_report` /
-   `timeline_weekly_report` + 각 섹션 테이블 4개를 추가한다(`create_tables.py` 사용).
-   - 새 테이블은 FK에 `ondelete="CASCADE"` + ORM `cascade` 둘 다, `created_at`은 파이썬
-     기본값 + DB `DEFAULT` 둘 다, `timeline_repository._EAGER_LOAD`에 추가까지 챙길 것
-   - **주간 보고서는 일간 보고서가 5개 미만이어도 만들어져야 한다.** 첫 주가 완성되는 건
-     9/18(금)이고, 추석 주는 거래일이 3일뿐이다(9/24·9/25 휴장)
-   - 일간 보고서는 브리핑이 비어도 동작해야 한다(확정 수치·뉴스만으로). 9/11에 5슬롯 중
-     2개가 브리핑 없이 저장됐다
+> **작업 인계 규칙**: 토큰이 떨어지면 다른 도구(Codex 등)로 이어서 작업한다. 그래서 단계가 끝날 때마다
+> 아래 진행 상황을 갱신한다. 이어받는 쪽은 이 문서 맨 위 '코드 주석 방침', 위 '보고서(브리핑 탭) 설계 — 확정',
+> 아래 진행 상황 순서로 읽는다. 커밋·푸시는 사용자가 지시할 때만. KIS 토큰은 반드시 캐시(`kis_client.get_access_token`)를 거친다
+> (강사님 계좌라 재발급마다 알림이 간다). `.env`는 커밋하지 않는다.
+
+**보고서 구현 진행 상황**
+
+| 단계 | 내용 | 상태 |
+|---|---|---|
+| 1 | 모델(테이블) `models/report.py` + `create_tables.py` | **완료** (Supabase 생성·저장·연쇄 삭제 확인) |
+| 2 | core API — `kis_client`(투자자 매매동향·업종 일/주별·환율 기간), Cloudflare 이미지, Supabase Storage, `config.py` 키 | **완료** (아래 '2단계 결과') |
+| 3 | 리포지토리 — 보고서 저장·조회 `services/report_repository.py` | **완료** (아래 '3단계 결과') |
+| 4-1 | 서비스 — 일간 수치 수집·저장 `services/report_data_service.py` | **구현 완료** |
+| 4-2 | 서비스 — 프롬프트(`prompts.REPORT_PROMPT`·`IMAGE_STYLE`), 문구·섹터·용어·이미지, 주간 `services/report_service.py` | **구현 완료** |
+| 5 | 스케줄러 연결 — `timeline_service.run_scheduled_collect("2000")` 끝에서 `report_service.run_scheduled_reports()` | **구현 완료** (실제 20:00 동작은 9/14 확인) |
+| 6 | 스키마 `schemas/report.py` · 라우터 `GET /timeline/report`, `POST /timeline/report/daily`·`/weekly` | **구현 완료** |
+| 7 | **사용자 코드·결과 확인 (9/14 예정)** → 품질 조정 | **다음** |
+
+> 2026-09-13 밤: 전체 검토 후 사용자 지시로 커밋했다(타임라인 주석 정리 + 보고서 1~6단계). 코드·결과 확인은 9/14에 사용자가 한다.
+
+**4-2 · 5 · 6단계 결과 (2026-09-13 구현, 9/10 테스트 데이터로 끝까지 실행 확인)**
+
+생성 흐름 (`report_service`)
+1. `generate_daily(session, day)`: `report_data_service.collect_and_save_daily`(수치 저장) → `timeline_repository.load_day`(그날 슬롯)
+   → `_daily_input`(재료 JSON: `확정 수치`=투자자·VKOSPI·분기·섹터 후보·시간대별 시세 / `타임라인`=슬롯 브리핑 / `뉴스`=슬롯 뉴스, URL 중복 제거) → `_write_report`
+2. `generate_weekly(session, day)`: `_week_trading_days`(월~금 중 `is_trading_day`) → 그 주 일간 보고서 로드(없으면 None)
+   → `collect_weekly_data`(투자자=일간 합, VKOSPI=W, 분기=주 마지막 거래일 기준 재계산) + `collect_weekly_sector_cards`(후보=그 주 일간 섹터 카드 업종명 전체, W 값)
+   → 수치 저장 → `_weekly_input`(`확정 수치` + `일간 보고서` 문구) → `_write_report`
+3. `_write_report`: LLM 1회(`REPORT_PROMPT`, timeout 120초) → `_parse_content`(섹션 3개·제목·요약·결론 없으면 실패 처리)
+   → 섹터 카드 선택(`_pick_sector_cards`: LLM 순서 + 남은 후보로 채움, 최대 3) 저장 → 문구 저장(`_pick_terms`) → 이미지 2장 병렬 생성·업로드 → URL 저장.
+   LLM 실패 시 기존 문구·섹터 카드를 건드리지 않고 반환(섹터 카드가 아직 없을 때만 후보 앞 3개 저장 — 주간 첫 생성)
+- **LLM 호출은 보고서당 1회.** 이미지용 영어 장면 묘사(`main_image_scene`, `section1_image_scene`)도 같은 응답에서 받는다(제미나이 한도 절약). 코드가 뒤에 `prompts.IMAGE_STYLE`을 붙인다
+- 금액은 LLM 입력에서 `_won()`으로 "-2조 2,984억원"처럼 바꿔 넘긴다. 등락률 키에는 "(%)"를 붙였다(처음 실행에서 VKOSPI "-3.96"을 "3.96 하락"으로 써서 추가)
+- 용어 선택(`_pick_terms`): 사전 용어 중 본문에 나온 것(결론·핵심 요약·키워드 우선) → 모자라면 LLM 후보 중 본문에 실제로 있는 것(`source="LLM"`)
+- 이미지 경로: `{daily|weekly}/{start_date}/{main|section1}_{HHMMSS}.jpg` (CDN 캐시 회피)
+- 스케줄러: 20:00 슬롯 수집이 **실패해도** 보고서는 시도한다. 휴장일이면 건너뛰고, 오늘이 그 주 마지막 거래일이면 일간 뒤 주간. 일간이 실패해도 주간은 시도. 로그 `[스케줄러] 일간 보고서 … 저장 완료 (N초) - 문구 있음/없음, 이미지 있음/없음`
+- API: `GET /timeline/report?type=daily|weekly&date=YYYY-MM-DD` (없으면 `null`, 잘못된 type 404),
+  `POST /timeline/report/daily?date=`, `POST /timeline/report/weekly?date=`(일간 보고서 없으면 404). 응답 금액은 백만원, `rising_ratio`·`trade_amount_change_rate`는 `to_response`가 계산
+
+실행 결과 (9/10 일간 → 9/7주 주간, 테스트 데이터)
+- 일간: 제목 "중동 불안 속 7000선 사수", 섹션 3개·핵심 요약 각 3개, 메인·섹션1 이미지 업로드, 외국인 -2조 6,217억, VKOSPI 47.28 -3.96%,
+  섹터 의료·정밀기기 +2.25%(거래대금 +55.5%)·일반서비스·비금속. 상승 종목 수는 None(9/10이 최근 거래일이 아니라서 — 의도대로)
+- 주간: 기간 9/7~9/11, VKOSPI 46.28 +17.67%, 섹터 주간 값(일반서비스 +6.68% 등), `GET ?type=weekly&date=2026-09-09` → 9/7주 조회됨
+- 용어는 3개 모두 사전(국채금리·순매도·순매수)
+
+**9/14 확인할 것 (보고서)**
+1. 20:00 슬롯 뒤 로그에 일간 보고서 저장 완료가 찍히는지, 섹터 카드 상승 종목 수가 채워지는지(당일이면 채워져야 함)
+2. 문구 품질 — 섹션2가 수치 나열에 그침(9/10 실행), 섹션3이 등락률 반복. 프롬프트에서 "왜"를 더 요구할지 검토
+3. 분기 차트 현 분기 환율: 9/10 기준 실행에서 26/Q3 환율이 8월 값(1,368.0)으로 나왔다(9/11 기준은 9월 1,344.1).
+   `get_overseas_period_price` M이 종료일에 따라 이번 달 행을 안 주는 경우가 있는 듯 — 당일 실행에서 이번 달 값이 오는지 확인
+4. 주간 보고서는 9/18(금) 20:00 이후 처음 자동 생성된다(추석 연휴 주는 마지막 거래일 기준)
+5. 이미지가 디자인 톤에 맞는지 — 안 맞으면 `prompts.IMAGE_STYLE`과 프롬프트 13번 규칙 조정
+
+**2단계 결과 (2026-09-13, 전부 새 함수로 실호출 확인)**
+
+| 함수 | 용도 | 확인 값 |
+|---|---|---|
+| `kis_client.get_investor_daily_by_market(base_date)` | 코스피 투자자별 순매수 (output 300거래일, 최신부터) | 9/11 외국인 `frgn_ntby_tr_pbmn` -2,298,412(백만원) |
+| `kis_client.get_index_daily_price(index_code, base_date, period)` | 업종 지수 D/W. output1 = 최근 거래일 현재 값(종목 수·전일 거래대금), output2 = 기간별 | VKOSPI `0503` W 9/7주 46.28, +17.67% / 건설 `0018` D `acml_tr_pbmn` 607,497 = 6,075억 → **거래대금도 백만원** |
+| `kis_client.get_overseas_period_price(market, symbol, start, end, period)` | 환율 기간별 (output2 최신부터, 월별 날짜는 그달 1일) | `FX@KRW` M 2025-04~2026-09 18행, 9월 1,344.1 |
+| `image_client.generate_image(prompt)` | 영어 프롬프트 → JPEG 바이트 | 168KB, 1.8초 |
+| `storage_client.upload_file(bucket, path, content, content_type)` | 업로드 후 공개 URL 반환 (`x-upsert` 덮어쓰기) | 버킷 `report-images` 업로드 → 공개 GET 200 → 테스트 파일 삭제 |
+
+- **공개 URL은 CDN 캐시가 있다.** 파일을 지운 뒤에도 같은 URL이 한동안 200으로 옛 이미지를 줬다(쿼리 붙이면 400).
+  → 이미지 경로에 **생성 시각을 넣어** 재생성하면 새 URL이 되게 했다 (예: `daily/2026-09-14/main_200512.jpg`)
+- 섹터 종목 수 필드: `ascn_issu_cnt`(상승) / `down_issu_cnt`(하락) / `stnr_issu_cnt`(보합). 전체 = 세 값의 합 (건설 26+8+1=35)
+
+**3단계 결과 (2026-09-13, 2000년 날짜 테스트 행으로 DB 실측 후 삭제)**
+
+`services/report_repository.py` — 서비스는 **세 번에 나눠 저장**한다. 앞 단계가 성공하면 뒤 단계가 실패해도 앞 값은 남는다.
+
+| 함수 | 하는 일 | 재실행 동작 (확인함) |
+|---|---|---|
+| `save_report_data(session, report_type, start_date, end_date, data)` | 수치 저장. 없으면 행 생성 | 넘긴 키만 바꾸고 문구·이미지는 유지. `quarters`/`sectors` 키가 있으면 자식 행 전체 교체(옛 행 삭제됨) |
+| `save_report_content(session, report_type, start_date, content)` | LLM 문구 저장 + `published_at` 기록. **LLM 성공 시에만 호출** | 섹션·요약·키워드·용어 교체, **이미지 URL은 비움**(문구와 안 맞으므로) |
+| `save_report_images(session, report_type, start_date, main_image_url=, section1_image_url=)` | 이미지 URL 저장 | None으로 넘긴 쪽은 안 건드림 |
+| `load_report(session, report_type, target_date)` | 프런트 조회. 일간 = 시작일 일치, 주간 = 기간 안 | 주말 날짜는 주간도 None |
+| `load_daily_reports(session, start_date, end_date)` | 주간 재료, 날짜순 | |
+
+- 상수 `report_repository.DAILY` / `WEEKLY`를 쓴다. 보고서가 없는데 content/images를 부르면 `ValueError`
+- `data`·`content` dict 키 형식은 함수 위 주석에 적었다. 서비스(`report_data_service`·`report_service`)가 이 형식으로 넘긴다
+- 주간 섹터 카드는 LLM이 고른 뒤 `save_report_data(..., {"sectors": [...]})`만 다시 부르면 된다
+- 이미지 저장 경로에는 생성 시각을 넣는다(2단계 결과의 CDN 캐시 참고)
+
+**4-1 결과 (2026-09-13 구현)**
+
+`services/report_data_service.py`
+- `collect_daily_data(day, sector_names)` (동기) → `save_report_data`의 `data` 형식 dict. 항목별 try/except, 실패 항목은 키를 빼서 기존 값 유지
+- `collect_and_save_daily(session, day=None)` (async) → 그날 `15:30` 슬롯의 주도 섹터를 등락률 순으로 읽어 수집 후 저장. `report_service.generate_daily`가 부른다
+- 섹터 카드: 등락률·거래대금은 output2 그날 행, 전일 거래대금은 그다음 행(날짜 지정이라 나중에도 정확).
+  상승·전체 종목 수는 output1 거래대금이 그날 행과 같을 때만 채운다(최근 거래일 검증). 업종명이 표에 없으면 이름만 있는 카드 + 경고
+- 분기 차트: 투자자 API를 기준일을 옮겨 최대 3회 호출해 6분기 시작일까지 모은다. 환율은 분기 안 가장 늦은 달 월간 값, 0 값 제외
+- 스모크 테스트(9/11, DB 저장 없이): 외국인 -2,298,412 / 기관 -1,218,394 / 개인 1,867,544, VKOSPI 46.28 -2.12%,
+  분기 25/Q2 -5.5조·1,355.3 … 26/Q2 -91.7조·1,549.5, 26/Q3(현재) -24.1조·1,344.1, 건설 +1.90% 26/35 607,497(전일 466,923), 없는 업종명 → 경고 + 빈 카드
+- 휴장일 판단은 여기서 하지 않는다(`report_service.run_scheduled_reports`가 먼저 확인한다)
+
+1. **보고서 확인·조정** — 코드는 1~6단계 모두 구현됨. 사용자 확인(9/14) 후 위 '9/14 확인할 것' 반영. 스펙은 '보고서(브리핑 탭) 설계 — 확정'.
+   - 새 테이블은 FK `ondelete="CASCADE"` + ORM `cascade` 둘 다, `created_at`은 파이썬 기본값 + DB `DEFAULT` 둘 다, `_EAGER_LOAD` 등록
+   - 9/10~9/11 테스트 데이터는 9/13 밤 삭제 완료(백업 위치는 '실데이터 적재 일정')
+   - 9/13 수정·추가한 파일(타임라인 주석 정리 + 보고서)은 9/13 밤 커밋 완료. 확인 후 고칠 것은 새 커밋으로
 2. **LLM 품질 검토** — 용어 사전(`glossary.GLOSSARY`), 슬롯별 검색어(`news_service._SLOT_KEYWORDS`),
    집중 지점(`prompts.SLOT_FOCUS`)을 주식 잘 아는 사람에게 검토받고 팀 회의에서 조정
 3. **프런트 반영 방식** — 폴링으로 시작. 프런트 담당자와 주기 협의.
@@ -978,5 +1252,6 @@ grep -E "WARNING|ERROR" logs/timeline.log
    - **무료 티어가 앱을 잠재우면 스케줄러가 죽는다.** 하루 8번 예약 수집이 서비스의 핵심인데
      무접속 시 spin down되면 슬롯이 안 쌓인다. 항상 켜진 티어를 쓰거나, 외부 cron이
      `POST /timeline/collect/{slot}`을 때리는 방식으로 바꿔야 한다(그러면 APScheduler를 빼도 된다).
-     단 그 엔드포인트는 지금 인증이 없어서 아무나 수집을 트리거할 수 있다 — 막아야 한다
+     단 그 엔드포인트는 지금 인증이 없어서 아무나 수집을 트리거할 수 있다 — 막아야 한다.
+     `POST /timeline/report/daily`·`/weekly`도 같다(한 번 부를 때마다 제미나이 1회 + 이미지 2장)
    - **인스턴스가 2개 이상이면 수집이 중복된다.** 데이터는 안 깨지지만 제미나이 호출이 2배가 된다

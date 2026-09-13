@@ -1,12 +1,5 @@
 # timeline_repository.py
-# 타임라인 슬롯을 DB에 넣고 꺼내는 코드
-#
-# 조립(timeline_service)과 저장(여기)을 나눈 이유: 수집·가공 로직과 DB 접근이 한 파일에 섞이면
-# 나중에 "저장 방식만 바꾸고 싶을 때" 건드릴 범위가 넓어진다.
-#
-# 비동기 ORM에서 주의할 점
-#   조회할 때 selectinload로 자식 테이블을 미리 같이 읽어와야 한다. 동기 ORM처럼 나중에
-#   slot.news를 꺼내려 하면 MissingGreenlet 에러가 난다(비동기에서는 뒤늦은 조회가 안 됨).
+# 타임라인 슬롯의 DB 저장·조회만 담당한다. 수집·가공은 timeline_service에 있다.
 
 import logging
 from datetime import date, datetime
@@ -33,15 +26,16 @@ _KST = ZoneInfo("Asia/Seoul")
 logger = logging.getLogger(__name__)
 
 
-# 시각을 한국 시간 시계값으로 바꾼다 (DB에는 시간대 정보 없이 저장한다 - models/timeline.py 참고)
+# 시각을 시간대 없는 한국 시간으로 바꾼다 (DB 저장 형식)
 def _to_naive_kst(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     return value.astimezone(_KST).replace(tzinfo=None)
 
 
-# 조회할 때 같이 읽어올 자식 테이블 목록
-# 테이블을 추가하면 여기에도 넣어야 한다. 빠뜨리면 그 값만 조용히 비어 보인다
+# 슬롯을 읽을 때 같이 읽어올 자식 테이블
+# 비동기 ORM은 나중에 자식을 꺼내면 MissingGreenlet 에러가 나서 미리 읽어야 한다
+# 테이블을 추가하면 여기에도 넣을 것 (빠뜨리면 그 값만 빈 채로 응답된다)
 _EAGER_LOAD = (
     selectinload(TimelineSlot.insights),
     selectinload(TimelineSlot.beginner_guides),
@@ -53,14 +47,10 @@ _EAGER_LOAD = (
 )
 
 
-# 슬롯 하나를 저장한다. 같은 날 같은 시간대가 이미 있으면 지우고 새로 넣는다
-#
-# 덮어쓰기로 만든 이유: trade_date + time_slot에 유니크 제약이 걸려 있어서 그냥 INSERT하면
-# 두 번째 실행부터 에러가 난다. 테스트로 여러 번 돌릴 때, 수집이 실패해서 다시 돌릴 때,
-# 서버를 재시작했을 때 모두 재실행이 필요하다.
-# 자식 테이블은 cascade가 걸려 있어서 슬롯 한 줄만 지우면 딸린 행이 전부 같이 지워진다
-#
-# collected: timeline_service가 모아둔 값 (브리핑/불개미/뉴스/지표/주도섹터)
+# 슬롯을 저장하고 저장된 슬롯을 돌려준다
+# 같은 날 같은 시간대가 있으면 지우고 새로 넣는다 (자식 행은 cascade로 같이 지워진다)
+# 새 브리핑·해설이 비어 있으면 기존 값을 유지한다 (LLM 실패로 재수집할 때 멀쩡한 브리핑을 지우지 않도록)
+# collected: timeline_service.collect_slot의 반환값
 async def save_slot(session: AsyncSession, trade_date: date, time_slot: str, collected: dict) -> TimelineSlot:
     existing = await session.scalar(
         select(TimelineSlot).where(TimelineSlot.trade_date == trade_date, TimelineSlot.time_slot == time_slot).options(*_EAGER_LOAD)
@@ -69,11 +59,6 @@ async def save_slot(session: AsyncSession, trade_date: date, time_slot: str, col
     briefing = collected.get("briefing")
     guides = collected.get("beginner_guides", [])
 
-    # LLM이 실패해서 브리핑이 비었는데 이미 저장된 브리핑이 있으면, 기존 것을 살려둔다
-    #
-    # 이 처리가 없으면 재실행이 위험해진다. 실제로 겪은 일인데, 브리핑이 잘 들어간 슬롯을
-    # 지표 때문에 다시 수집했다가 그 순간 LLM 한도에 걸려서 멀쩡했던 브리핑이 빈 값으로 덮였다.
-    # 새로 만든 게 없으면 기존 것을 유지하는 편이 항상 낫다
     if briefing is None and existing is not None and existing.briefing_headline:
         briefing = {
             "headline": existing.briefing_headline,
@@ -90,7 +75,7 @@ async def save_slot(session: AsyncSession, trade_date: date, time_slot: str, col
 
     if existing is not None:
         await session.delete(existing)
-        await session.flush()  # 새 행을 넣기 전에 삭제를 먼저 DB에 반영해야 유니크 제약에 안 걸린다
+        await session.flush()  # 삭제를 먼저 반영해야 새 행이 유니크 제약에 걸리지 않는다
     slot = TimelineSlot(
         trade_date=trade_date,
         time_slot=time_slot,
@@ -106,7 +91,7 @@ async def save_slot(session: AsyncSession, trade_date: date, time_slot: str, col
             seq=guide["seq"],
             title=guide["title"],
             body=guide["body"],
-            # 태그는 쉼표로 이어붙여 한 칸에 저장한다 (모델 주석 참고)
+            # 태그 목록을 쉼표로 이어 한 칸에 저장한다
             tags=", ".join(guide["tags"]) or None,
         )
         for guide in guides
@@ -138,17 +123,16 @@ async def save_slot(session: AsyncSession, trade_date: date, time_slot: str, col
     session.add(slot)
     await session.commit()
 
-    # 방금 넣은 행을 자식까지 붙여서 다시 읽어 돌려준다 (저장 결과를 바로 응답에 쓸 수 있게)
+    # 자식 테이블까지 붙여 다시 읽어 돌려준다
     return await load_slot(session, trade_date, time_slot)
 
 
-# 슬롯 하나를 꺼낸다 (없으면 None)
+# 슬롯 하나 조회 (없으면 None)
 async def load_slot(session: AsyncSession, trade_date: date, time_slot: str) -> TimelineSlot | None:
     return await session.scalar(select(TimelineSlot).where(TimelineSlot.trade_date == trade_date, TimelineSlot.time_slot == time_slot).options(*_EAGER_LOAD))
 
 
-# 하루치 슬롯을 시간 순서대로 꺼낸다
-# time_slot이 "07:30" 형태의 문자열이라 문자 정렬만으로 시간 순서가 맞는다(앞자리가 0으로 채워져 있어서)
+# 하루치 슬롯을 시간순으로 조회 ("07:30" 문자열 정렬이 곧 시간순이다)
 async def load_day(session: AsyncSession, trade_date: date) -> list[TimelineSlot]:
     result = await session.scalars(select(TimelineSlot).where(TimelineSlot.trade_date == trade_date).order_by(TimelineSlot.time_slot).options(*_EAGER_LOAD))
     return list(result)
