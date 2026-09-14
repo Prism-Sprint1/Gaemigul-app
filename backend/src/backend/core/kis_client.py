@@ -1,11 +1,13 @@
 # kis_client.py
-# 한국투자증권(KIS) API 호출 (전 도메인 공용). 토큰 발급·캐싱, 재시도, 시세·순위·휴장일·투자자 매매동향·기간별 시세 조회.
+# 한국투자증권(KIS) API 호출 (전 도메인 공용). 토큰 발급·캐싱, 재시도, 시세·순위·휴장일·투자자 매매동향·기간별 시세 조회, 종목 마스터 파일.
 # 토큰은 계좌 단위라 KIS 호출은 반드시 이 파일을 거친다 (토큰을 새로 발급할 때마다 계좌 주인에게 알림이 간다).
 
 from __future__ import annotations
 
+import io
 import json
 import time
+import zipfile
 from pathlib import Path
 
 import httpx
@@ -15,7 +17,11 @@ from backend.core.config import get_settings
 # 토큰 캐시 파일 위치: backend/.cache/kis_token.json (git에 올리지 않는다)
 _TOKEN_CACHE_PATH = Path(__file__).resolve().parents[3] / ".cache" / "kis_token.json"
 
-# API 주소와 TR ID (KIS 문서 기준)
+# KIS API별 주소(_ENDPOINT)와 거래 ID(_TR_ID). 아래 조회 함수들이 이 두 값으로 요청을 보낸다
+#   ENDPOINT  kis_base_url 뒤에 붙는 경로
+#   TR_ID     요청 헤더 tr_id에 넣는 코드. KIS가 이 값으로 어떤 조회인지 구분한다 (주소가 같아도 TR_ID가 다르면 다른 API)
+# 값은 KIS 개발자 문서에 적힌 그대로다. 임의로 바꾸면 에러가 난다
+# API를 추가하려면 두 줄을 추가하고, 함수에서 _get_with_retry(주소, headers=_headers(settings, TR_ID), params=...)로 부른다
 _TOKEN_ENDPOINT = "/oauth2/tokenP"
 _INDEX_PRICE_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-index-price"
 _INDEX_PRICE_TR_ID = "FHPUP02100000"
@@ -27,8 +33,6 @@ _FLUCTUATION_RANK_ENDPOINT = "/uapi/domestic-stock/v1/ranking/fluctuation"
 _FLUCTUATION_RANK_TR_ID = "FHPST01700000"
 _VOLUME_RANK_ENDPOINT = "/uapi/domestic-stock/v1/quotations/volume-rank"
 _VOLUME_RANK_TR_ID = "FHPST01710000"
-_INDEX_TICK_PRICE_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-index-timeprice"
-_INDEX_TICK_PRICE_TR_ID = "FHPUP02110200"
 _HOLIDAY_ENDPOINT = "/uapi/domestic-stock/v1/quotations/chk-holiday"
 _HOLIDAY_TR_ID = "CTCA0903R"
 _EXPECTED_RANK_ENDPOINT = "/uapi/domestic-stock/v1/ranking/exp-trans-updown"
@@ -39,6 +43,12 @@ _INDEX_DAILY_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-index-daily-
 _INDEX_DAILY_TR_ID = "FHPUP02120000"
 _OVERSEAS_PERIOD_ENDPOINT = "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice"
 _OVERSEAS_PERIOD_TR_ID = "FHKST03030100"
+_ITEM_PERIOD_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
+_ITEM_PERIOD_TR_ID = "FHKST03010100"
+
+# 코스피 종목 마스터 파일 (KIS 공개 배포 주소. 토큰이 필요 없고 매일 갱신된다)
+_KOSPI_MASTER_URL = "https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip"
+_KOSPI_MASTER_FILE = "kospi_code.mst"
 
 # 조회 실패 시 재시도 횟수, 대기(초, 시도마다 배수로 늘어남), 요청 타임아웃(초)
 _RETRY_COUNT = 3
@@ -92,17 +102,22 @@ def _headers(settings, tr_id: str) -> dict[str, str]:
     }
 
 
-# 조회 API 공통 GET
+# 조회 API 공통 GET (JSON 응답). 재시도 규칙은 _send_with_retry
+def _get_with_retry(url: str, *, headers: dict, params: dict) -> dict:
+    return _send_with_retry(url, headers=headers, params=params).json()
+
+
+# GET을 보내고 응답을 돌려준다 (JSON 조회와 마스터 파일 다운로드가 같이 쓴다)
 # 5xx(초당 한도 초과 EGW00201 포함)와 연결 오류는 _RETRY_COUNT번까지 재시도하고, 4xx는 바로 에러를 낸다
 # 토큰 발급에는 쓰지 않는다 (재시도하면 알림이 여러 번 간다)
-def _get_with_retry(url: str, *, headers: dict, params: dict) -> dict:
+def _send_with_retry(url: str, *, headers: dict | None = None, params: dict | None = None) -> httpx.Response:
     last_error = None
 
     for attempt in range(_RETRY_COUNT):
         try:
             response = httpx.get(url, headers=headers, params=params, timeout=_TIMEOUT_SECONDS)
             response.raise_for_status()
-            return response.json()
+            return response
         except httpx.HTTPStatusError as error:
             if error.response.status_code < 500:
                 raise
@@ -114,7 +129,6 @@ def _get_with_retry(url: str, *, headers: dict, params: dict) -> dict:
             time.sleep(_RETRY_WAIT_SECONDS * (attempt + 1))
 
     raise last_error
-
 
 
 # 접근 토큰. 캐시가 유효하면 재사용하고 없을 때만 새로 발급한다
@@ -193,13 +207,13 @@ def get_index_category_price(market_cls_code: str = "K", index_code: str = "0001
     )
 
 
-# 등락률 순위 (상위 30개) - 두 곳에서 쓴다
+# 등락률 순위 (상승률순 30개) - 두 곳에서 쓴다
 #   주도 섹터의 업종 내 상승 1위        sector_code=업종코드, market_div_code="J"
-#   프리마켓·애프터마켓 급상승 종목     sector_code="0000", market_div_code="NX"
+#   정규장 밖 급상승 종목               sector_code="0000", market_div_code="NX"(08:30 프리마켓) / "J"(17:30·20:00 애프터마켓)
 # sector_code: 업종코드면 그 업종 안에서, "0000"이면 시장 전체
-# market_div_code: "J" 거래소(정규장 09:00~15:30) / "NX" 넥스트레이드(프리마켓 08:00~08:50, 애프터마켓 15:40~20:00) / "UN" 통합
-# FID_RANK_SORT_CLS_CODE: "0" 상승률순 / "1" 하락률순
-# 주의: "NX" 응답은 등락률순이 아니다. 받는 쪽에서 prdy_ctrt로 다시 정렬할 것
+# market_div_code: "J" 한국거래소(정규장 09:00~15:30, 애프터마켓 16:00~20:00) / "NX" 넥스트레이드(프리마켓 08:00~08:50, 애프터마켓 15:40~20:00)
+#   "UN"(통합)은 이 순위 API에서 0행이 온다
+# FID_PRC_CLS_CODE: "1" 전일 종가 대비(prdy_ctrt 순) / "0" 당일 저가 대비(lwpr_vrss_prpr_rate 순 - 화면 등락률과 순서가 다르고 진짜 상위 종목이 30개 밖으로 밀린다)
 # 응답 output: hts_kor_isnm(종목명) / prdy_ctrt(등락률) / stck_prpr(현재가) / stck_shrn_iscd(종목코드)
 def get_fluctuation_ranking(sector_code: str = "0000", market_div_code: str = "J") -> dict:
     settings = _checked_settings()
@@ -210,9 +224,9 @@ def get_fluctuation_ranking(sector_code: str = "0000", market_div_code: str = "J
             "FID_COND_MRKT_DIV_CODE": market_div_code,
             "FID_COND_SCR_DIV_CODE": "20170",
             "FID_INPUT_ISCD": sector_code,
-            "FID_RANK_SORT_CLS_CODE": "0",
+            "FID_RANK_SORT_CLS_CODE": "0",  # 상승률순
             "FID_INPUT_CNT_1": "0",
-            "FID_PRC_CLS_CODE": "0",
+            "FID_PRC_CLS_CODE": "1",  # 전일 종가 대비 등락률 순
             "FID_INPUT_PRICE_1": "",
             "FID_INPUT_PRICE_2": "",
             "FID_VOL_CNT": "",
@@ -246,23 +260,6 @@ def get_volume_ranking(sector_code: str = "0000") -> dict:
             "FID_INPUT_PRICE_2": "",
             "FID_VOL_CNT": "",
             "FID_INPUT_DATE_1": "",
-        },
-    )
-
-
-# 업종 지수 시간별 체결 (지금부터 거슬러 최근 100틱) - 지금은 호출하는 곳 없음
-# index_code: "0001"(코스피) / 업종코드, interval_seconds: 틱 간격 "60" / "30"
-# 주의: 과거 시각은 조회할 수 없다. 체결이 없는 자리에 "99:99:99" 같은 더미 행이 오니 시(hour)가 00~23인 행만 쓸 것
-# 응답 output: bsop_hour(HHMMSS) / bstp_nmix_prpr(지수) / bstp_nmix_prdy_ctrt(등락률)
-def get_index_tick_price(index_code: str = "0001", interval_seconds: str = "60") -> dict:
-    settings = _checked_settings()
-    return _get_with_retry(
-        f"{settings.kis_base_url}{_INDEX_TICK_PRICE_ENDPOINT}",
-        headers=_headers(settings, _INDEX_TICK_PRICE_TR_ID),
-        params={
-            "FID_COND_MRKT_DIV_CODE": "U",
-            "FID_INPUT_ISCD": index_code,
-            "FID_INPUT_HOUR_1": interval_seconds,
         },
     )
 
@@ -368,3 +365,31 @@ def get_overseas_period_price(market_div_code: str, symbol: str, start_date: str
             "FID_PERIOD_DIV_CODE": period,
         },
     )
+
+
+# 국내 종목 기간별 시세 (일·주·월봉) - 주간 섹터 카드의 종목별 주간 상승·하락 판정에 쓴다
+# stock_code: 종목코드 6자리, start_date·end_date: "20260801" 형태, period: "D" 일 / "W" 주 / "M" 월
+# 응답 output2 (최신부터, 최대 100행): stck_bsop_date(주봉은 그 주 월요일) / stck_clpr(기간 종가) / prdy_vrss(직전 기간 대비 가격 차이)
+#   주의: 주봉에는 등락률(prdy_ctrt) 칸이 없다. 오르내림은 prdy_vrss 부호나 종가 비교로 판단한다
+def get_stock_period_price(stock_code: str, start_date: str, end_date: str, period: str = "D") -> dict:
+    settings = _checked_settings()
+    return _get_with_retry(
+        f"{settings.kis_base_url}{_ITEM_PERIOD_ENDPOINT}",
+        headers=_headers(settings, _ITEM_PERIOD_TR_ID),
+        params={
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": stock_code,
+            "FID_INPUT_DATE_1": start_date,
+            "FID_INPUT_DATE_2": end_date,
+            "FID_PERIOD_DIV_CODE": period,
+            "FID_ORG_ADJ_PRC": "0",  # 수정주가 반영
+        },
+    )
+
+
+# 코스피 종목 마스터 파일(kospi_code.mst) 내용을 바이트로 돌려준다 - 주간 섹터 카드의 업종 종목 명단에 쓴다
+# zip(약 120KB)을 받아 압축을 풀기만 한다. 줄 형식 해석은 report_data_service._sector_members
+def get_kospi_master() -> bytes:
+    response = _send_with_retry(_KOSPI_MASTER_URL)
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        return archive.read(_KOSPI_MASTER_FILE)

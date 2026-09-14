@@ -2,13 +2,12 @@
 # 타임라인 슬롯을 수집·저장·조회한다. 슬롯 시간대 정의와 수집 시각도 여기서 정한다.
 #   collect_and_save       슬롯을 수집해서 DB에 저장 (스케줄러·POST /timeline/collect)
 #   get_day                하루치 슬롯을 DB에서 읽기 (GET /timeline)
-#   get_slot               저장 없이 즉석 수집 (확인용 GET /timeline/slot)
 #   run_scheduled_collect  스케줄러가 부르는 진입점 (휴장일 확인 + 실패 로깅, 20:00 슬롯 뒤에는 보고서 생성)
 
 import asyncio
 import logging
 import time
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,14 +44,16 @@ _SLOTS_WITH_INTRADAY = {"1530"}
 _INTRADAY_TARGET_NAMES = ("KOSPI", "KOSDAQ", "USD/KRW")
 
 # 슬롯별 수집 시각 (시, 분). 바꾸면 스케줄러가 그 시각에 수집한다 (서버 재시작 필요)
-# 15:30 슬롯이 실제 종가와 다르게 저장되면 "1530"을 (15, 35)로 바꾼다
+# 15:30 슬롯만 15:35에 수집한다. 15:20~15:30 종가 동시호가 동안 지수가 멈춰 있고, 결과가 15:30~15:32에 걸쳐 반영된다
+# (코스피는 15:30, 코스닥은 15:32 틱에 종가가 들어오고, 일부 업종은 그 뒤에 확정된다). 정각에 수집하면 15:29 값이 저장된다
+# 16:00부터 KRX 애프터마켓이 열려 종목 가격이 다시 움직이므로 16:00 전이어야 한다
 SLOT_COLLECT_TIMES = {
     "0730": (7, 30),
     "0830": (8, 30),
     "0930": (9, 30),
     "1200": (12, 0),
     "1400": (14, 0),
-    "1530": (15, 30),
+    "1530": (15, 35),
     "1730": (17, 30),
     "2000": (20, 0),
 }
@@ -75,18 +76,6 @@ def _timed(label: str, func, *args, **kwargs):
     result = func(*args, **kwargs)
     logger.info("  [%s] %.1f초", label, time.monotonic() - started)
     return result
-
-
-# 주도 섹터 수집 결과를 응답 형태로 바꾼다
-def _to_sector_items(collected: list[dict]) -> list[LeadingSectorItem]:
-    return [
-        LeadingSectorItem(
-            name=sector["name"],
-            change_rate=sector["change_rate"],
-            stocks=[LeadingSectorStockItem(**stock) for stock in sector["stocks"]],
-        )
-        for sector in collected
-    ]
 
 
 # 지표 6종 [{code, name, price, change_rate}]를 돌려준다
@@ -182,33 +171,6 @@ def collect_slot(slot_key: str, *, with_briefing: bool = True, intraday_changes:
     }
 
 
-# 수집 결과를 응답 형태로 바꾼다 (즉석 조회용)
-def _to_response(slot_key: str, collected: dict) -> TimelineSlotResponse:
-    time_slot, title = _SLOT_DEFS[slot_key]
-    briefing = collected["briefing"]
-
-    return TimelineSlotResponse(
-        slot_key=slot_key,
-        time_slot=time_slot,
-        title=title,
-        collected_at=datetime.now(UTC),
-        briefing_headline=briefing["headline"] if briefing else None,
-        briefing_subtitle=briefing["subtitle"] if briefing else None,
-        briefing_points=[BriefingPointItem(**point) for point in (briefing["points"] if briefing else [])],
-        beginner_guides=[BeginnerGuideItem(**guide) for guide in collected["beginner_guides"]],
-        leading_sectors=_to_sector_items(collected["leading_sectors"]),
-        top_gainers=[TopGainerItem(**row) for row in collected["top_gainers"]],
-        news=[NewsItem(seq=seq, **item) for seq, item in enumerate(collected["news"], start=1)],
-        indicators=[SlotIndicatorItem(name=row["name"], price=row["price"], change_rate=row["change_rate"]) for row in collected["indicators"]],
-        intraday_changes=[IntradayChangeItem(**row) for row in collected["intraday_changes"]],
-    )
-
-
-# 저장 없이 지금 수집해서 돌려준다 (GET /timeline/slot). 장중 변화는 채우지 않는다
-def get_slot(slot_key: str, *, with_briefing: bool = True) -> TimelineSlotResponse:
-    return _to_response(slot_key, collect_slot(slot_key, with_briefing=with_briefing))
-
-
 # DB의 시각(시간대 없는 한국 시간)에 KST를 붙여 내보낸다. 안 붙이면 프런트가 UTC로 읽을 수 있다
 def _with_kst(value: datetime | None) -> datetime | None:
     return value.replace(tzinfo=_KST) if value is not None else None
@@ -288,11 +250,6 @@ def _visible(slots: list[TimelineSlot], trade_date: date, now: datetime) -> list
 async def get_day(session: AsyncSession, trade_date: date, *, now: datetime | None = None) -> list[TimelineSlotResponse]:
     slots = await timeline_repository.load_day(session, trade_date)
     return [_from_db(slot) for slot in _visible(slots, trade_date, now or datetime.now(_KST))]
-
-
-# 슬롯 목록 [{slot_key, time_slot, title}] (GET /timeline/slots)
-def get_slot_list() -> list[dict]:
-    return [{"slot_key": key, "time_slot": time_slot, "title": title} for key, (time_slot, title) in _SLOT_DEFS.items()]
 
 
 # 스케줄러가 SLOT_COLLECT_TIMES 시각에 부른다

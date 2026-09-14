@@ -1,6 +1,6 @@
 # timeline.py
-# 타임라인 슬롯 응답 형태(DTO). GET /timeline, GET /timeline/slot, POST /timeline/collect가 쓴다.
-# 필드 이름은 models/timeline.py의 테이블 칼럼과 맞춘다. 필드를 추가하면 timeline_service의 _from_db·_to_response도 고칠 것
+# 타임라인 슬롯 응답 형태(DTO). GET /timeline, POST /timeline/collect가 쓴다.
+# 필드 이름은 models/timeline.py의 테이블 칼럼과 맞춘다. 필드를 추가하면 timeline_service._from_db도 고칠 것
 
 from datetime import datetime
 

@@ -9,10 +9,10 @@ import httpx
 
 from backend.core.config import get_settings
 
-# 사용할 모델. 바꾸면 모든 LLM 호출이 그 모델로 간다
+# 기본 모델. 바꾸면 model을 따로 지정하지 않은 모든 LLM 호출이 그 모델로 간다
 # 무료 한도는 모델별로 따로다 (gemini-3.5-flash-lite 하루 200회, gemini-3.6-flash 하루 20회)
-_MODEL = "gemini-3.5-flash-lite"
-_ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{_MODEL}:generateContent"
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
+_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # 실패 시 재시도 횟수와 대기(초). 호출 한 번이 수십 초 걸릴 수 있어 횟수를 적게 둔다
 _RETRY_COUNT = 2
@@ -20,8 +20,9 @@ _RETRY_WAIT_SECONDS = 1.0
 
 
 # 프롬프트를 보내고 생성된 텍스트를 돌려받는다
+# model: 비우면 DEFAULT_MODEL. 호출 수가 적고 품질이 중요한 곳(보고서)만 다른 모델을 넘긴다
 # 5xx·429(한도)·타임아웃은 재시도하고, 그 외 4xx는 바로 에러를 낸다. 키가 없으면 RuntimeError
-def generate(prompt: str, timeout: float = 60.0) -> str:
+def generate(prompt: str, timeout: float = 60.0, model: str | None = None) -> str:
     settings = get_settings()
     if not settings.gemini_api_key:
         raise RuntimeError("GEMINI_API_KEY가 .env에 없습니다. backend/.env에 추가해주세요.")
@@ -30,7 +31,7 @@ def generate(prompt: str, timeout: float = 60.0) -> str:
     for attempt in range(_RETRY_COUNT):
         try:
             response = httpx.post(
-                _ENDPOINT,
+                _ENDPOINT.format(model=model or DEFAULT_MODEL),
                 headers={
                     "x-goog-api-key": settings.gemini_api_key,
                     "content-type": "application/json",
@@ -55,8 +56,8 @@ def generate(prompt: str, timeout: float = 60.0) -> str:
 
 # 프롬프트를 보내고 결과를 dict로 돌려받는다
 # 응답을 감싼 ```json 코드블록과 앞뒤 설명 문장을 벗겨내고 파싱한다. JSON이 아니면 ValueError
-def generate_json(prompt: str, timeout: float = 60.0) -> dict:
-    text = generate(prompt, timeout=timeout).strip()
+def generate_json(prompt: str, timeout: float = 60.0, model: str | None = None) -> dict:
+    text = generate(prompt, timeout=timeout, model=model).strip()
 
     fenced = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.DOTALL)
     if fenced:

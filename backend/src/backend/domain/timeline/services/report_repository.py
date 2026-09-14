@@ -59,10 +59,11 @@ async def _find(session: AsyncSession, report_type: str, start_date: date) -> Ti
 # 1. 수치 저장. 보고서가 없으면 만들고, 있으면 수치만 고친다 (문구·이미지는 그대로)
 #   data 키 (없는 키는 기존 값 유지)
 #     "foreign_net_buy" / "institution_net_buy" / "individual_net_buy"  int, 백만원
+#     "foreign_badge"                                                  str, 외국인 순매수 흐름 뱃지
 #     "vkospi" / "vkospi_change_rate"                                  float
 #     "quarters"  [{"label", "usd_krw", "foreign_net_buy", "is_current"}]  오래된 분기부터 (seq는 순서대로 매긴다)
-#     "sectors"   [{"sector_name", "change_rate", "rising_count", "total_count", "trade_amount", "prev_trade_amount"}]  카드 순서대로
-#   quarters·sectors는 키가 있으면 기존 행을 전부 바꾼다 (주간은 LLM이 섹터를 고른 뒤 sectors만 다시 저장할 수 있다)
+#     "sectors"   [{"sector_name", "change_rate", "rising_count", "total_count", "trade_amount", "prev_trade_amount"}]  주목할 섹터 카드 (한 개)
+#   quarters·sectors는 키가 있으면 기존 행을 전부 바꾼다
 async def save_report_data(session: AsyncSession, report_type: str, start_date: date, end_date: date, data: dict) -> TimelineReport:
     report = await _find(session, report_type, start_date)
     if report is None:
@@ -70,7 +71,7 @@ async def save_report_data(session: AsyncSession, report_type: str, start_date: 
         session.add(report)
     report.end_date = end_date
 
-    for field in ("foreign_net_buy", "institution_net_buy", "individual_net_buy", "vkospi", "vkospi_change_rate"):
+    for field in ("foreign_net_buy", "institution_net_buy", "individual_net_buy", "foreign_badge", "vkospi", "vkospi_change_rate"):
         if field in data:
             setattr(report, field, data[field])
 
@@ -83,7 +84,6 @@ async def save_report_data(session: AsyncSession, report_type: str, start_date: 
     if "sectors" in data:
         report.sectors = [
             TimelineReportSector(
-                seq=seq,
                 sector_name=item["sector_name"],
                 change_rate=item.get("change_rate"),
                 rising_count=item.get("rising_count"),
@@ -91,7 +91,7 @@ async def save_report_data(session: AsyncSession, report_type: str, start_date: 
                 trade_amount=item.get("trade_amount"),
                 prev_trade_amount=item.get("prev_trade_amount"),
             )
-            for seq, item in enumerate(data["sectors"], start=1)
+            for item in data["sectors"]
         ]
 
     await session.commit()
@@ -156,12 +156,12 @@ async def save_report_images(session: AsyncSession, report_type: str, start_date
 
 
 # 프런트 조회용 - 날짜 하나로 보고서를 찾는다 (없으면 None)
-#   일간: 시작일이 그 날짜인 보고서
-#   주간: 그 날짜가 기간(시작일~종료일) 안에 드는 보고서. 주말처럼 거래일 밖 날짜는 None
+#   일간: 그 날짜의 보고서
+#   주간: 그 날짜에 만든 보고서 = 종료일(그 주 마지막 거래일)이 그 날짜인 보고서. 주 중간 날짜는 None
 async def load_report(session: AsyncSession, report_type: str, target_date: date) -> TimelineReport | None:
     query = select(TimelineReport).where(TimelineReport.report_type == report_type).options(*_EAGER_LOAD)
     if report_type == WEEKLY:
-        query = query.where(TimelineReport.start_date <= target_date, TimelineReport.end_date >= target_date)
+        query = query.where(TimelineReport.end_date == target_date)
     else:
         query = query.where(TimelineReport.start_date == target_date)
     return await session.scalar(query)

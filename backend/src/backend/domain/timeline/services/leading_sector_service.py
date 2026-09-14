@@ -38,16 +38,23 @@ _LABEL_TOP_TRADED = "거래 1위"
 _LABEL_BOTH = "상승·거래 1위"
 
 
-# 순위 응답에서 1위 행만 꺼낸다 (없으면 None)
+# 순위 응답에서 1위 행만 꺼낸다 (없으면 None). 거래대금 순위에 쓴다 (API 순서 = 거래대금 순)
 def _top_row(raw: dict) -> dict | None:
     rows = raw.get("output") or []
     return rows[0] if rows else None
 
 
+# 등락률 순위 응답에서 등락률(prdy_ctrt)이 가장 높은 행 (없으면 None)
+# API 순서를 그대로 믿지 않고 화면에 보여주는 숫자로 고른다
+def _top_gainer_row(raw: dict) -> dict | None:
+    rows = [row for row in raw.get("output") or [] if row.get("prdy_ctrt")]
+    return max(rows, key=lambda row: float(row["prdy_ctrt"])) if rows else None
+
+
 # 업종 하나의 대표 종목 [{name, change_rate, label}] 0~2개
 # 상승 1위와 거래대금 1위가 같은 종목이면 "상승·거래 1위" 한 줄로 합친다
 def _collect_sector_stocks(sector_code: str) -> list[dict]:
-    top_gainer = _top_row(kis_client.get_fluctuation_ranking(sector_code))
+    top_gainer = _top_gainer_row(kis_client.get_fluctuation_ranking(sector_code))
     top_traded = _top_row(kis_client.get_volume_ranking(sector_code))
 
     stocks = []

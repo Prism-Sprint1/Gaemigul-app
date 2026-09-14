@@ -5,10 +5,15 @@
 #   BRIEFING_PROMPT     브리핑 (수집 데이터 -> 헤드라인·부제·포인트 3개)
 #   BEGINNER_PROMPT     불개미 해설 (수집 데이터 + 브리핑 -> 해설 3개)
 #   NEWS_SELECT_PROMPT  뉴스 선별 (후보 기사 -> 실을 기사 번호)
-#   REPORT_PROMPT       일간·주간 보고서 (보고서 재료 -> 제목·섹션 3개·결론·섹터 선택·용어 후보·이미지 장면)
+#   REPORT_PROMPT       일간·주간 보고서 (보고서 재료 -> 섹션 3개·제목·요약·결론·섹션별 쉬운 요약·용어 후보·이미지 소재·분위기)
 #   REPORT_PERIOD       보고서 종류별 기간 설명 (REPORT_PROMPT의 {period}에 들어간다)
-#   IMAGE_STYLE         이미지 공통 화풍 (LLM이 쓴 장면 묘사 뒤에 코드가 붙인다)
+#   IMAGE_SCENE         보고서 이미지 장면 틀 (서울 도심 + 분위기 + 지평선의 원인 소재 + 외국인 자금 흐름. IMAGE_CITY·IMAGE_FLOWS 포함)
+#   IMAGE_SYMBOLS       보고서 이미지 원인 소재 (LLM이 이름을 고르면 코드가 영어 묘사로 바꾼다)
+#   IMAGE_MOODS         보고서 이미지 분위기 (날씨·빛)
+#   IMAGE_STYLE         이미지 공통 화풍 (소재·분위기로 만든 그림 설명 뒤에 코드가 붙인다)
 # 중괄호 {이름}은 코드에서 채워 넣는 자리이고, JSON 예시의 {{ }}는 중괄호 문자 그대로다.
+# 글자 수는 모든 프롬프트에서 같은 기준을 쓴다: 제목·소제목 30자 / 한 줄 문장 80자 / 브리핑·해설 본문 150자 / 보고서 섹션 설명 300자
+#   기준을 바꾸려면 각 프롬프트의 [길이]를 같이 고친다. LLM이 "17.67퍼센트"로 써도 코드가 "%"로 바꾼다(text_review.normalize_percent)
 
 # 슬롯 시각 -> 화면 명칭. 바꾸면 응답의 title과 프롬프트에 같이 반영된다
 SLOT_TITLES = {
@@ -28,7 +33,7 @@ SLOT_FOCUS = {
     "07:30": "재료는 07:30 기준 지표 6종(코스피·코스닥·나스닥·S&P500·니케이는 종가, 환율은 현재가)과 전날 20:00 이후 뉴스다. "
     "어제 국내장 마감과 밤사이 해외 시장 흐름을 연결하고, 오늘 국내장에 영향을 줄 요인을 짚는다.",
     "08:30": "재료는 넥스트레이드 프리마켓 급상승 종목 TOP3와 07:30 이후 뉴스다. "
-    "프리마켓에서 어떤 종목이 왜 올랐는지, 개장을 앞두고 어떤 업종·테마가 주목받는지에 집중한다.",
+    "프리마켓에서 어떤 종목이 올랐는지, 개장을 앞두고 어떤 업종·테마가 주목받는지에 집중한다. 오른 이유는 뉴스에 나온 경우에만 연결한다.",
     "09:30": "재료는 코스피 업종 등락률 TOP3(업종별 상승 1위·거래대금 1위 종목 포함)와 08:30 이후 뉴스다. "
     "개장 직후 시장이 어느 쪽으로 움직였는지, 어떤 업종이 앞서가는지에 집중한다.",
     "12:00": "재료는 코스피 업종 등락률 TOP3(업종별 상승 1위·거래대금 1위 종목 포함)와 09:30 이후 뉴스다. "
@@ -37,10 +42,12 @@ SLOT_FOCUS = {
     "오전 대비 흐름이 어떻게 바뀌었는지, 마감을 앞둔 분위기에 집중한다.",
     "15:30": "재료는 장중 변화(코스피·코스닥·환율의 07:30 가격과 마감 가격), 코스피 업종 등락률 TOP3, 14:00 이후 뉴스다. "
     "07:30 대비 하루 동안 얼마나 움직였는지로 오늘을 결산하고, 무엇이 시장을 움직였는지 정리한다.",
-    "17:30": "재료는 넥스트레이드 애프터마켓 급상승 종목 TOP3와 15:30 이후 뉴스다. "
-    "정규장 마감 결과의 의미와, 마감 후 애프터마켓에서 어떤 종목이 왜 올랐는지에 집중한다.",
-    "20:00": "재료는 넥스트레이드 애프터마켓 급상승 종목 TOP3와 17:30 이후 뉴스다. "
-    "오늘 시장을 정리하고, 애프터마켓 흐름을 바탕으로 내일 지켜볼 지점을 짚는다.",
+    "17:30": "재료는 한국거래소(KRX) 애프터마켓 가격 기준 급상승 종목 TOP3와 15:30 이후 뉴스다. "
+    "정규장 마감 결과의 의미와, 애프터마켓 가격 기준으로 전일 종가보다 크게 오른 종목에 집중한다. "
+    "등락률에는 정규장 상승분이 들어 있으므로 애프터마켓에서 올랐다고 쓰지 않는다. 오른 이유는 뉴스에 나온 경우에만 연결한다.",
+    "20:00": "재료는 한국거래소(KRX) 애프터마켓 가격 기준 급상승 종목 TOP3와 17:30 이후 뉴스다. "
+    "오늘 시장을 정리하고, 애프터마켓 가격 기준으로 전일 종가보다 크게 오른 종목과 뉴스를 바탕으로 내일 지켜볼 지점을 짚는다. "
+    "등락률에는 정규장 상승분이 들어 있으므로 애프터마켓에서 올랐다고 쓰지 않는다.",
 }
 
 # 브리핑 프롬프트
@@ -58,6 +65,11 @@ BRIEFING_PROMPT = """너는 한국 주식시장 브리핑을 쓰는 금융 에�
 - [확정 수치]: 증권사 시세 API에서 직접 받은 값이다. 지금 시점의 값이고 정확하다.
 - [뉴스]: 기사 제목과 요약이다. 각 기사에는 발행 시각이 붙어 있다.
   요약은 기사 본문에서 두 줄 정도만 잘라낸 것이라 앞뒤 문맥이 없다.
+- [확정 수치]의 "주도 섹터"는 코스피 업종 중 등락률이 가장 높은 3개다. 셋 다 마이너스면 "가장 적게 내린 업종"이라는 뜻이다.
+  약세 업종이나 부진한 업종으로 쓰지 마라.
+- [확정 수치]의 "급상승 종목"은 등락률이 가장 높은 3개다. 08:30은 넥스트레이드 프리마켓, 17:30·20:00은 한국거래소(KRX) 애프터마켓 가격 기준이다. 오른 이유는 [확정 수치]에 없다.
+  등락률은 전일 종가 대비다. 17:30·20:00에는 정규장에서 오른 폭이 그대로 들어 있으므로 "애프터마켓에서 OO% 올랐다"고 쓰지 마라.
+  "전일 종가보다 OO% 높은 가격"처럼 기준을 밝혀 쓴다.
 
 [규칙]
 1. 숫자는 [확정 수치]와 [뉴스]에 실제로 있는 값만 쓴다. 없는 수치, 종목명, 지표를 지어내지 마라.
@@ -73,12 +85,19 @@ BRIEFING_PROMPT = """너는 한국 주식시장 브리핑을 쓰는 금융 에�
 8. 데이터가 부족하면 억지로 세 개를 채우지 말고 쓸 수 있는 만큼만 써라.
 9. 겁주거나 부추기는 표현을 쓰지 마라.
 10. 모든 문장을 "~습니다", "~했습니다" 형태로 끝내라. "~했다", "~보였다" 같은 신문 문체를 쓰지 마라.
-11. 퍼센트는 "%" 기호로 써라. "2.25퍼센트"가 아니라 "2.25%"로 쓴다.
+11. 퍼센트는 "%" 기호로 써라. "2.25퍼센트"가 아니라 "2.25%"로 쓴다. 등락률 숫자 뒤에는 반드시 "%"를 붙인다.
+12. 원인이나 이유는 [뉴스]에 그 원인이 적혀 있을 때만 쓴다. 뉴스에 이유가 없으면 이유를 추측해서 쓰지 말고 사실만 쓴다.
+    "A 때문에 B했다"를 쓰려면 A와 B가 같은 기사에 함께 나와야 한다.
+13. "OO에 따르면", "뉴스에 따르면"은 [뉴스]에서 가져온 내용에만 붙인다. [확정 수치]에서 가져온 값에는 붙이지 마라.
+14. 기사에 "~할 예정", "~한다"처럼 앞으로 일어날 일로 적힌 것은 [현재 시각] 기준으로 아직 일어나지 않았을 수 있다.
+    기사 발행 시각과 [현재 시각]을 비교해, 일어나지 않은 일은 "~할 예정입니다"로 써라.
+15. "혼조"는 오르는 것과 내리는 것이 섞였을 때만 쓴다. 지수가 한 방향으로 크게 움직였으면 쓰지 마라.
+16. "홀로", "유일하게", "가장 크게" 같은 비교 표현은 [확정 수치]에서 다른 대상과 비교해 확인될 때만 쓴다.
 
 [길이]
-- headline: 20자 이내. 오늘 시장을 한마디로 요약한 제목
-- subtitle: 40자 이내. headline을 뒷받침하는 핵심 숫자나 사실 한 줄
-- points[].title: 12자 이내. 그 문단의 소제목
+- headline: 30자 이내. 오늘 시장을 한마디로 요약한 제목
+- subtitle: 80자 이내 한 문장. headline을 뒷받침하는 핵심 숫자나 사실
+- points[].title: 30자 이내. 그 문단의 소제목
 - points[].body: 2~3문장, 150자 이내
 
 [출력 형식]
@@ -139,12 +158,24 @@ BEGINNER_PROMPT = """너는 주식을 막 시작한 사람에게 오늘 시황�
 7. 겁주거나 부추기지 마라. "폭락", "지금 안 사면 후회한다" 같은 표현을 쓰지 마라.
 8. 문장을 짧게 끊어 써라. 한 문장에 한 가지만 말해라.
 9. 모든 문장을 "~습니다", "~했습니다" 형태로 끝내라. "~했다", "~보였다" 같은 신문 문체를 쓰지 마라.
-   퍼센트는 "%" 기호로 써라. "2.25퍼센트"가 아니라 "2.25%"로 쓴다.
+   퍼센트는 "%" 기호로 써라. "2.25퍼센트"가 아니라 "2.25%"로 쓴다. 등락률 숫자 뒤에는 반드시 "%"를 붙인다.
 10. 뉴스에서 온 내용을 쓸 때는 "OO에 따르면", "뉴스에 따르면"처럼 출처를 밝혀라. 시세로 확인된 값처럼 쓰면 안 된다.
+    반대로 [데이터]의 "확정 수치"(지표·주도 섹터·급상승 종목·장중 변화)에서 온 내용에는 "뉴스에 따르면"을 붙이지 마라.
+11. "무엇 때문에 이런 일이 일어났는지"(사건의 원인)는 [데이터]의 뉴스에 적혀 있어야 한다. 뉴스에 없는 원인을 지어내지 마라.
+    원인이 뉴스에 있을 때, 그 원인이 왜 그런 결과로 이어지는지 일반적인 원리를 풀어 쓰는 것은 괜찮다(위 좋은 예처럼).
+    종목이 왜 올랐는지 뉴스에 없으면 "이유는 뉴스에 나오지 않았다"는 사실과 그 움직임의 일반적인 의미만 설명해라.
+12. "주도 섹터"가 모두 마이너스면 시장이 내린 날 가장 적게 내린 업종이다. 부진한 업종으로 설명하지 마라.
+13. 기사에 앞으로 일어날 일로 적힌 것은 일어난 일처럼 쓰지 마라.
+14. "거래가 몰려서 올랐다", "거래가 집중되면서 업종이 힘을 받았다"처럼 거래대금·거래 1위를 오른 원인으로 쓰지 마라.
+    거래가 많다는 것은 관심이 컸다는 뜻일 뿐 오른 이유가 아니다.
+15. [브리핑]의 숫자와 문장을 다시 옮겨 적는 문단을 만들지 마라. 쓸 원인이 뉴스에 없으면
+    그 숫자가 무엇을 뜻하는지(예: 상승 1위와 거래 1위의 차이), 또는 [데이터]의 뉴스 중 초보자가 궁금해할 다른 사건을 설명해라.
+16. "급상승 종목" 등락률은 전일 종가 대비다. 17:30·20:00에는 정규장 상승분이 포함돼 있으므로 "애프터마켓에서 OO% 올랐다"고 쓰지 마라.
+    "전일 종가보다 OO% 높은 가격"처럼 기준을 밝혀 쓴다.
 
 [길이]
-- points[].title: 25자 이내. 그 문단이 무엇을 설명하는지 알 수 있는 제목
-- points[].body: 2~3문장, 120자 이내
+- points[].title: 30자 이내. 그 문단이 무엇을 설명하는지 알 수 있는 제목
+- points[].body: 2~3문장, 150자 이내
 - points[].tags: 그 문단의 핵심 키워드 1~3개. 한 단어씩 (예: "금리", "외국인", "반도체")
 
 [출력 형식]
@@ -204,11 +235,14 @@ selected에는 고른 기사의 번호를 중요한 순서대로 넣어라.
 REPORT_PERIOD = {
     "DAILY": "하루(일간) 보고서다. 재료는 그날 하루의 확정 수치와 그날 타임라인(07:30~20:00)의 브리핑·뉴스다.",
     "WEEKLY": "한 주(주간) 보고서다. 재료는 그 주 거래일의 확정 수치와 그 주 일간 보고서들이다. "
-    "하루하루를 나열하지 말고 한 주 전체의 흐름으로 묶어라.",
+    "하루하루를 나열하지 말고 한 주 전체의 흐름으로 묶어라. "
+    "순매수·순매도 방향, 등락률, VKOSPI 같은 숫자와 방향은 반드시 [확정 수치]의 주간 값으로 쓴다. "
+    "일간 보고서는 그날 하루의 글이라 주간 값과 방향이 다를 수 있다(하루는 순매도였어도 한 주 합계는 순매수일 수 있다). "
+    "일간 보고서의 제목·요약·문장을 그대로 옮기지 말고, 무슨 일이 있었는지 파악하는 데만 써라.",
 }
 
 # 일간·주간 보고서 프롬프트
-# 채우는 값: period(REPORT_PERIOD), start_date·end_date, sector_candidates(고를 수 있는 업종명), data(보고서 재료 JSON)
+# 채우는 값: period(REPORT_PERIOD), image_symbols·image_flows·image_moods(IMAGE_SYMBOLS·IMAGE_FLOWS·IMAGE_MOODS 이름 목록), start_date·end_date, sector(주목할 섹터 - 일간은 그날 종가 기준 코스피 업종 등락률 1위, 주간은 그 주 등락률 1위), data(보고서 재료 JSON)
 # 섹션 순서와 주제는 [섹션 구성]을 고친다 (섹션 개수를 바꾸면 report_service와 화면도 같이 고칠 것)
 # 출력 키를 바꾸면 report_service._parse_content도 같이 고칠 것
 REPORT_PROMPT = """너는 한국 주식시장 보고서를 쓰는 금융 에디터다.
@@ -225,9 +259,27 @@ REPORT_PROMPT = """너는 한국 주식시장 보고서를 쓰는 금융 에디�
 - [뉴스]: 기사 제목과 두 줄 요약이다. 앞뒤 문맥이 잘려 있다.
 
 [섹션 구성] 세 섹션의 주제는 정해져 있다
-1. 섹션1 "핵심 이슈": 이 기간 시장을 움직인 가장 큰 사건과 그 배경
-2. 섹션2 "수급과 변동성": 외국인·기관·개인 순매수, VKOSPI, 원달러 환율, 분기별 외국인 순매수 흐름
-3. 섹션3 "주목할 섹터": [섹터 후보]에서 고른 업종이 왜 움직였는지
+1. 섹션1 "핵심 이슈(원인 분석)": 이 기간 시장을 움직인 가장 큰 사건과 그 원인.
+   원인은 [뉴스]·[타임라인]·[일간 보고서]에 적힌 것만 쓴다
+2. 섹션2 "시장 전체 반응(결과 & 실증 데이터)": 섹션1의 이슈에 시장 전체가 어떻게 반응했는지를 [확정 수치]로 보여준다.
+   외국인 순매수(와 그 흐름), VKOSPI, 분기별 원달러 환율·외국인 순매수 흐름을 중심으로 쓰고, 기관·개인 순매수는 보조로 쓴다.
+   분기 값은 차트로 따로 보여주므로 여섯 분기를 모두 나열하지 말고, 흐름(커졌다·줄었다·방향이 바뀌었다)과 핵심 수치 1~2개만 쓴다
+3. 섹션3 "주목할 섹터(실제 사례)": [주목할 섹터] 업종 하나를 실제 사례로 보여준다.
+   그 업종의 등락률, 상승 종목 비율(업종 N개 중 M개 상승), 거래대금 변화로 어떻게 움직였는지 설명한다.
+   움직인 이유는 [뉴스]·[타임라인]·[일간 보고서]에 그 업종 이야기가 있을 때만 쓰고, 없으면 쓰지 않는다. 다른 업종으로 바꾸지 마라
+
+[쓰는 순서] 출력 형식의 순서대로 쓴다
+1. 세 섹션을 먼저 쓴다
+2. [보고서 재료] 전체와 네가 쓴 세 섹션을 모두 바탕으로 title·summary·conclusion·keywords를 쓴다
+   - summary: 이 보고서 전체의 요약이다. 세 섹션의 핵심을 한 문장에 담는다
+   - conclusion: 주식을 막 시작한 사람이 30초 안에 이해하도록 이 보고서를 쉽게 풀어 쓴 한 문장이다.
+     전문 용어("수급", "변동성", "지지선", "순매도" 같은 말)를 쓰지 말고 일상 말로 바꾼다.
+     summary 문장을 그대로 옮기거나 말만 바꿔 반복하지 마라. 재료에 없는 사실을 새로 넣지 마라
+   - keywords: 세 섹션을 주식 입문자 눈높이로 한 번 더 요약한 것이다. 반드시 3개이고 순서대로 섹션1·섹션2·섹션3에 대응한다.
+     title은 그 섹션에서 기억할 핵심 한 가지를 쉬운 말로, description은 그게 무슨 뜻인지 한두 문장으로 풀어 쓴다.
+     conclusion과 같은 결론 영역이라 전문 용어 대신 일상 말을 쓴다("외국인 순매도" -> "외국인이 주식을 많이 팔았다").
+     용어 이름만 적거나 용어 뜻풀이를 하지 마라(용어 설명은 따로 있다). 섹션에 없는 내용을 넣지 마라.
+     "~하세요", "~에 주목하세요", "~를 사수하세요" 같은 투자 행동 지시를 쓰지 마라. 무슨 일이 있었고 그게 무슨 뜻인지만 쓴다
 
 [규칙]
 1. 숫자는 [확정 수치]에 있는 값을 우선 쓴다. 없는 수치, 종목명, 지표를 지어내지 마라.
@@ -237,63 +289,143 @@ REPORT_PROMPT = """너는 한국 주식시장 보고서를 쓰는 금융 에디�
 5. 매수, 매도, 보유 같은 투자 행동을 권유하지 마라. 시장에서 일어난 일과 그 배경만 서술한다.
 6. 전망을 쓸 때는 단정하지 말고 근거와 함께 가능성으로 서술해라.
 7. 겁주거나 부추기는 표현을 쓰지 마라.
-8. 모든 문장을 "~습니다", "~했습니다" 형태로 끝내라. "~했다", "~보였다" 같은 신문 문체를 쓰지 마라.
-9. 퍼센트는 "%" 기호로 써라.
+8. 문장은 "~습니다", "~했습니다" 형태로 끝내라. "~했다", "~보였다" 같은 신문 문체를 쓰지 마라.
+   title, sections[].title, keywords[].title은 문장이 아니라 제목이다. "~습니다"를 붙이지 말고 명사형으로 끝낸다(예: "금리·유가 악재에 코스피 3%대 급락").
+   매매 금액은 [확정 수치]처럼 "3조 3,363억원 순매도"로 방향 단어와 함께 쓰고, 금액 앞에 "+", "-" 기호를 붙이지 마라.
+9. 퍼센트는 "%" 기호로 써라. "2.25퍼센트"가 아니라 "2.25%"로 쓴다. 등락률 숫자 뒤에는 반드시 "%"를 붙인다.
 10. 세 섹션이 같은 내용을 반복하지 않게 해라.
-11. sectors에는 [섹터 후보]에 있는 업종명만 그대로 적어라. 섹션1 이슈와 관련이 깊은 순서로 최대 3개.
-12. terms에는 네가 쓴 보고서 본문에 실제로 나온 어려운 금융 용어를 중요한 순서로 최대 5개 적어라.
-    description은 주식을 처음 하는 사람이 알아듣게 30자 이내 한 문장으로 쓴다.
-13. main_image_scene과 section1_image_scene은 이미지 생성 AI에 넣을 영어 장면 묘사다.
-    - main_image_scene은 summary의 내용을, section1_image_scene은 섹션1 title·description의 내용을 그린다
-    - 그 글에 나온 대상만 그려라. 글에 없는 사물을 끌어오지 마라
-    - 사물 1~2개와 배경만 짧게 묘사한다. 한 문장, 영어 25단어 이내
-    - 상승·호재 분위기면 밝고 따뜻한 빛, 하락·악재 분위기면 차분하고 어두운 빛으로 표현한다
-    - 글자, 숫자, 로고, 사람 얼굴, 차트 눈금은 넣지 마라. 화풍은 적지 마라(코드가 붙인다)
+    원인이나 이유는 [뉴스]나 [타임라인]·[일간 보고서]에 적힌 것만 쓴다. 없는 원인을 추측하지 마라.
+    "OO에 따르면"은 [뉴스]에서 온 내용에만 붙이고, [확정 수치] 값에는 붙이지 마라.
+    [주목할 섹터]는 등락률 1위 업종이다. 등락률이 마이너스면 "가장 적게 내린 업종"이다. 부진한 업종으로 쓰지 마라.
+    "혼조"는 오르는 것과 내리는 것이 섞였을 때만 쓴다. 지수가 한 방향으로 크게 움직였으면 쓰지 마라.
+    "홀로", "유일하게", "가장 크게" 같은 비교 표현은 [확정 수치]에서 다른 대상과 비교해 확인될 때만 쓴다.
+11. terms에는 네가 쓴 보고서 본문에 실제로 나온 어려운 금융 용어를 중요한 순서로 최대 5개 적어라.
+    description은 주식을 처음 하는 사람이 알아듣게 한 문장으로 쓴다.
+12. main_image와 section1_image는 이미지 재료다. main_image는 summary, section1_image는 섹션1 description의 내용을 그린다.
+    그림은 "한국 증시(서울 도심)가 주인공이고, 멀리 지평선에 원인이 서 있는 장면"으로 코드가 만든다.
+    - symbols: 그 글에서 한국 증시를 움직인 원인·배경을 [그림 소재 목록]에서 중요한 순서로 1~2개 고른다. 목록에 있는 이름 그대로 쓴다.
+      글에 직접 나온 대상만 고른다(예: 글에 환율 이야기가 없으면 "환율·달러"를 고르지 마라). 외국인 매매는 symbols가 아니라 flow로 나타낸다
+    - flow: 글에 외국인 자금 흐름이 핵심으로 나오면 [자금 흐름 목록]에서 하나를 고르고, 아니면 "없음"
+    - mood: [분위기 목록]에서 그 글의 시장 분위기 하나를 고른다
+    - 영어 문장이나 화풍은 쓰지 마라
+
+[그림 소재 목록]에서 그 글의 핵심 대상을 중요한 순서로 2~3개 고른다. 목록에 있는 이름 그대로 쓴다. 글에 없는 대상은 고르지 마라
+    - mood: [분위기 목록]에서 그 글의 시장 분위기 하나를 고른다
+    - 영어 문장이나 화풍은 쓰지 마라(코드가 소재와 분위기로 그림 설명을 만든다)
+
+[그림 소재 목록]
+{image_symbols}
+
+[자금 흐름 목록]
+{image_flows}
+
+[분위기 목록]
+{image_moods}
 
 [길이]
-- title: 25자 이내. 보고서 전체 제목
-- summary: 60자 이내 한 문장. 이 기간 시장을 한 줄로 요약
-- sections[].title: 20자 이내
-- sections[].description: 2~3문장, 200자 이내
-- sections[].points: 핵심 요약 정확히 3개. 각 1문장, 60자 이내
-- conclusion: 80자 이내 한 문장. 보고서 결론
-- keywords: 정확히 3개. title 10자 이내, description 1문장 60자 이내
+- sections[].title: 30자 이내. 무엇이 어떻게 됐는지 드러나는 설명형 제목 (메인 화면의 핵심 요약 프리뷰에도 쓰인다)
+- sections[].description: 섹션1·2·3 모두 300자 이내
+- sections[].points: 핵심 요약 정확히 3개. 각 1문장, 80자 이내
+- title: 30자 이내. 보고서 전체 제목
+- summary: 80자 이내 한 문장. 보고서 전체 요약
+- conclusion: 80자 이내 한 문장. 주식 입문자를 위해 쉽게 풀어 쓴 요약
+- keywords: 정확히 3개(섹션1·2·3 순서). title 30자 이내, description은 주식 입문자가 이해할 쉬운 말로 80자 이내
+- terms[].description: 80자 이내 한 문장
 
 [출력 형식]
 설명이나 코드 블록 없이 아래 JSON만 출력해라.
 
 {{
-  "title": "...",
-  "summary": "...",
   "sections": [
     {{"title": "...", "description": "...", "points": ["...", "...", "..."]}},
     {{"title": "...", "description": "...", "points": ["...", "...", "..."]}},
     {{"title": "...", "description": "...", "points": ["...", "...", "..."]}}
   ],
+  "title": "...",
+  "summary": "...",
   "conclusion": "...",
   "keywords": [
     {{"title": "...", "description": "..."}},
     {{"title": "...", "description": "..."}},
     {{"title": "...", "description": "..."}}
   ],
-  "sectors": ["...", "...", "..."],
   "terms": [{{"term": "...", "description": "..."}}],
-  "main_image_scene": "...",
-  "section1_image_scene": "..."
+  "main_image": {{"symbols": ["...", "..."], "flow": "...", "mood": "..."}},
+  "section1_image": {{"symbols": ["...", "..."], "flow": "...", "mood": "..."}}
 }}
 
-[섹터 후보]
-{sector_candidates}
+[주목할 섹터]
+{sector}
 
 [보고서 재료]
 {data}
 """
 
-# 이미지 공통 화풍. LLM이 쓴 장면 묘사 뒤에 붙는다
-# 디자인 톤(흰 바탕·네이비·붉은 포인트)에 맞춘 미니멀 일러스트. 바꾸면 모든 보고서 이미지의 화풍이 바뀐다
-# 정사각형을 프런트가 가운데 기준으로 잘라 쓰므로 주요 사물을 가운데 두게 한다
+# 보고서 이미지 장면. 한국 증시(서울 도심)를 주인공으로 두고, LLM이 고른 원인 소재를 멀리 지평선에 세운다 (report_service._image_scene이 채운다)
+#   {city} IMAGE_CITY / {mood} IMAGE_MOODS 값 / {causes} IMAGE_SYMBOLS 값을 이은 것 / {flow} IMAGE_FLOWS 값
+# 소재를 늘어놓는 방식보다 "무엇이 한국 증시에 영향을 줬는지"가 읽혀서 이 구성을 쓴다
+IMAGE_SCENE = "{city} {mood}, while far in the distance on the horizon stand {causes}{flow}, one unified scene"
+IMAGE_SCENE_NO_CAUSE = "{city} {mood}{flow}, one unified scene"
+IMAGE_CITY = "a modern Seoul city skyline with a tall slim tower on a hill in the foreground"
+
+# 외국인 자금 흐름 (이름 -> 장면에 붙는 영어 문구). "없음"은 붙이지 않는다
+IMAGE_FLOWS = {
+    "외국인 매도": ", and a gust of wind blows gold coins away from the city toward the horizon",
+    "외국인 매수": ", and a stream of gold coins flows from the horizon into the city",
+    "없음": "",
+}
+
+# 보고서 이미지 소재 (원인·배경). LLM이 이름(키)을 고르면 코드가 영어 묘사(값)로 바꿔 장면의 지평선에 세운다
+# 이미지 AI가 알아보기 쉬운 구체적인 사물로 적는다. 멀리 서 있으므로 건물·설비는 실루엣("the silhouette of"), 작은 사물은 거대하게("giant") 쓴다
+# 실루엣으로 쓰면 건물 박공 같은 곳에 가짜 글자가 덜 생긴다. 칩처럼 건물 사이에 묻히는 사물은 하늘에 띄운다("floating high in the sky"). 글자가 들어가는 사물(지폐·서류·화면·간판)과 사람·화살표·그래프는 넣지 않는다
+# 소재를 추가하면 LLM 선택지가 늘어난다 (키는 보고서에 자주 나오는 말로)
+IMAGE_SYMBOLS = {
+    "반도체": "a giant glowing microchip floating high in the sky",
+    "인공지능(AI)": "a giant glowing AI brain-shaped chip floating high in the sky",
+    "금리·연준·중앙은행": "the dark silhouette of a large domed central bank building",
+    "국채·채권": "a giant stack of plain sealed bond folders",
+    "물가": "a giant shopping cart full of groceries",
+    "유가·원유": "the silhouettes of oil pump jacks and oil barrels",
+    "환율·달러": "a giant balance scale holding two piles of plain gold coins",
+    "해외 증시": "a giant globe",
+    "변동성·불안": "rough ocean waves tossing a small sailboat",
+    "수출·무역": "the silhouettes of cargo ships and stacked containers at a port",
+    "중동·지정학": "the silhouettes of desert oil derricks",
+    "섬유·의류": "giant colorful rolls of fabric and a sewing machine",
+    "자동차": "the silhouette of a giant modern electric car",
+    "조선": "the silhouette of a giant ship in a shipyard",
+    "건설": "the silhouettes of tall construction cranes",
+    "제약·바이오": "giant medicine capsules and laboratory flasks",
+    "화학": "giant laboratory flasks with colorful liquid",
+    "철강·금속": "the silhouettes of steel mill chimneys and rolled steel coils",
+    "금융·은행": "the silhouette of a giant bank vault door",
+    "통신": "the silhouette of a tall telecommunication tower sending signal waves",
+    "전기·가스·에너지": "the silhouettes of power transmission towers and wind turbines",
+    "항공·운송": "a passenger airplane flying over cargo trucks",
+    "게임·엔터·문화": "a giant game controller under colorful stage spotlights",
+    "음식료": "a golden wheat field with a giant basket of bread",
+    "부동산": "the silhouettes of apartment buildings",
+    "유통": "a giant shopping bag in front of storefronts",
+    "IT 서비스": "giant glowing cloud server racks",
+}
+
+# 보고서 이미지 분위기. 방향(화살표·그래프)은 이미지 AI가 반대로 그리므로 날씨와 빛으로만 나타낸다
+IMAGE_MOODS = {
+    "강한 상승": "under a bright clear sky with warm golden sunlight",
+    "상승": "under a clear blue sky with soft warm sunlight",
+    "혼조": "under a partly cloudy sky with sunlight breaking through",
+    "보합": "under a calm soft overcast sky",
+    "하락": "under gray clouds with soft cool light",
+    "급락": "under dark gray storm clouds with dim cool light",
+}
+
+# 이미지 공통 화풍. 소재·분위기로 만든 그림 설명 뒤에 붙는다 (report_service._image_scene)
+# 사이트 디자인(밝은 회색 바탕·빨간 포인트·차콜 글자·카드형 UI)에 맞춘 플랫 일러스트. 바꾸면 모든 보고서 이미지의 화풍이 바뀐다
+# 정사각형으로 생성되지만 화면에서는 가로로 긴 배너로 가운데를 잘라 쓰므로, 주요 소재를 세로 가운데 띠에 모으게 한다
 IMAGE_STYLE = (
-    "minimal flat vector illustration, off-white background, navy blue main color with a small muted red accent, "
-    "simple clean shapes, main subject centered with generous empty space around it, "
-    "no text, no letters, no numbers, no logos"
+    "clean modern flat vector illustration in a minimal fintech style, soft light warm gray and muted blue tones "
+    "with vivid red accents and charcoal details, simple rounded shapes, subtle soft shadows, "
+    "one unified scene with the main subjects grouped together in the vertical middle of the image, "
+    "full-bleed background with no borders, frames, bars or stripes, "
+    "no text, no letters, no numbers, no logos, no people, no faces, no arrows, no charts, no graphs"
 )

@@ -5,13 +5,13 @@
 #   timeline_report ─┬─ timeline_report_section        섹션 3행
 #                    │     └─ timeline_report_point    핵심 요약 3행씩
 #                    ├─ timeline_report_quarter        차트 분기 6행
-#                    ├─ timeline_report_sector         섹터 카드 3행
-#                    ├─ timeline_report_keyword        결론 키워드 3행
+#                    ├─ timeline_report_sector         섹터 카드 1행 (코스피 업종 등락률 1위)
+#                    ├─ timeline_report_keyword        결론 영역 섹션별 쉬운 요약 3행
 #                    └─ timeline_report_term           어려운 용어 3행
 #
-# [조회 기준] 프런트가 날짜를 주면
-#   일간: report_type="DAILY"  이고 start_date = 그 날짜
-#   주간: report_type="WEEKLY" 이고 start_date <= 그 날짜 <= end_date
+# [조회 기준] 프런트는 날짜 하나로 그날 만든 보고서만 불러온다
+#   일간: report_type="DAILY"  이고 start_date = 그 날짜 (거래일마다 20:00 슬롯 뒤 생성)
+#   주간: report_type="WEEKLY" 이고 end_date = 그 날짜 (그 주 마지막 거래일에만 일간 뒤 생성)
 #
 # [저장 순서] 수치 칼럼을 먼저 채우고 LLM 문구 칼럼은 나중에 채운다.
 #   그래서 LLM 문구 칼럼은 전부 NULL을 허용한다 (LLM이 실패해도 수치는 남는다)
@@ -64,20 +64,24 @@ class TimelineReport(Base):
     # 보고서 제목 (LLM)
     title: Mapped[str | None] = mapped_column(String(200), default=None)
 
-    # 메인 한 줄 요약 (LLM). 메인 이미지 생성의 재료
+    # 메인 한 줄 요약 (LLM). 보고서 전체 요약이고 메인 이미지 생성의 재료
     summary: Mapped[str | None] = mapped_column(String(300), default=None)
 
     # 메인 이미지 주소 (Supabase Storage 공개 URL)
     main_image_url: Mapped[str | None] = mapped_column(String(1000), default=None)
 
-    # 결론 한 줄 요약 (LLM)
+    # 결론 영역 한 줄 요약 (LLM). 주식 입문자가 30초 안에 이해하도록 쉽게 풀어 쓴 문장 (메인 summary와 역할이 다르다)
     conclusion: Mapped[str | None] = mapped_column(String(300), default=None)
 
-    # 코스피 투자자별 순매수(백만원, 음수면 순매도). 주간은 그 주 일간 값의 합
-    # 섹션2 카드에는 외국인만 쓰고, 기관·개인은 LLM 근거로 넘긴다
+    # 코스피 투자자별 순매수(백만원, 음수면 순매도). 주간은 그 주 거래일 값의 합 (KIS 일별 기록)
+    # 섹션2 카드에는 외국인만 쓰고, 기관·개인은 LLM 근거로만 쓴다 (API 응답에는 내보내지 않는다)
     foreign_net_buy: Mapped[int | None] = mapped_column(BigInteger, default=None)
     institution_net_buy: Mapped[int | None] = mapped_column(BigInteger, default=None)
     individual_net_buy: Mapped[int | None] = mapped_column(BigInteger, default=None)
+
+    # 외국인 순매수 흐름 뱃지 (섹션2 카드). 과거 데이터와 비교해 코드가 만든다 (LLM 아님)
+    # 일간 예: "4거래일 연속 순매도" / "순매수 전환" / "8/25 이후 최대 순매도", 주간 예: "3주 연속 순매도" / "5주 만에 최대 주간 순매도"
+    foreign_badge: Mapped[str | None] = mapped_column(String(50), default=None)
 
     # VKOSPI 종가. 주간은 주 마지막 거래일 종가
     vkospi: Mapped[float | None] = mapped_column(Float, default=None)
@@ -91,15 +95,16 @@ class TimelineReport(Base):
     # 저장 시각 (한국 시간)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst, server_default=_KST_NOW_SQL)
 
-    # 자식 테이블 연결. seq 순서로 꺼내진다
+    # 자식 테이블 연결. 섹터를 뺀 나머지는 seq 순서로 꺼내진다
     sections: Mapped[list["TimelineReportSection"]] = relationship(back_populates="report", cascade="all, delete-orphan", order_by="TimelineReportSection.seq")
     quarters: Mapped[list["TimelineReportQuarter"]] = relationship(back_populates="report", cascade="all, delete-orphan", order_by="TimelineReportQuarter.seq")
-    sectors: Mapped[list["TimelineReportSector"]] = relationship(back_populates="report", cascade="all, delete-orphan", order_by="TimelineReportSector.seq")
+    # 섹터 카드는 한 개라 순서가 없다. 목록 형태는 다른 자식 테이블과 저장 방식을 맞추기 위해서다 (report.sectors[0])
+    sectors: Mapped[list["TimelineReportSector"]] = relationship(back_populates="report", cascade="all, delete-orphan")
     keywords: Mapped[list["TimelineReportKeyword"]] = relationship(back_populates="report", cascade="all, delete-orphan", order_by="TimelineReportKeyword.seq")
     terms: Mapped[list["TimelineReportTerm"]] = relationship(back_populates="report", cascade="all, delete-orphan", order_by="TimelineReportTerm.seq")
 
 
-# 보고서 섹션 - 보고서당 3행 (1 핵심 이슈, 2 수급과 변동성, 3 주목할 섹터 - 주제는 prompts.REPORT_PROMPT에서 정한다)
+# 보고서 섹션 - 보고서당 3행 (1 핵심 이슈(원인 분석), 2 시장 전체 반응(결과 & 실증 데이터), 3 주목할 섹터(실제 사례) - 주제는 prompts.REPORT_PROMPT에서 정한다)
 class TimelineReportSection(Base):
     __tablename__ = "timeline_report_section"
 
@@ -165,7 +170,7 @@ class TimelineReportQuarter(Base):
     # 차트 라벨 (예: "26/Q3")
     label: Mapped[str] = mapped_column(String(10))
 
-    # 원/달러 환율. 분기 안 가장 늦은 달의 월간 값 (지난 분기는 분기 마지막 달, 현 분기는 이번 달까지 받은 최신 월)
+    # 원/달러 환율. 지난 분기는 분기 마지막 달의 월간 값, 현 분기는 보고서 날짜(없으면 그 전 가장 가까운 날)의 일별 값
     usd_krw: Mapped[float | None] = mapped_column(Float, default=None)
 
     # 분기 외국인 순매수 합계(백만원). 현 분기는 보고서 날짜까지의 합
@@ -180,7 +185,7 @@ class TimelineReportQuarter(Base):
     report: Mapped["TimelineReport"] = relationship(back_populates="quarters")
 
 
-# 섹션3 주목할 섹터 카드 - 보고서당 3행
+# 섹션3 주목할 섹터 카드 - 보고서당 1행 (일간은 그날 종가 기준 코스피 업종 등락률 1위, 주간은 그 주 등락률 1위)
 class TimelineReportSector(Base):
     __tablename__ = "timeline_report_sector"
 
@@ -189,9 +194,6 @@ class TimelineReportSector(Base):
     # 소속 보고서
     report_id: Mapped[int] = mapped_column(ForeignKey("timeline_report.id", ondelete="CASCADE"))
 
-    # 표시 순서 (1, 2, 3)
-    seq: Mapped[int] = mapped_column()
-
     # 업종명 (예: "건설")
     sector_name: Mapped[str] = mapped_column(String(100))
 
@@ -199,7 +201,7 @@ class TimelineReportSector(Base):
     change_rate: Mapped[float | None] = mapped_column(Float, default=None)
 
     # 상승 종목 수 / 업종 전체 종목 수. 카드에 "업종 N개 중 M개 상승"과 비율로 표시한다
-    # 주간은 API에 주간 값이 없어서 기준이 정해질 때까지 NULL일 수 있다
+    # 일간은 업종 지수의 그날 값, 주간은 종목별 주봉으로 센 값(그 주 종가 > 전주 종가). 조회에 실패하면 NULL
     rising_count: Mapped[int | None] = mapped_column(default=None)
     total_count: Mapped[int | None] = mapped_column(default=None)
 
@@ -213,7 +215,7 @@ class TimelineReportSector(Base):
     report: Mapped["TimelineReport"] = relationship(back_populates="sectors")
 
 
-# 결론 키워드 - 보고서당 3행
+# 결론 영역 섹션별 쉬운 요약 - 보고서당 3행 (seq 1·2·3이 섹션1·2·3에 대응. 섹션 내용을 주식 입문자 눈높이로 한 번 더 요약)
 class TimelineReportKeyword(Base):
     __tablename__ = "timeline_report_keyword"
 
@@ -222,13 +224,13 @@ class TimelineReportKeyword(Base):
     # 소속 보고서
     report_id: Mapped[int] = mapped_column(ForeignKey("timeline_report.id", ondelete="CASCADE"))
 
-    # 표시 순서 (1, 2, 3)
+    # 대응하는 섹션 번호이자 표시 순서 (1, 2, 3)
     seq: Mapped[int] = mapped_column()
 
-    # 키워드 타이틀 (LLM)
+    # 쉬운 요약 타이틀 (LLM)
     title: Mapped[str] = mapped_column(String(100))
 
-    # 키워드 설명 (LLM)
+    # 쉬운 요약 설명 (LLM)
     description: Mapped[str] = mapped_column(Text)
 
     # 저장 시각 (한국 시간)
@@ -256,6 +258,7 @@ class TimelineReportTerm(Base):
     description: Mapped[str] = mapped_column(Text)
 
     # 설명 출처 "GLOSSARY"(glossary.py 사전) / "LLM"(사전에 없어 LLM이 작성 - 검토 후 사전에 정식 등록할 후보)
+    # 백엔드 검토용이라 API 응답에는 내보내지 않는다
     source: Mapped[str] = mapped_column(String(10))
 
     # 저장 시각 (한국 시간)

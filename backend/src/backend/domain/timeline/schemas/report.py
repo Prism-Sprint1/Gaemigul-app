@@ -9,7 +9,7 @@ from datetime import date, datetime
 from pydantic import BaseModel
 
 
-# 섹션 하나 (1 핵심 이슈 / 2 수급과 변동성 / 3 주목할 섹터)
+# 섹션 하나 (1 핵심 이슈(원인 분석) / 2 시장 전체 반응(결과 & 실증 데이터) / 3 주목할 섹터(실제 사례))
 class ReportSectionItem(BaseModel):
     seq: int  # 섹션 번호 (1, 2, 3)
     title: str | None
@@ -26,11 +26,11 @@ class ReportQuarterItem(BaseModel):
     is_current: bool  # 진행 중인 분기
 
 
-# 섹션3 섹터 카드 하나
+# 섹션3 주목할 섹터 카드 (일간은 그날 종가 기준 코스피 업종 등락률 1위, 주간은 그 주 등락률 1위)
 class ReportSectorItem(BaseModel):
     sector_name: str  # 업종명
     change_rate: float | None  # 업종 등락률(%). 일간은 전일 대비, 주간은 전주 대비
-    rising_count: int | None  # 상승 종목 수 (주간은 None일 수 있다)
+    rising_count: int | None  # 상승 종목 수 (일간은 그날, 주간은 그 주 종가가 전주보다 오른 종목). 조회 실패 시 None
     total_count: int | None  # 업종 전체 종목 수
     rising_ratio: float | None  # 상승 종목 비율(%) = rising_count / total_count
     trade_amount: int | None  # 거래대금(백만원). 일간은 당일, 주간은 그 주
@@ -38,7 +38,7 @@ class ReportSectorItem(BaseModel):
     trade_amount_change_rate: float | None  # 거래대금 증감률(%)
 
 
-# 결론 키워드 하나
+# 결론 영역 섹션별 쉬운 요약 하나 (주식 입문자용)
 class ReportKeywordItem(BaseModel):
     title: str
     description: str
@@ -48,7 +48,6 @@ class ReportKeywordItem(BaseModel):
 class ReportTermItem(BaseModel):
     term: str
     description: str
-    source: str  # "GLOSSARY"(사전) / "LLM"(사전에 없어 LLM이 작성)
 
 
 # 보고서 전체 응답
@@ -58,16 +57,16 @@ class ReportResponse(BaseModel):
     end_date: date  # 일간은 그날, 주간은 그 주 마지막 거래일
     published_at: datetime | None  # 발행 시각 (KST). 문구 생성 전이면 None
     title: str | None
-    summary: str | None  # 메인 한 줄 요약
+    summary: str | None  # 메인 한 줄 요약 (보고서 전체 요약)
     main_image_url: str | None
     sections: list[ReportSectionItem]  # 메인 화면의 섹션 타이틀 3개도 여기서 쓴다
     foreign_net_buy: int | None  # 섹션2 외국인 순매수(백만원). 주간은 주간 합계
-    institution_net_buy: int | None
-    individual_net_buy: int | None
+    foreign_badge: str | None  # 외국인 카드 뱃지 (예: "4거래일 연속 순매도", "8/25 이후 최대 순매도"). 순매수 0이거나 데이터 없으면 None
     vkospi: float | None  # 섹션2 VKOSPI
     vkospi_change_rate: float | None  # 일간은 전일 대비, 주간은 전주 대비(%)
+    vkospi_badge: str | None  # VKOSPI 카드 뱃지 (예: "+18.2% 급등"). ±10% 이상 급등·급락, 그 안은 상승·하락, 0이면 보합
     quarters: list[ReportQuarterItem]  # 섹션2 차트 6개, 오래된 분기부터
-    sectors: list[ReportSectorItem]  # 섹션3 카드 최대 3개
-    conclusion: str | None  # 결론 한 줄 요약
-    keywords: list[ReportKeywordItem]  # 3개
+    sector: ReportSectorItem | None  # 섹션3 카드 (박스 3개: 등락률 / 상승 종목 비율 / 거래대금). 업종 등락률을 받지 못하면 None
+    conclusion: str | None  # 결론 영역 한 줄 요약 (주식 입문자용 쉬운 풀이)
+    keywords: list[ReportKeywordItem]  # 결론 영역 번호 항목 3개. 순서대로 섹션1·2·3을 쉽게 다시 요약한 것
     terms: list[ReportTermItem]  # 3개

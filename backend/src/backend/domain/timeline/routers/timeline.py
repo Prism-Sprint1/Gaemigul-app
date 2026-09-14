@@ -25,26 +25,10 @@ def get_indicators() -> IndicatorBarResponse:
     return market_indicator_service.get_indicators()
 
 
-# GET /timeline/slots - 슬롯 목록 [{slot_key, time_slot, title}]
-@router.get("/slots")
-def get_slot_list() -> list[dict]:
-    return timeline_service.get_slot_list()
-
-
 # GET /timeline/glossary - 용어 사전 {용어: 설명}. 프런트 호버 설명용
 @router.get("/glossary")
 def get_glossary() -> dict[str, str]:
     return glossary.GLOSSARY
-
-
-# GET /timeline/slot/{slot_key} - 저장 없이 즉석 수집 (확인용, 화면용 아님)
-# slot_key는 "0730"처럼 콜론 없이. ?with_briefing=false면 LLM을 건너뛴다. 없는 슬롯이면 404
-@router.get("/slot/{slot_key}", response_model=TimelineSlotResponse)
-def get_slot(slot_key: str, with_briefing: bool = True) -> TimelineSlotResponse:
-    try:
-        return timeline_service.get_slot(slot_key, with_briefing=with_briefing)
-    except ValueError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
 
 
 # GET /timeline?date=2026-09-14 - 하루치 슬롯 (프런트용). date를 빼면 오늘
@@ -69,7 +53,7 @@ _REPORT_TYPES = {"daily": report_repository.DAILY, "weekly": report_repository.W
 
 
 # GET /timeline/report?type=daily&date=2026-09-14 - 보고서 (프런트용). date를 빼면 오늘
-# 일간은 그날 보고서, 주간은 그 날짜가 속한 주의 보고서. 없으면 null
+# 일간은 그날 보고서, 주간은 그날 만든 보고서(그 주 마지막 거래일에만 있다). 없으면 null
 # DB에서 읽기만 한다
 @router.get("/report", response_model=ReportResponse | None)
 async def get_report(type_: str = Query(alias="type"), date_: date | None = Query(default=None, alias="date"), session: AsyncSession = Depends(get_db)) -> ReportResponse | None:
@@ -79,7 +63,7 @@ async def get_report(type_: str = Query(alias="type"), date_: date | None = Quer
 
 
 # POST /timeline/report/daily?date=2026-09-14 - 일간 보고서 생성·저장 (스케줄러 동작을 수동 실행). date를 빼면 오늘
-# 같은 날 보고서가 있으면 고쳐 쓴다. LLM·이미지 포함 1분 안팎 걸린다
+# 같은 날 보고서가 있으면 고쳐 쓴다. LLM·이미지 포함 10~20초 걸린다
 # 주의: 섹터 카드의 상승 종목 수는 그날 다음 개장 전까지만 채워진다
 @router.post("/report/daily", response_model=ReportResponse)
 async def create_daily_report(date_: date | None = Query(default=None, alias="date"), session: AsyncSession = Depends(get_db)) -> ReportResponse:
