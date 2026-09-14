@@ -1,11 +1,7 @@
 /* 뉴스 데이터 — TODO: API 연동 시 NEWS 배열만 교체 */
 
 export type Category =
-  | "macro"
-  | "rate"
-  | "dividend"
-  | "earnings"
-  | "optionExpiry"
+  "macro" | "rate" | "dividend" | "earnings" | "optionExpiry"
 
 export type NewsItem = {
   id: string // 뉴스 항목을 구분하는 고유 식별자
