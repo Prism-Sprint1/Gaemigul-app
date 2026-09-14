@@ -30,6 +30,9 @@ def _get(path: str, **params: str | int) -> dict:
 # 시계열의 관측치를 조회. limit=2/sort_order="desc"(기본값)면 [최신값, 직전값] 순서로 온다.
 # observation_start/end("YYYY-MM-DD")를 주면 그 기간의 관측치를 전부 가져올 수 있다 - 기간 밖의
 # 미래 관측치는 FRED에 데이터 자체가 없어서 응답에 아예 안 나온다(임의 생성 위험 없음).
+# realtime_start/end를 주면 "그 시점 스냅샷"의 데이터를 조회할 수 있다 - 특정 값이 실제로
+# 언제 처음 등장했는지 확인할 때 쓴다(예: GDP처럼 한 분기에 발표가 여러 번 있는 지표에서
+# 그중 어떤 발표일이 실제 그 값의 최초 발표일인지 검증할 때).
 # value가 "."이면 해당 시점에 실제 값이 없다는 뜻 (FRED 자체 규칙)
 def get_series_observations(
     series_id: str,
@@ -38,6 +41,8 @@ def get_series_observations(
     sort_order: str = "desc",
     observation_start: str | None = None,
     observation_end: str | None = None,
+    realtime_start: str | None = None,
+    realtime_end: str | None = None,
 ) -> list[dict]:
     params: dict[str, str | int] = {
         "series_id": series_id,
@@ -48,6 +53,10 @@ def get_series_observations(
         params["observation_start"] = observation_start
     if observation_end is not None:
         params["observation_end"] = observation_end
+    if realtime_start is not None:
+        params["realtime_start"] = realtime_start
+    if realtime_end is not None:
+        params["realtime_end"] = realtime_end
 
     body = _get("/series/observations", **params)
     return body["observations"]
