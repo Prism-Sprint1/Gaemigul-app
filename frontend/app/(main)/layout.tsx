@@ -11,7 +11,7 @@ export default function MainLayout({
       <Header />
       <div className="flex">
         <Sidebar />
-        <main className="w-full px-12.5 py-10">{children}</main>
+        <main className="w-full min-w-0 px-12.5 py-10">{children}</main>
 
         <ReportSidebar />
       </div>
