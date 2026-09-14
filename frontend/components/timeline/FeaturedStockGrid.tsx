@@ -1,17 +1,17 @@
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui"
-import type { SurgingStock } from "@/lib/types/TimelineType"
+import type { FeaturedStock } from "@/lib/types/TimelineType"
 import { isPositiveRate } from "./utils"
 
-type SurgingStockGridProps = {
-  stocks: SurgingStock[]
+type FeaturedStockGridProps = {
+  stocks: FeaturedStock[]
 }
 
-export default function SurgingStockGrid({ stocks }: SurgingStockGridProps) {
+export default function FeaturedStockGrid({ stocks }: FeaturedStockGridProps) {
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="text-base font-bold">종목 급상승</h3>
+      <h3 className="text-base font-bold">특징주</h3>
       <div className="grid gap-3 sm:grid-cols-3">
         {stocks.map((stock) => {
           const positive = isPositiveRate(stock.rate)

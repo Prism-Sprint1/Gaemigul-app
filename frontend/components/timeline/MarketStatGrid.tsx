@@ -54,9 +54,14 @@ export default function MarketStatGrid({ groups }: MarketStatGridProps) {
                 {stat.value}
               </strong>
               {stat.previousValue && (
-                <div className="mt-1.5 flex items-center gap-1 border-t border-neutral-100 pt-1.5 text-[11px]">
-                  <span className="text-neutral-400">
-                    {stat.previousLabel ?? "07:30"} {stat.previousValue}
+                <div className="mt-1.5 flex items-center gap-2 border-t border-neutral-100 pt-1.5 text-[11px]">
+                  <span className="flex items-center gap-1">
+                    <span className="text-neutral-400">
+                      {stat.previousLabel ?? "07:30"}
+                    </span>
+                    <span className="font-semibold text-neutral-700">
+                      {stat.previousValue}
+                    </span>
                   </span>
                   <ArrowRight size={10} className="shrink-0 text-neutral-300" />
                   <span

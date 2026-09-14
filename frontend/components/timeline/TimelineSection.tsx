@@ -1,26 +1,29 @@
 import type { ScheduleItem, TimelineContent } from "@/lib/types/TimelineType"
 import BeginnerSummarySection from "./BeginnerSummarySection"
+import FeaturedStockGrid from "./FeaturedStockGrid"
 import LLMSummarySection from "./LLMSummarySection"
 import MarketStatGrid from "./MarketStatGrid"
 import NewsList from "./NewsList"
 import SectorGrid from "./SectorGrid"
-import SurgingStockGrid from "./SurgingStockGrid"
 import TimelineLockedSection from "./TimelineLockedSection"
 import TimelineSectionHeader from "./TimelineSectionHeader"
-
-// TODO: 백엔드 연동 후 제거 — 개발 편의를 위해 모든 시간대 섹션을 임시로 오픈해 둔다.
-const DEV_FORCE_OPEN_ALL = true
 
 type TimelineSectionProps = {
   item: ScheduleItem
   content: TimelineContent
+  /**
+   * 오늘이 아닌 지난 날짜를 보고 있을 때 true로 전달한다.
+   * 지난 날짜는 하루치 데이터가 이미 전부 확정된 상태이므로 시간대 잠금 없이 모두 공개한다.
+   */
+  forceOpen?: boolean
 }
 
-export default function TimelineSection({ item, content }: TimelineSectionProps) {
-  const isOpen =
-    DEV_FORCE_OPEN_ALL ||
-    item.status === "past" ||
-    item.status === "current"
+export default function TimelineSection({
+  item,
+  content,
+  forceOpen = false,
+}: TimelineSectionProps) {
+  const isOpen = forceOpen || item.status === "past" || item.status === "current"
 
   return (
     <section id={item.id} className="flex scroll-mt-6 flex-col gap-5">
@@ -35,8 +38,8 @@ export default function TimelineSection({ item, content }: TimelineSectionProps)
           <BeginnerSummarySection summary={content.beginnerSummary} />
           <NewsList news={content.news} />
           {content.sectors && <SectorGrid sectors={content.sectors} />}
-          {content.surgingStocks && (
-            <SurgingStockGrid stocks={content.surgingStocks} />
+          {content.featuredStocks && (
+            <FeaturedStockGrid stocks={content.featuredStocks} />
           )}
         </div>
       ) : (

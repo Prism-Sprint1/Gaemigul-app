@@ -53,12 +53,29 @@ export const timelineContents: TimelineContent[] = [
     },
     beginnerSummary: {
       title: "오늘 왜 유가가 오르는 거예요?",
-      description:
-        "중동에서 유조선이 공격당했다는 소식에 원유 공급이 줄어들 것이라는 걱정이 커지면서 기름값이 올랐어요. 기름값이 오르면 물가도 같이 오를 수 있어서 시장이 긴장하고 있습니다.",
-      bullets: [
-        "유가가 오르면 물가 상승(인플레이션) 우려가 커져요",
-        "물가가 오르면 금리를 더 올릴 수 있다는 걱정이 생겨요",
-        "그래서 오늘은 성장주보다 안전자산이 주목받고 있어요",
+      subtitle: "유가가 오르면 물가와 금리, 안전자산까지 줄줄이 영향을 받아요",
+      points: [
+        {
+          id: "s1-b1",
+          title: "공급 불안이 유가를 밀어올려요",
+          description:
+            "중동에서 유조선이 공격당했다는 소식에 원유 공급이 줄어들 것이라는 걱정이 커지면서 기름값이 올랐어요.",
+          tags: ["유가", "공급불안"],
+        },
+        {
+          id: "s1-b2",
+          title: "기름값이 오르면 물가도 뛰어요",
+          description:
+            "기름값은 거의 모든 물건의 생산·운송 비용에 영향을 줘서, 오르면 물가 상승(인플레이션) 우려로 이어져요.",
+          tags: ["인플레이션", "물가"],
+        },
+        {
+          id: "s1-b3",
+          title: "물가 걱정은 금리 걱정으로 번져요",
+          description:
+            "물가가 오르면 금리를 더 올릴 수 있다는 걱정이 커져서, 오늘은 성장주보다 안전자산이 주목받고 있어요.",
+          tags: ["금리", "안전자산"],
+        },
       ],
     },
     news: [
@@ -101,11 +118,26 @@ export const timelineContents: TimelineContent[] = [
     },
     beginnerSummary: {
       title: "프리마켓이 뭔가요?",
-      description:
-        "정규장이 열리기 전에 미리 거래할 수 있는 시장이에요. 밤사이 나온 뉴스에 따라 특정 종목이 먼저 움직이는 걸 확인할 수 있어요.",
-      bullets: [
-        "정규장 시작 전 시장 분위기를 미리 가늠할 수 있어요",
-        "거래량이 적어 가격이 크게 흔들릴 수 있으니 주의가 필요해요",
+      subtitle: "정규장 전 거래라 가격이 크게 흔들릴 수 있으니 참고만 해요",
+      points: [
+        {
+          id: "s2-b1",
+          title: "정규장 전에 미리 거래해요",
+          description: "정규장이 열리기 전에 미리 거래할 수 있는 시장이 프리마켓이에요.",
+          tags: ["프리마켓", "거래시간"],
+        },
+        {
+          id: "s2-b2",
+          title: "밤사이 뉴스가 먼저 반영돼요",
+          description: "밤사이 나온 뉴스에 따라 특정 종목이 먼저 움직이는 걸 확인할 수 있어요.",
+          tags: ["뉴스", "특징주"],
+        },
+        {
+          id: "s2-b3",
+          title: "거래량이 적어 변동성이 커요",
+          description: "거래량이 적어 가격이 크게 흔들릴 수 있으니 주의가 필요해요.",
+          tags: ["변동성", "주의"],
+        },
       ],
     },
     news: [
@@ -114,7 +146,7 @@ export const timelineContents: TimelineContent[] = [
       { id: "s2-n3", content: "간밤 이슈 정리…오늘 장초반 체크포인트는", source: "NAVER" , url: "#" },
       { id: "s2-n4", content: "외국인 프리마켓 순매수 상위 종목은", source: "NAVER" , url: "#" },
     ],
-    surgingStocks: [
+    featuredStocks: [
       { id: "s2-st1", name: "S-Oil", rate: "+4.8%", price: "78,900", badge: "상승 1위" },
       { id: "s2-st2", name: "한화에어로스페이스", rate: "+3.9%", price: "412,000", badge: "상승 2위" },
       { id: "s2-st3", name: "LG화학", rate: "+3.1%", price: "331,500", badge: "상승 3위" },
@@ -151,11 +183,26 @@ export const timelineContents: TimelineContent[] = [
     },
     beginnerSummary: {
       title: "주도 섹터는 어떻게 정해지나요?",
-      description:
-        "그날 가장 많은 돈이 몰리면서 오른 업종을 '주도 섹터'라고 불러요. 오늘은 전자제품과 반도체 관련 업종에 매수세가 집중되고 있어요.",
-      bullets: [
-        "돈이 많이 몰릴수록 그 업종 주가가 오르는 경향이 있어요",
-        "주도 섹터를 보면 오늘 시장의 관심사를 알 수 있어요",
+      subtitle: "그날 가장 많은 돈이 몰리며 오른 업종을 주도 섹터라고 불러요",
+      points: [
+        {
+          id: "s3-b1",
+          title: "돈이 몰리는 곳이 주도 섹터예요",
+          description: "그날 가장 많은 돈이 몰리면서 오른 업종을 '주도 섹터'라고 불러요.",
+          tags: ["주도섹터", "수급"],
+        },
+        {
+          id: "s3-b2",
+          title: "오늘은 전자·반도체가 강세예요",
+          description: "오늘은 전자제품과 반도체 관련 업종에 매수세가 집중되고 있어요.",
+          tags: ["전자제품", "반도체"],
+        },
+        {
+          id: "s3-b3",
+          title: "주도 섹터로 시장 관심사를 읽어요",
+          description: "주도 섹터를 보면 오늘 시장의 관심사가 어디에 있는지 알 수 있어요.",
+          tags: ["시장관심", "테마"],
+        },
       ],
     },
     news: [
@@ -169,28 +216,19 @@ export const timelineContents: TimelineContent[] = [
         id: "s3-sec1",
         name: "전자제품",
         rate: "+3.43%",
-        stocks: [
-          { name: "LG전자", badge: "상승·거래 1위", rate: "+3.4%" },
-          { name: "삼성전자", badge: "거래 2위", rate: "+2.1%" },
-        ],
+        topStock: { name: "LG전자", badge: "상승·거래 1위", rate: "+3.4%" },
       },
       {
         id: "s3-sec2",
         name: "헨드셋",
         rate: "+3.43%",
-        stocks: [
-          { name: "인탑스", badge: "상승·거래 1위", rate: "+3.4%" },
-          { name: "파트론", badge: "거래 2위", rate: "+2.8%" },
-        ],
+        topStock: { name: "인탑스", badge: "상승·거래 1위", rate: "+3.4%" },
       },
       {
         id: "s3-sec3",
         name: "반도체와반도체장비",
         rate: "+3.43%",
-        stocks: [
-          { name: "DB하이텍", badge: "상승 1위", rate: "+3.4%" },
-          { name: "테스", badge: "거래 1위", rate: "+3.4%" },
-        ],
+        topStock: { name: "DB하이텍", badge: "상승 1위", rate: "+3.4%" },
       },
     ],
   },
@@ -225,11 +263,27 @@ export const timelineContents: TimelineContent[] = [
     },
     beginnerSummary: {
       title: "오전장 흐름은 왜 중요한가요?",
-      description:
-        "개장 직후 방향이 오전 내내 이어지는 경우가 많아서, 오전장 흐름을 보면 오늘 하루 시장 분위기를 짐작할 수 있어요.",
-      bullets: [
-        "오전 상승세가 이어지면 매수세가 힘을 받고 있다는 신호예요",
-        "환율이 안정되면 외국인 자금이 들어오기 더 편해져요",
+      subtitle: "개장 직후 방향이 오전 내내 이어지는 경우가 많아요",
+      points: [
+        {
+          id: "s4-b1",
+          title: "개장 흐름이 오전 내내 이어져요",
+          description:
+            "개장 직후 방향이 오전 내내 이어지는 경우가 많아서, 오전장 흐름을 보면 하루 분위기를 짐작할 수 있어요.",
+          tags: ["오전장", "추세"],
+        },
+        {
+          id: "s4-b2",
+          title: "상승세는 매수세의 신호예요",
+          description: "오전 상승세가 이어지면 매수세가 힘을 받고 있다는 신호로 볼 수 있어요.",
+          tags: ["매수세", "상승세"],
+        },
+        {
+          id: "s4-b3",
+          title: "환율 안정은 외국인에 우호적",
+          description: "환율이 안정되면 외국인 자금이 국내 증시로 들어오기 더 편해져요.",
+          tags: ["환율", "외국인수급"],
+        },
       ],
     },
     news: [
@@ -243,28 +297,19 @@ export const timelineContents: TimelineContent[] = [
         id: "s4-sec1",
         name: "2차전지",
         rate: "+2.85%",
-        stocks: [
-          { name: "LG에너지솔루션", badge: "상승·거래 1위", rate: "+2.9%" },
-          { name: "삼성SDI", badge: "거래 2위", rate: "+2.3%" },
-        ],
+        topStock: { name: "LG에너지솔루션", badge: "상승·거래 1위", rate: "+2.9%" },
       },
       {
         id: "s4-sec2",
         name: "반도체와반도체장비",
         rate: "+2.61%",
-        stocks: [
-          { name: "SK하이닉스", badge: "상승·거래 1위", rate: "+2.7%" },
-          { name: "한미반도체", badge: "거래 2위", rate: "+2.4%" },
-        ],
+        topStock: { name: "SK하이닉스", badge: "상승·거래 1위", rate: "+2.7%" },
       },
       {
         id: "s4-sec3",
         name: "자동차",
         rate: "+1.98%",
-        stocks: [
-          { name: "현대차", badge: "상승 1위", rate: "+2.1%" },
-          { name: "기아", badge: "거래 1위", rate: "+1.9%" },
-        ],
+        topStock: { name: "현대차", badge: "상승 1위", rate: "+2.1%" },
       },
     ],
   },
@@ -299,11 +344,26 @@ export const timelineContents: TimelineContent[] = [
     },
     beginnerSummary: {
       title: "차익 실현이 뭐예요?",
-      description:
-        "주가가 오른 종목을 팔아서 이익을 확정 짓는 것을 '차익 실현'이라고 해요. 오전에 많이 오른 업종일수록 오후에 이런 매물이 나오기 쉬워요.",
-      bullets: [
-        "많이 오른 종목은 오후에 매도 물량이 나올 수 있어요",
-        "장 마감이 가까워질수록 가격 변동이 커질 수 있어요",
+      subtitle: "많이 오른 종목일수록 오후에 매도 물량이 나오기 쉬워요",
+      points: [
+        {
+          id: "s5-b1",
+          title: "오른 만큼 팔아 이익을 챙겨요",
+          description: "주가가 오른 종목을 팔아서 이익을 확정 짓는 것을 '차익 실현'이라고 해요.",
+          tags: ["차익실현", "매도"],
+        },
+        {
+          id: "s5-b2",
+          title: "많이 오를수록 매물도 늘어요",
+          description: "오전에 많이 오른 업종일수록 오후에 차익 실현 매물이 나오기 쉬워요.",
+          tags: ["업종순환", "매물"],
+        },
+        {
+          id: "s5-b3",
+          title: "마감이 가까울수록 변동성 확대",
+          description: "장 마감이 가까워질수록 가격 변동이 커질 수 있어요.",
+          tags: ["변동성", "장마감"],
+        },
       ],
     },
     news: [
@@ -317,28 +377,19 @@ export const timelineContents: TimelineContent[] = [
         id: "s5-sec1",
         name: "헬스케어",
         rate: "+2.12%",
-        stocks: [
-          { name: "삼성바이오로직스", badge: "상승·거래 1위", rate: "+2.2%" },
-          { name: "셀트리온", badge: "거래 2위", rate: "+1.8%" },
-        ],
+        topStock: { name: "삼성바이오로직스", badge: "상승·거래 1위", rate: "+2.2%" },
       },
       {
         id: "s5-sec2",
         name: "전자제품",
         rate: "+1.75%",
-        stocks: [
-          { name: "LG전자", badge: "상승·거래 1위", rate: "+1.8%" },
-          { name: "삼성전자", badge: "거래 2위", rate: "+1.5%" },
-        ],
+        topStock: { name: "LG전자", badge: "상승·거래 1위", rate: "+1.8%" },
       },
       {
         id: "s5-sec3",
         name: "게임엔터",
         rate: "+1.44%",
-        stocks: [
-          { name: "크래프톤", badge: "상승 1위", rate: "+1.6%" },
-          { name: "엔씨소프트", badge: "거래 1위", rate: "+1.3%" },
-        ],
+        topStock: { name: "크래프톤", badge: "상승 1위", rate: "+1.6%" },
       },
     ],
   },
@@ -401,11 +452,26 @@ export const timelineContents: TimelineContent[] = [
     },
     beginnerSummary: {
       title: "오늘 하루를 정리하면?",
-      description:
-        "아침엔 유가 급등으로 불안했지만, 반도체와 2차전지 업종이 힘을 내면서 지수는 오히려 오르며 하루를 마쳤어요.",
-      bullets: [
-        "악재가 있어도 주도 업종이 강하면 지수는 오를 수 있어요",
-        "외국인 수급 전환은 장 막판 반등의 중요한 신호예요",
+      subtitle: "악재가 있어도 주도 업종이 강하면 지수는 오를 수 있어요",
+      points: [
+        {
+          id: "s6-b1",
+          title: "아침엔 유가 급등이 불안했어요",
+          description: "아침엔 유가 급등 소식에 시장이 긴장했지만, 하루 종일 이어지진 않았어요.",
+          tags: ["유가", "오전시황"],
+        },
+        {
+          id: "s6-b2",
+          title: "반도체·2차전지가 힘을 냈어요",
+          description: "반도체와 2차전지 업종이 힘을 내면서 지수는 오히려 오르며 하루를 마쳤어요.",
+          tags: ["반도체", "2차전지"],
+        },
+        {
+          id: "s6-b3",
+          title: "외국인 전환이 막판 반등 신호",
+          description: "외국인 수급이 장 후반 순매수로 전환된 건 반등의 중요한 신호예요.",
+          tags: ["외국인수급", "반등신호"],
+        },
       ],
     },
     news: [
@@ -419,28 +485,19 @@ export const timelineContents: TimelineContent[] = [
         id: "s6-sec1",
         name: "반도체와반도체장비",
         rate: "+3.02%",
-        stocks: [
-          { name: "SK하이닉스", badge: "상승·거래 1위", rate: "+3.1%" },
-          { name: "DB하이텍", badge: "거래 2위", rate: "+2.8%" },
-        ],
+        topStock: { name: "SK하이닉스", badge: "상승·거래 1위", rate: "+3.1%" },
       },
       {
         id: "s6-sec2",
         name: "2차전지",
         rate: "+2.44%",
-        stocks: [
-          { name: "LG에너지솔루션", badge: "상승·거래 1위", rate: "+2.5%" },
-          { name: "삼성SDI", badge: "거래 2위", rate: "+2.2%" },
-        ],
+        topStock: { name: "LG에너지솔루션", badge: "상승·거래 1위", rate: "+2.5%" },
       },
       {
         id: "s6-sec3",
         name: "전자제품",
         rate: "+1.87%",
-        stocks: [
-          { name: "LG전자", badge: "상승 1위", rate: "+1.9%" },
-          { name: "삼성전자", badge: "거래 1위", rate: "+1.7%" },
-        ],
+        topStock: { name: "LG전자", badge: "상승 1위", rate: "+1.9%" },
       },
     ],
   },
@@ -475,11 +532,27 @@ export const timelineContents: TimelineContent[] = [
     },
     beginnerSummary: {
       title: "시간외 거래는 뭔가요?",
-      description:
-        "정규장이 끝난 뒤에도 정해진 가격으로 잠깐 더 거래할 수 있는 시간이에요. 그날 발표된 실적이나 뉴스에 따라 주가가 크게 움직일 수 있어요.",
-      bullets: [
-        "실적 발표 직후 시간외 거래에서 주가가 크게 움직일 수 있어요",
-        "시간외 흐름은 다음 날 개장가에 힌트를 주기도 해요",
+      subtitle: "실적 발표 직후엔 주가가 시간외에서 크게 움직일 수 있어요",
+      points: [
+        {
+          id: "s7-b1",
+          title: "정규장 뒤에도 잠깐 거래해요",
+          description:
+            "정규장이 끝난 뒤에도 정해진 가격으로 잠깐 더 거래할 수 있는 시간이 시간외 거래예요.",
+          tags: ["시간외거래", "단일가"],
+        },
+        {
+          id: "s7-b2",
+          title: "실적 발표가 주가를 흔들어요",
+          description: "그날 발표된 실적이나 뉴스에 따라 주가가 크게 움직일 수 있어요.",
+          tags: ["실적발표", "변동성"],
+        },
+        {
+          id: "s7-b3",
+          title: "다음 날 개장가의 힌트가 돼요",
+          description: "시간외 흐름은 다음 날 개장가에 힌트를 주기도 해요.",
+          tags: ["개장가", "프리뷰"],
+        },
       ],
     },
     news: [
@@ -488,7 +561,7 @@ export const timelineContents: TimelineContent[] = [
       { id: "s7-n3", content: "가이던스 부진 종목, 시간외서 약세", source: "NAVER" , url: "#" },
       { id: "s7-n4", content: "내일 개장 전 체크해야 할 이슈는", source: "NAVER" , url: "#" },
     ],
-    surgingStocks: [
+    featuredStocks: [
       { id: "s7-st1", name: "한미반도체", rate: "+9.8%", price: "182,300", badge: "상승 1위" },
       { id: "s7-st2", name: "에코프로비엠", rate: "+6.2%", price: "231,000", badge: "상승 2위" },
       { id: "s7-st3", name: "카카오", rate: "+4.7%", price: "45,900", badge: "상승 3위" },
@@ -525,11 +598,27 @@ export const timelineContents: TimelineContent[] = [
     },
     beginnerSummary: {
       title: "내일은 뭘 봐야 하나요?",
-      description:
-        "오늘처럼 유가가 계속 오르는지, 그리고 오늘 시장을 이끈 반도체 업종의 강세가 내일도 이어지는지를 함께 지켜보면 좋아요.",
-      bullets: [
-        "유가 흐름은 인플레이션과 금리 우려로 이어질 수 있어요",
-        "오늘 주도 업종이 다음 날에도 이어지는지 확인해보세요",
+      subtitle: "유가 흐름과 오늘 주도 업종이 내일도 이어지는지 지켜봐요",
+      points: [
+        {
+          id: "s8-b1",
+          title: "유가가 계속 오르는지 확인해요",
+          description:
+            "유가 흐름은 인플레이션과 금리 우려로 이어질 수 있어서 계속 지켜볼 필요가 있어요.",
+          tags: ["유가", "인플레이션"],
+        },
+        {
+          id: "s8-b2",
+          title: "오늘 주도 업종의 지속 여부",
+          description: "오늘 시장을 이끈 반도체 업종의 강세가 내일도 이어지는지 확인해보세요.",
+          tags: ["반도체", "주도업종"],
+        },
+        {
+          id: "s8-b3",
+          title: "외국인 수급 흐름도 체크해요",
+          description: "외국인 수급이 계속 우호적으로 유지되는지도 함께 살펴보면 좋아요.",
+          tags: ["외국인수급", "체크포인트"],
+        },
       ],
     },
     news: [
@@ -538,7 +627,7 @@ export const timelineContents: TimelineContent[] = [
       { id: "s8-n3", content: "외국인 수급, 장 후반 순매수로 마무리", source: "NAVER" , url: "#" },
       { id: "s8-n4", content: "전문가들 \"유가 변동성 당분간 지속될 것\"", source: "NAVER" , url: "#" },
     ],
-    surgingStocks: [
+    featuredStocks: [
       { id: "s8-st1", name: "SK하이닉스", rate: "+5.4%", price: "215,000", badge: "상승 1위" },
       { id: "s8-st2", name: "LG에너지솔루션", rate: "+4.1%", price: "398,500", badge: "상승 2위" },
       { id: "s8-st3", name: "S-Oil", rate: "-2.3%", price: "75,200", badge: "하락 1위" },

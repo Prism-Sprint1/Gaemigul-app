@@ -43,10 +43,18 @@ export type LLMSummary = {
   points: LLMSummaryPoint[]
 }
 
-export type BeginnerSummary = {
+export type BeginnerSummaryPoint = {
+  id: string
   title: string
   description: string
-  bullets: string[]
+  /** 카드 하단에 보여줄 태그. 카드마다 2개씩 넣는다. */
+  tags: string[]
+}
+
+export type BeginnerSummary = {
+  title: string
+  subtitle: string
+  points: BeginnerSummaryPoint[]
 }
 
 export type NewsItem = {
@@ -67,10 +75,12 @@ export type SectorItem = {
   id: string
   name: string
   rate: string
-  stocks: SectorStock[]
+  /** 섹터 대표 종목 1개만 보여준다. */
+  topStock: SectorStock
 }
 
-export type SurgingStock = {
+/** 급등/급락 여부와 무관하게 시장에서 주목받는 특징 종목. */
+export type FeaturedStock = {
   id: string
   name: string
   rate: string
@@ -85,5 +95,5 @@ export type TimelineContent = {
   beginnerSummary: BeginnerSummary
   news: NewsItem[]
   sectors?: SectorItem[]
-  surgingStocks?: SurgingStock[]
+  featuredStocks?: FeaturedStock[]
 }

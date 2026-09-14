@@ -8,8 +8,6 @@ import {
   endOfMonth,
   endOfWeek,
   format,
-  isAfter,
-  isBefore,
   isSameDay,
   isSameMonth,
   startOfDay,
@@ -38,23 +36,22 @@ function getMonthGrid(month: Date) {
 
 type TimelineDateHeaderProps = {
   selectedDate: Date
-  minDate: Date
-  maxDate: Date
+  /** 실제로 데이터가 존재하는 날짜 목록 — 이 목록에 없는 날짜는 선택할 수 없다. */
+  availableDates: Date[]
   onSelect: (date: Date) => void
 }
 
 export default function TimelineDateHeader({
   selectedDate,
-  minDate,
-  maxDate,
+  availableDates,
   onSelect,
 }: TimelineDateHeaderProps) {
   const [open, setOpen] = useState(false)
   const [viewMonth, setViewMonth] = useState(startOfMonth(selectedDate))
 
   const days = getMonthGrid(viewMonth)
-  const isOutOfRange = (date: Date) =>
-    isBefore(date, startOfDay(minDate)) || isAfter(date, startOfDay(maxDate))
+  const isAvailable = (date: Date) =>
+    availableDates.some((available) => isSameDay(available, date))
 
   return (
     <Popover.Root
@@ -110,7 +107,7 @@ export default function TimelineDateHeader({
 
             <div className="mt-1 grid grid-cols-7 gap-y-1 text-center text-xs">
               {days.map((day) => {
-                const disabled = isOutOfRange(day)
+                const disabled = !isAvailable(day)
                 const isSelected = isSameDay(day, selectedDate)
                 const isToday = isSameDay(day, new Date())
                 const inMonth = isSameMonth(day, viewMonth)
@@ -141,7 +138,7 @@ export default function TimelineDateHeader({
             </div>
 
             <p className="mt-3 text-[11px] leading-relaxed text-neutral-400">
-              아직 백엔드 데이터가 연동되지 않아 오늘 날짜만 조회할 수 있어요.
+              데이터가 있는 날짜만 선택할 수 있어요.
             </p>
           </Popover.Popup>
         </Popover.Positioner>

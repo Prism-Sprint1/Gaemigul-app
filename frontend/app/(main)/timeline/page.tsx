@@ -1,19 +1,23 @@
 "use client"
 
 import { useState } from "react"
-import { startOfDay } from "date-fns"
+import { isSameDay, startOfDay } from "date-fns"
 
 import { PageTitle } from "@/components/common"
 import { useTimelineSchedule } from "@/components/common/timeline"
 import { TimelineDateHeader, TimelineSection } from "@/components/timeline"
 import { timelineContents } from "@/lib/constant/timelineContent"
 
-// 백엔드 연동 전이라 조회 가능한 날짜 범위는 오늘 하루로 고정한다.
+// 백엔드 연동 전이라 DB에 데이터가 있는 날짜는 오늘 하루뿐이다.
+// 추후 연동 시 실제로 데이터가 존재하는 날짜 목록으로 교체한다.
 const TODAY = startOfDay(new Date())
+const AVAILABLE_DATES = [TODAY]
 
 export default function TimelinePage() {
   const { items } = useTimelineSchedule(30000)
   const [selectedDate, setSelectedDate] = useState(TODAY)
+  // 오늘이 아닌 날짜는 하루치 데이터가 이미 확정돼 있으므로 시간대 잠금 없이 전부 보여준다.
+  const isViewingToday = isSameDay(selectedDate, TODAY)
 
   return (
     <div className="flex flex-col gap-6">
@@ -24,8 +28,7 @@ export default function TimelinePage() {
 
       <TimelineDateHeader
         selectedDate={selectedDate}
-        minDate={TODAY}
-        maxDate={TODAY}
+        availableDates={AVAILABLE_DATES}
         onSelect={setSelectedDate}
       />
 
@@ -37,7 +40,14 @@ export default function TimelinePage() {
 
           if (!content) return null
 
-          return <TimelineSection key={item.id} item={item} content={content} />
+          return (
+            <TimelineSection
+              key={item.id}
+              item={item}
+              content={content}
+              forceOpen={!isViewingToday}
+            />
+          )
         })}
       </div>
     </div>

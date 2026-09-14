@@ -1,5 +1,6 @@
 import { cn } from "cn"
 
+import { Badge } from "@/components/ui"
 import type { SectorItem } from "@/lib/types/TimelineType"
 import { isPositiveRate } from "./utils"
 
@@ -26,30 +27,26 @@ export default function SectorGrid({ sectors }: SectorGridProps) {
             >
               {sector.rate}
             </strong>
-            <div className="flex flex-col gap-1.5 border-t border-neutral-100 pt-2">
-              {sector.stocks.map((stock) => (
-                <div
-                  key={stock.name}
-                  className="flex items-center justify-between text-xs"
+            <div className="flex items-center justify-between border-t border-neutral-100 pt-2 text-xs">
+              <span className="flex items-center gap-1.5">
+                <span className="font-medium">{sector.topStock.name}</span>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] text-neutral-500"
                 >
-                  <span className="flex items-center gap-1.5">
-                    <span className="font-medium">{stock.name}</span>
-                    <span className="text-[10px] text-neutral-400">
-                      {stock.badge}
-                    </span>
-                  </span>
-                  <span
-                    className={cn(
-                      "font-semibold",
-                      isPositiveRate(stock.rate)
-                        ? "text-increase"
-                        : "text-decrease"
-                    )}
-                  >
-                    {stock.rate}
-                  </span>
-                </div>
-              ))}
+                  {sector.topStock.badge}
+                </Badge>
+              </span>
+              <span
+                className={cn(
+                  "font-semibold",
+                  isPositiveRate(sector.topStock.rate)
+                    ? "text-increase"
+                    : "text-decrease"
+                )}
+              >
+                {sector.topStock.rate}
+              </span>
             </div>
           </div>
         ))}
