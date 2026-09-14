@@ -43,7 +43,7 @@ export default function Timeline() {
   }
 
   return (
-    <ol className="relative flex flex-col bg-ant-bg px-5 py-3">
+    <ol className="relative flex flex-col px-5 py-3">
       <span className="absolute top-5.5 bottom-5.5 left-6.75 w-0.5 bg-neutral-200" />
       {items.map((item) => {
         const isMuted = mutedStatuses.has(item.status)

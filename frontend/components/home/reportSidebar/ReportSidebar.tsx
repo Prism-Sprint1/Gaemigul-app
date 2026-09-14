@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react"
 import { cn } from "cn"
 
@@ -9,6 +9,7 @@ import { Badge, Separator } from "@/components/ui"
 import { reportMonths, reportWeekGroups } from "@/lib/constant/report"
 
 const TIMELINE_PAGE_PATH = "/timeline"
+const BRIEFING_PAGE_PATH = "/briefing"
 
 const DEFAULT_MONTH_INDEX = reportMonths.findIndex(
   (month) => month.subLabel === "SEPTEMBER"
@@ -21,6 +22,7 @@ const DEFAULT_ACTIVE_REPORT_ID =
 
 export default function ReportSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [monthIndex, setMonthIndex] = useState(
     DEFAULT_MONTH_INDEX === -1 ? 0 : DEFAULT_MONTH_INDEX
   )
@@ -31,14 +33,14 @@ export default function ReportSidebar() {
     DEFAULT_ACTIVE_REPORT_ID
   )
 
-  if (pathname !== TIMELINE_PAGE_PATH) {
+  if (pathname !== TIMELINE_PAGE_PATH && pathname !== BRIEFING_PAGE_PATH) {
     return null
   }
 
   const month = reportMonths[monthIndex]
 
   return (
-    <aside className="max-w-67.5">
+    <aside className="w-67.5 min-w-67.5">
       <div>
         {/* 상단 월 교체 영역 */}
         <div className="flex items-center justify-between px-5 py-3">
@@ -132,7 +134,10 @@ export default function ReportSidebar() {
                       <li key={item.id}>
                         <button
                           type="button"
-                          onClick={() => setActiveReportId(item.id)}
+                          onClick={() => {
+                            setActiveReportId(item.id)
+                            router.push(BRIEFING_PAGE_PATH)
+                          }}
                           className={cn(
                             "relative flex w-full cursor-pointer items-start gap-3 rounded-xl border bg-white px-2 py-3 text-left shadow-sm transition-colors duration-200",
                             isActive
