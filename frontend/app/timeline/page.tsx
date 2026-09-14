@@ -13,7 +13,7 @@ export default function timeline() {
         name="KOSPI"
         value="6,995.39"
         change="4.61%"
-        isIncrease="True"
+        isIncrease={true}
       ></IndexCard>
       {timelineItems.map((item) => (
         <section
