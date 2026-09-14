@@ -23,14 +23,15 @@ export default function TimelineSection({
   content,
   forceOpen = false,
 }: TimelineSectionProps) {
-  const isOpen = forceOpen || item.status === "past" || item.status === "current"
+  const isOpen =
+    forceOpen || item.status === "past" || item.status === "current"
 
   return (
     <section id={item.id} className="flex scroll-mt-6 flex-col gap-5">
       <TimelineSectionHeader title={item.title} time={item.time} />
 
       {isOpen ? (
-        <div className="flex flex-col gap-10 rounded-none border-b border-[#E5E7EB] bg-neutral-50 p-5">
+        <div className="flex flex-col gap-10 rounded-none border-b border-line-bg bg-neutral-50 p-5">
           {content.marketStats && (
             <MarketStatGrid groups={content.marketStats} />
           )}
