@@ -61,7 +61,7 @@ export default function NewsList({ news }: NewsListProps) {
           onScroll={isSlider ? updateScrollState : undefined}
           className={cn(
             isSlider
-              ? "scrollbar-none flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-1"
+              ? "flex snap-x snap-mandatory scrollbar-none gap-3 overflow-x-auto scroll-smooth pb-1"
               : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
           )}
         >

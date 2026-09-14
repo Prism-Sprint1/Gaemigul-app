@@ -6,7 +6,7 @@ import SidebarNav from "./SidebarNav"
 
 export default function Sidebar() {
   return (
-    <aside className="flex max-w-67.5 flex-col justify-between bg-ant-bg">
+    <aside className="flex w-67.5 min-w-67.5 flex-col justify-between bg-ant-bg">
       <div>
         <SidebarNav />
         <Separator className="w-full" />
