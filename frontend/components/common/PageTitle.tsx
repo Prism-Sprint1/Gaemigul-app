@@ -7,11 +7,13 @@ interface PageTitleType {
 
 export default function PageTitle({ title, description }: PageTitleType) {
   return (
-    <div className="text-l flex flex-col gap-8">
+    <div className="text-l flex flex-col gap-3">
       <div className="flex flex-col gap-2">
-        <div className="text-2xl leading-none font-bold">{title}</div>
+        <div className="truncate text-lg leading-none font-bold sm:text-xl lg:text-2xl">
+          {title}
+        </div>
         <div className="text-muted-foreground">
-          <p className="text-xs whitespace-nowrap">{description}</p>
+          <p className="truncate text-[10px] sm:text-xs">{description}</p>
         </div>
       </div>
       <Separator />

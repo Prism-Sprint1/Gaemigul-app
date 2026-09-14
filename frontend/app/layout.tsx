@@ -21,7 +21,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn("antialiased", pretendard.variable, "font-sans")}
     >
-      <body>
+      <body className="overflow-x-hidden">
         {children}
         {/* <ThemeProvider></ThemeProvider> */}
       </body>
