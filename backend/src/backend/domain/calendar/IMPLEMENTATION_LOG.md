@@ -317,7 +317,162 @@ FRED가 제공하지 않아 항상 `null`이라 테스트 화면에서 굳이 "-
 자체(타입 정의)는 남겨두고 화면 출력 JSX만 주석 처리했다. 재검증 결과 "실제값 / 이전값"만 정상
 표시됨을 스크린샷으로 재확인.
 
-## 13. 다음 후보
+## 13. 실제 프런트엔드 Calendar 연동 분석 (front/feat/calendar 병합 후)
+
+프런트 팀의 실제 캘린더 화면(`front/feat/calendar` 브랜치 병합분)이 들어온 뒤, 백엔드
+`GET /calendar/events`와 실제로 연결 가능한지 코드 기준으로 분석한 기록. **분석만 진행, 코드는
+수정하지 않음.**
+
+### 프런트 Calendar 관련 실제 파일
+
+| 파일 | 역할 |
+|---|---|
+| `frontend/app/(main)/calendar/page.tsx` | 페이지 엔트리 |
+| `frontend/app/(main)/calendar/calendar-view.tsx` | 메인 컴포넌트(월/주 뷰, 필터, 미니캘린더) |
+| `frontend/app/(main)/calendar/news-data.ts` | **타입 정의 + mock 데이터** (`NewsItem`, `Category`, `MarketHoliday`, `NEWS`) |
+| `frontend/app/(main)/calendar/news-panel.tsx` | 날짜 클릭 상세 팝업 |
+| `frontend/lib/api/indicator.ts` | (타임라인 도메인) 실제 axios API 연동 선례 |
+| `frontend/components/ui/full-calendar.tsx` | 더 이상 안 쓰는 예전 더미 캘린더 잔재 |
+
+### 프런트 `NewsItem` 타입 (실제 요구 데이터 구조)
+
+```ts
+type NewsItem = {
+  id: string
+  title: string
+  summary: string
+  category: "macro" | "rate" | "dividend" | "earnings" | "optionExpiry"  // 5종 고정
+  region: string          // 국가/기업명 겸용
+  publishedAt: Date       // 날짜+시간 통합 (백엔드는 publishedAt/time 분리)
+  highlight?: "special"
+  replay?: boolean
+  url?: string
+  detail?: { forecast?: string; previous?: string; source?: string; sectors?: string[] }
+}
+```
+`news-data.ts` 상단에 `/* 뉴스 데이터 — TODO: API 연동 시 NEWS 배열만 교체 */` 주석이 이미
+있어, 프런트 팀이 이 지점을 연동 지점으로 스스로 열어둔 상태.
+
+### 백엔드 ↔ 프런트 필드 비교
+
+| 백엔드 필드 | 프런트 대응 | 상태 |
+|---|---|---|
+| `id` | `id` | 이름 동일, 값 형식만 다름(문제 없음) |
+| `publishedAt`(날짜) + `time`(시각) | `publishedAt`(날짜+시각 통합 `Date`) | 합쳐서 변환 필요 |
+| `start_date`/`end_date` | 없음 | 다일 이벤트 개념 자체가 프런트에 없음 |
+| `region` | `region` | 호환 |
+| `category`(지표 코드: `CPI`/`PPI`) | `category`(5종 그룹) | **값 불일치, 매핑표 필요** (`CPI`/`PPI`/`GDP`/`UNRATE`/`PAYEMS`→`macro`, `FEDFUNDS`→`rate`) |
+| `title`/`summary` | `title`/`summary` | 호환 |
+| `importance` | 없음 | 항상 null이라 당장 문제 없음 |
+| `previous`/`forecast` | `detail.previous`/`detail.forecast` | 이름은 다르지만(중첩 구조) 매핑 가능 |
+| **`actual`** | **없음** | **UI에 실제값을 보여줄 자리가 아예 없음 — 가장 중요한 격차** |
+| **`status`** | **없음** | RELEASED/SCHEDULED 구분 UI 없음 |
+
+### 발견된 주요 문제
+
+1. 날짜/시간 구조 불일치 (분리 vs 통합)
+2. `category` 값 완전 불일치 → 매핑표 필요
+3. `actual`/`status`를 보여줄 화면 요소가 프런트에 없음 (프런트 팀과 별도 협의 필요)
+4. timezone 처리 코드 없음 — 프런트는 "브라우저 로컬시간 = KST"라는 암묵적 가정에 의존 (date-fns만 사용, UTC/timezone 변환 로직 없음)
+5. **환경변수 불일치**: `frontend/.env.local`이 `8080`인데, `.env.example`과 `lib/api/indicator.ts`의 실제 기본값은 `8000`으로 이미 바뀌어 있음 — 나중에 `8000`으로 통일 필요
+6. HTTP 클라이언트는 fetch가 아니라 **axios**가 실제 팀 컨벤션(`indicator.ts` 기준, 이제 `package.json`에도 설치돼 있음)
+
+### 현재 API 연결 상태
+
+**mock 데이터만 사용 중.** `calendar-view.tsx`가 `news-data.ts`의 `NEWS` 정적 배열을 그대로 씀.
+fetch/axios 호출 0건(grep 확인). Supabase 직접 호출도 프로젝트 전체에 0건.
+
+### 연결 가능 여부 판단: **B. 간단한 데이터 매핑 후 연결 가능**
+
+필드명이 상당수 동일(`id`/`region`/`title`/`summary`)하고 나머지도 이름만 바꾸거나 합치는
+수준이라, 백엔드 스키마나 프런트 컴포넌트 구조를 바꿀 정도의 근본적 불일치는 없음. **백엔드는
+지금 구조를 그대로 유지**하는 것으로 결론.
+
+### 나중에 필요한 최소 수정사항 (아직 미적용)
+
+- `news-data.ts`의 `NEWS` 상수를 "백엔드 응답 → `NewsItem[]` 변환 함수" 호출 결과로 교체
+- `lib/api/calendar.ts` 신규 추가 (`indicator.ts`와 동일한 axios 패턴으로 `GET /calendar/events` 호출)
+- `frontend/.env.local`을 `8000`으로 통일
+- `calendar-view.tsx`/`news-panel.tsx`는 둘 다 `NEWS`라는 이름의 배열만 소비하므로, 위 두 파일만 추가/교체하면 **컴포넌트는 한 줄도 안 건드리고 연결 가능**
+- `actual`/`status` 노출 여부는 프런트 팀과 UI 설계 협의 필요
+
+### 전체 데이터 흐름 현황
+
+| 단계 | 상태 |
+|---|---|
+| FRED → FastAPI Service → Supabase → `GET /calendar/events` | ✅ 완료 |
+| Next.js (axios 연동) | 🟡 부분완료 — timeline 도메인만 연동, calendar 도메인은 미연동 |
+| Calendar UI | ❌ 미구현 — 100% mock 데이터 |
+
+`Supabase → Next.js` 직접 연결은 없음(확인 완료, 목표 아키텍처 위반 없음).
+
+## 14. 전체 카테고리 체계 재설계 (5개 대분류 확정 + 전체 이벤트 유형 매핑)
+
+`category` 컬럼을 지표별 코드(`CPI`/`PPI`/...)가 아니라, 캘린더 색상 구분용 **5개 대분류
+고정값**으로만 쓰기로 확정. 프런트 `NewsItem.category`(13번 항목에서 확인한 5종)와 정확히
+동일한 값을 백엔드도 그대로 저장하는 방향.
+
+```python
+Literal["macro", "rate", "dividend", "earnings", "optionExpiry"]
+```
+
+### 전체 이벤트 유형 → category 매핑
+
+| 지역 | 이벤트 | category | 소스 상태 |
+|---|---|---|---|
+| 미국 | FOMC(회의/결정) | `macro` | ❓ 미정 — Federal Reserve 공식 캘린더 필요(FRED/KIS 둘 다 없음) |
+| 미국 | CPI | `macro` | ✅ FRED, 구현 완료 |
+| 미국 | PPI | `macro` | ✅ FRED, 구현 완료 |
+| 미국 | GDP | `macro` | ✅ FRED, series_id `GDP` (다음 후보) |
+| 미국 | 고용지표(UNRATE/PAYEMS) | `macro` | ✅ FRED (다음 후보) |
+| 미국 | 기준금리(FEDFUNDS) | `rate` | ✅ FRED, series_id `FEDFUNDS` (다음 후보) — FOMC 회의 일정과는 다른 데이터(41번/CLAUDE.md 원문 경고 재확인) |
+| 미국 | 증시 휴장일 | `macro` | ❓ 미정 — FRED·KIS 둘 다 미국 시장 휴장일 데이터 없음(KIS `chk-holiday`는 한국 KRX 전용) |
+| 미국 | 주요 기업 실적 발표(NVIDIA/Apple/MS/Oracle 등) | `earnings` | ❓ 미정 — KIS `estimate-perform`은 발표일 아님(기존 조사 결론 유지), 기업 IR 캘린더 등 별도 소스 필요 |
+| 미국 | 선물 만기/옵션 만기/동시만기/월물옵션 | `optionExpiry` | 🔧 API 없음, **규칙 계산으로 해결 가능**(예: 매월 세번째 금요일 등 고정 규칙) |
+| 미국 | 기업/시장 이벤트(신제품 발표·GTC·CES·Investor Day 등) | `macro` | ❓ 미정 — 뉴스/보도자료성 데이터, 정형화된 API 없음 |
+| 한국 | 기준금리 | `rate` | ❓ 미정 — 한국은행 API/공지 필요 |
+| 한국 | 주요 기업 실적 발표(삼성전자/SK하이닉스 등) | `earnings` | ❓ 미정 — DART 등 필요(KIS로는 발표일 확인 불가, 기존 조사 결론 유지) |
+| 한국 | 주요 금융 뉴스 / 정책·관세 뉴스 | `macro` | ❓ 미정 — 뉴스 API 필요 |
+| 한국 | 증시 휴장일 | `macro` | ✅ KIS `chk-holiday`, 라이브 테스트 완료 |
+| 한국 | 옵션 만기/선물 만기/동시만기 | `optionExpiry` | 🔧 API 없음, 규칙 계산으로 해결 가능 |
+| 한국 | 합병/분할 | `macro` | ✅ KIS `ksdinfo/merger-split`, 라이브 테스트 완료 |
+| (지역 무관) | 배당 | `dividend` | ✅ KIS `ksdinfo/dividend`, 라이브 테스트 완료. 실데이터 없으면 임의 생성 안 함(원칙 유지) |
+
+### ⚠️ 지난 KIS 설계안과 달라진 점 (재확인 필요)
+
+10번 항목(KIS 설계)에서는 `IPO`, `MERGER_SPLIT`, `SHAREHOLDER_MEETING`을 **각각 별도
+category 값**으로 제안했었다. 이번 5개 고정 category 체계에서는:
+- **합병/분할**은 `macro`로 재배정됨(사용자 지시 목록에 명시)
+- **공모주청약(IPO)**은 이번 전체 이벤트 목록에 아예 등장하지 않음 — "기업/시장 이벤트" 하위 예시로만 존재했던 원래 항목이라 `macro`에 포함되는 것으로 추정되나, 명시적 확인 필요
+- **주주총회일정**도 이번 두 차례 지시 어디에도 등장하지 않음 — 계속 확장 대상에 포함할지, 이번 범위에서 제외할지 확인 필요
+
+### Supabase 테이블 구조 변경 필요 여부 — 결론: **컬럼 추가 불필요**
+
+현재 14개 컬럼만으로 위 표의 모든 이벤트 유형을 구조적으로 담을 수 있다고 판단한다. 근거:
+
+| 컬럼 | 위 모든 유형에 왜 충분한가 |
+|---|---|
+| `region` | **국가명만 사용**(`"미국"`/`"한국"`). 기업명은 `region`에 넣지 않고 `title`에 포함시킨다 — 예: `title="삼성전자 2026년 3분기 실적 발표"`, `region="한국"`. (13번 항목에서 확인한 프런트의 "국가/기업명 겸용" 방식과는 다른 선택 — 프런트 연동 매핑 단계에서 이 차이를 흡수해야 함) |
+| `start_date`/`end_date` | FOMC 2일 회의, 합병/분할의 매매정지~신주상장 구간 등 다일 이벤트에 사용(원래 이 두 컬럼의 설계 목적) |
+| `previous`/`actual`/`forecast`/`importance` | 값이 있는 유형(지표, 기준금리, 배당금 등)엔 채우고, 없는 유형(휴장일, 만기일, 뉴스)엔 전부 `null` 유지 — 임의 생성 금지 원칙 그대로 |
+| `title`/`summary` | 어떤 지표/이벤트인지 구체적으로 구분하는 역할을 전담(카테고리가 더 이상 이 역할을 안 하므로 더 중요해짐) |
+
+**대신 필요한 변경 2가지** (컬럼 추가 아님):
+1. `category`에 5개 값만 허용하는 제약(Pydantic `Literal`, 필요하면 Postgres `CHECK` 제약)
+2. **코드 내부 리팩터링**: 지난 턴(카테고리 이슈 발견)에서 확인한 대로, `services/calendar.py`의 `category`가 지금 "저장값"과 "내부 조회 키(indicator)"를 겸하고 있어서, 이 둘을 분리해야 함 — `indicator`("CPI"/"PPI"/"KR_HOLIDAY" 등, 코드 내부에서만 쓰는 세부 식별자) → `category`(5개 값, DB 저장용) 매핑표를 추가하는 구조로.
+
+### 소스별 `id` 접두사 규칙 제안 (여러 API가 같은 테이블을 공유하므로)
+
+| 소스 | 접두사 예시 |
+|---|---|
+| FRED | `fred-{series_id}-{observation_date}` (기존 그대로) |
+| KIS | `kis-{세부유형}-{종목코드 또는 all}-{날짜}` (10번 항목에서 이미 제안) |
+| 규칙 계산(만기일 등) | `rule-{세부유형}-{날짜}` (신규 제안) |
+| 향후 뉴스/IR 등 미정 소스 | 소스가 정해지면 그때 접두사 확정 |
+
+서로 다른 접두사를 쓰는 한, 같은 `calendar_events` 테이블을 계속 공유해도 `id` 충돌 위험은 없다.
+
+## 15. 다음 후보
 
 - GDP(`GDP`) → 고용(`PAYEMS`) → 실업률(`UNRATE`) → 금리(`FEDFUNDS`) 순으로 확장
   (각 지표 추가 시 `_TITLES`, `_SUMMARIES`, `_PERIOD_LABELS`, `_RELEASE_TIME_ET`, `_SERIES_IDS`에 항목만 추가하면 되는 구조 — PPI 추가로 검증됨)

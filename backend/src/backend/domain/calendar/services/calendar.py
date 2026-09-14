@@ -61,6 +61,15 @@ _SERIES_IDS: dict[str, str] = {
     "PPI": "PPIACO",
 }
 
+# 지표(indicator) -> 캘린더에 실제로 저장할 category(5개 색상 대분류) 매핑.
+# "CPI"/"PPI"는 코드 내부에서 FRED series/제목/발표시각 등을 찾는 키(indicator)로만 쓰고,
+# DB에는 이 표로 변환한 5개 고정값(macro/rate/dividend/earnings/optionExpiry)만 저장한다
+# (IMPLEMENTATION_LOG.md 14번 항목 결정 사항).
+_CATEGORY_OF: dict[str, str] = {
+    "CPI": "macro",
+    "PPI": "macro",
+}
+
 
 # FRED observation_date("2026-07-01")를 "2026년 7월" 형태로 변환.
 # CPI의 observation_date는 "그 값이 설명하는 대상 기간"이지 발표일이 아니다 - title/summary에
@@ -89,10 +98,12 @@ def _clean_value(raw: str | None) -> str | None:
     return raw
 
 
-# FRED에서 지정한 카테고리(CPI/PPI)의 최신 데이터를 1회 가져와 Supabase calendar_events에 저장한다.
+# FRED에서 지정한 지표(indicator: "CPI"/"PPI")의 최신 데이터를 1회 가져와
+# Supabase calendar_events에 저장한다. indicator는 코드 내부에서만 쓰는 세부 식별자이고,
+# 실제 DB에 저장되는 category는 _CATEGORY_OF로 변환한 5개 고정값이다.
 # main.py 스케줄러에는 아직 연결하지 않는다 - scripts/seed_cpi.py, scripts/seed_ppi.py로 수동 실행한다.
-async def _ingest_from_fred(category: str) -> CalendarEvent:
-    series_id = _SERIES_IDS[category]
+async def _ingest_from_fred(indicator: str) -> CalendarEvent:
+    series_id = _SERIES_IDS[indicator]
 
     observations = fred_client.get_series_observations(series_id, limit=2)
     latest = observations[0]
@@ -103,7 +114,7 @@ async def _ingest_from_fred(category: str) -> CalendarEvent:
     # 실제 발표일 조회에 실패하면 관측일(observation date)로 대체 - 최소한 임의 날짜를 만들지는 않는다
     release_date = release_dates[0]["date"] if release_dates else latest["date"]
 
-    published_at, released_time = _to_kst(release_date, category)
+    published_at, released_time = _to_kst(release_date, indicator)
     actual = _clean_value(latest["value"])
     period_kr = _format_period_kr(latest["date"])
 
@@ -112,9 +123,9 @@ async def _ingest_from_fred(category: str) -> CalendarEvent:
         publishedAt=published_at,
         time=released_time,
         region="미국",
-        category=category,
-        title=f"{_TITLES[category]} - {period_kr}",
-        summary=f"{period_kr} {_PERIOD_LABELS[category]} 자료입니다. {_SUMMARIES[category]}",
+        category=_CATEGORY_OF[indicator],
+        title=f"{_TITLES[indicator]} - {period_kr}",
+        summary=f"{period_kr} {_PERIOD_LABELS[indicator]} 자료입니다. {_SUMMARIES[indicator]}",
         previous=_clean_value(previous["value"]) if previous else None,
         actual=actual,
         status="SCHEDULED" if actual is None else "RELEASED",
@@ -125,6 +136,80 @@ async def _ingest_from_fred(category: str) -> CalendarEvent:
         await session.commit()
 
     return event
+
+
+# FRED에서 지정한 지표(indicator)의 특정 연도(1~12월) 전체를 한 번에 가져와 upsert한다.
+# - 이미 발표된 달: 실제 관측값으로 RELEASED
+# - 아직 발표 안 된 달: FRED release calendar에 예정 발표일이 있는 경우에만 SCHEDULED(actual=null)
+#   생성. 예정 발표일 자체가 FRED에 없는 달은 만들지 않는다(임의 날짜 생성 금지).
+# - previous는 그 시점까지 실제로 존재하는 가장 최근 관측값(과거 실측치이므로 임의 생성 아님)
+async def ingest_year_from_fred(indicator: str, year: int) -> list[CalendarEvent]:
+    series_id = _SERIES_IDS[indicator]
+
+    # 1월의 previous 계산을 위해 전년 12월분까지 같이 가져온다
+    observations = fred_client.get_series_observations(
+        series_id,
+        sort_order="asc",
+        limit=100,
+        observation_start=f"{year - 1}-12-01",
+        observation_end=f"{year}-12-31",
+    )
+    obs_by_date: dict[str, str] = {o["date"]: o["value"] for o in observations}
+    known_dates = sorted(obs_by_date)
+
+    release_id = fred_client.get_series_release_id(series_id)
+    # 12월분 발표일은 보통 다음 해 1월에 나오므로 조회 범위를 다음 해 2월까지 넉넉히 잡는다
+    release_dates = fred_client.get_release_dates(
+        release_id,
+        sort_order="asc",
+        limit=100,
+        realtime_start=f"{year}-01-01",
+        realtime_end=f"{year + 1}-02-28",
+        include_release_dates_with_no_data=True,
+    )
+    release_date_strs = [d["date"] for d in release_dates]
+
+    events: list[CalendarEvent] = []
+    for month in range(1, 13):
+        obs_date = f"{year}-{month:02d}-01"
+        next_month, next_month_year = (1, year + 1) if month == 12 else (month + 1, year)
+        next_month_first = f"{next_month_year}-{next_month:02d}-01"
+
+        # 그 달 데이터를 발표하는 실제 발표일 = 다음 달 1일 이후 최초로 오는 release date
+        release_date = next((d for d in release_date_strs if d >= next_month_first), None)
+        if release_date is None:
+            # FRED release calendar에 이 달의 예정 발표일 자체가 없음 - 임의로 만들지 않고 건너뜀
+            continue
+
+        raw_value = obs_by_date.get(obs_date)
+        actual = _clean_value(raw_value) if raw_value is not None else None
+
+        prev_dates = [d for d in known_dates if d < obs_date]
+        previous = _clean_value(obs_by_date[prev_dates[-1]]) if prev_dates else None
+
+        published_at, released_time = _to_kst(release_date, indicator)
+        period_kr = _format_period_kr(obs_date)
+
+        event = CalendarEvent(
+            id=f"fred-{series_id}-{obs_date}",
+            publishedAt=published_at,
+            time=released_time,
+            region="미국",
+            category=_CATEGORY_OF[indicator],
+            title=f"{_TITLES[indicator]} - {period_kr}",
+            summary=f"{period_kr} {_PERIOD_LABELS[indicator]} 자료입니다. {_SUMMARIES[indicator]}",
+            previous=previous,
+            actual=actual,
+            status="SCHEDULED" if actual is None else "RELEASED",
+        )
+        events.append(event)
+
+    async with async_session() as session:
+        for event in events:
+            await _upsert_event(session, event)
+        await session.commit()
+
+    return events
 
 
 # 기존 호출부(scripts/seed_cpi.py 등)와의 호환을 위한 얇은 래퍼 - 동작은 이전과 동일

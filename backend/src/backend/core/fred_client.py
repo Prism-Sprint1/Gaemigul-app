@@ -27,15 +27,29 @@ def _get(path: str, **params: str | int) -> dict:
     return response.json()
 
 
-# 시계열의 관측치를 최신순으로 조회. limit=2면 [최신값, 직전값] 순서로 온다
+# 시계열의 관측치를 조회. limit=2/sort_order="desc"(기본값)면 [최신값, 직전값] 순서로 온다.
+# observation_start/end("YYYY-MM-DD")를 주면 그 기간의 관측치를 전부 가져올 수 있다 - 기간 밖의
+# 미래 관측치는 FRED에 데이터 자체가 없어서 응답에 아예 안 나온다(임의 생성 위험 없음).
 # value가 "."이면 해당 시점에 실제 값이 없다는 뜻 (FRED 자체 규칙)
-def get_series_observations(series_id: str, *, limit: int = 2) -> list[dict]:
-    body = _get(
-        "/series/observations",
-        series_id=series_id,
-        sort_order="desc",
-        limit=limit,
-    )
+def get_series_observations(
+    series_id: str,
+    *,
+    limit: int = 2,
+    sort_order: str = "desc",
+    observation_start: str | None = None,
+    observation_end: str | None = None,
+) -> list[dict]:
+    params: dict[str, str | int] = {
+        "series_id": series_id,
+        "sort_order": sort_order,
+        "limit": limit,
+    }
+    if observation_start is not None:
+        params["observation_start"] = observation_start
+    if observation_end is not None:
+        params["observation_end"] = observation_end
+
+    body = _get("/series/observations", **params)
     return body["observations"]
 
 
@@ -45,12 +59,29 @@ def get_series_release_id(series_id: str) -> int:
     return body["releases"][0]["id"]
 
 
-# 해당 release의 실제 발표일(날짜만, 시각 없음)을 최신순으로 조회
-def get_release_dates(release_id: int, *, limit: int = 1) -> list[dict]:
-    body = _get(
-        "/release/dates",
-        release_id=release_id,
-        sort_order="desc",
-        limit=limit,
-    )
+# 해당 release의 실제 발표일(날짜만, 시각 없음)을 조회.
+# include_release_dates_with_no_data=True를 줘야 "아직 데이터는 없지만 예정된" 미래 발표일까지
+# 나온다 - 이게 없으면 이미 지나간 발표일만 나온다(FRED 자체 규칙, 실제 라이브 호출로 확인함).
+def get_release_dates(
+    release_id: int,
+    *,
+    limit: int = 1,
+    sort_order: str = "desc",
+    realtime_start: str | None = None,
+    realtime_end: str | None = None,
+    include_release_dates_with_no_data: bool = False,
+) -> list[dict]:
+    params: dict[str, str | int] = {
+        "release_id": release_id,
+        "sort_order": sort_order,
+        "limit": limit,
+    }
+    if realtime_start is not None:
+        params["realtime_start"] = realtime_start
+    if realtime_end is not None:
+        params["realtime_end"] = realtime_end
+    if include_release_dates_with_no_data:
+        params["include_release_dates_with_no_data"] = "true"
+
+    body = _get("/release/dates", **params)
     return body["release_dates"]
