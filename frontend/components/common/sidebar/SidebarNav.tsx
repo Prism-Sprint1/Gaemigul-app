@@ -12,7 +12,7 @@ export default function SidebarNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="px-2.5 py-3">
+    <nav className="bg-white px-2.5 py-3">
       <ul className="flex flex-col gap-2.5">
         {sidebarNavItems.map(
           ({
