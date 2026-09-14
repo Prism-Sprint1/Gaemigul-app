@@ -164,83 +164,91 @@ export function CalendarWorkspace() {
 
         <div className="flex min-w-0 flex-col-reverse gap-3 lg:flex-row">
           {/* 왼쪽: 필터 + 월간/주간 뷰 */}
-          <main className="flex min-w-0 flex-1 flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm sm:p-5">
-            <div className="flex flex-nowrap items-center gap-1">
-              <div className="flex flex-1 gap-1 rounded-lg bg-muted p-1 text-xs lg:flex-none lg:shrink-0">
-                <button
-                  type="button"
-                  onClick={() => selectGroup("all")}
-                  className={groupSegBtn(groupFilter === "all")}
-                >
-                  전체
-                </button>
-                {(Object.keys(CATEGORY_GROUPS) as CategoryGroupId[]).map(
-                  (g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => selectGroup(g)}
-                      className={groupSegBtn(groupFilter === g)}
-                    >
-                      {CATEGORY_GROUPS[g].label}
-                    </button>
-                  )
-                )}
-              </div>
-
-              {/* 국내/해외, 뷰 전환(주별/월별) — 앱(모바일)에서는 둘 다 숨김 */}
-              <div className="ml-auto hidden shrink-0 items-center gap-1 lg:flex">
-                <div className="flex gap-1 rounded-lg bg-muted p-1 text-xs">
-                  {(["domestic", "overseas"] as const).map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() =>
-                        setRegionFilter((prev) => (prev === r ? "all" : r))
-                      }
-                      className={segBtn(regionFilter === r)}
-                    >
-                      {r === "domestic" ? "국내" : "해외"}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex gap-1 rounded-lg bg-muted p-1 text-xs">
-                  {(["week", "month"] as const).map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setViewMode(v)}
-                      className={segBtn(viewMode === v)}
-                    >
-                      {v === "week" ? "주별" : "월별"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* 서브 카테고리 — 현재 탭(전체/경제지표/실적)에 속한 카테고리만 다중 선택 */}
-            <div className="flex flex-nowrap items-center gap-1">
-              {subCategories.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCategorySet((s) => toggleCategory(s, c))}
-                  aria-pressed={categorySet.has(c)}
-                  className={cn(
-                    "flex shrink-0 cursor-pointer items-center gap-1 rounded-full border bg-muted/60 px-1.5 py-0.5 text-[11px] whitespace-nowrap transition-all hover:bg-muted",
-                    categorySet.has(c) &&
-                      "border-primary/40 bg-primary/10 font-medium text-primary",
-                    categorySet.size > 0 && !categorySet.has(c) && "opacity-40"
+          <main className="flex min-w-0 flex-1 flex-col gap-3 rounded-xl border bg-card px-3 py-4 shadow-sm sm:pb-5 lg:px-5">
+            {/* 전체/경제지표/실적, 국내/해외, 주별/월별 + 서브 카테고리 필터 — 웹에서는 스크롤해도 상단에 붙어서 따라옴 */}
+            <div className="flex flex-col gap-3 rounded-2xl lg:sticky lg:top-0 lg:z-10 lg:-mx-5 lg:bg-card lg:px-5 lg:pt-0 lg:pb-3">
+              <div className="flex flex-nowrap items-center gap-1">
+                <div className="flex flex-1 gap-1 rounded-lg bg-muted p-1 text-xs lg:flex-none lg:shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => selectGroup("all")}
+                    className={groupSegBtn(groupFilter === "all")}
+                  >
+                    전체
+                  </button>
+                  {(Object.keys(CATEGORY_GROUPS) as CategoryGroupId[]).map(
+                    (g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => selectGroup(g)}
+                        className={groupSegBtn(groupFilter === g)}
+                      >
+                        {CATEGORY_GROUPS[g].label}
+                      </button>
+                    )
                   )}
-                >
-                  <span
-                    className={cn("size-1.5 shrink-0 rounded-full", CAT[c].dot)}
-                  />
-                  {CAT[c].label}
-                </button>
-              ))}
+                </div>
+
+                {/* 국내/해외, 뷰 전환(주별/월별) — 앱(모바일)에서는 둘 다 숨김 */}
+                <div className="ml-auto hidden shrink-0 items-center gap-1 lg:flex">
+                  <div className="flex gap-1 rounded-lg bg-muted p-1 text-xs">
+                    {(["domestic", "overseas"] as const).map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() =>
+                          setRegionFilter((prev) => (prev === r ? "all" : r))
+                        }
+                        className={segBtn(regionFilter === r)}
+                      >
+                        {r === "domestic" ? "국내" : "해외"}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-1 rounded-lg bg-muted p-1 text-xs">
+                    {(["week", "month"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setViewMode(v)}
+                        className={segBtn(viewMode === v)}
+                      >
+                        {v === "week" ? "주별" : "월별"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 서브 카테고리 — 현재 탭(전체/경제지표/실적)에 속한 카테고리만 다중 선택 */}
+              <div className="flex flex-nowrap items-center gap-1">
+                {subCategories.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCategorySet((s) => toggleCategory(s, c))}
+                    aria-pressed={categorySet.has(c)}
+                    className={cn(
+                      "flex shrink-0 cursor-pointer items-center gap-1 rounded-full border bg-muted/60 px-1.5 py-0.5 text-[11px] whitespace-nowrap transition-all hover:bg-muted",
+                      categorySet.has(c) &&
+                        "border-primary/40 bg-primary/10 font-medium text-primary",
+                      categorySet.size > 0 &&
+                        !categorySet.has(c) &&
+                        "opacity-40"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        CAT[c].dot
+                      )}
+                    />
+                    {CAT[c].label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* 앱(모바일): 커다란 월간 캘린더 없이 주별 일정만 표시 */}
@@ -282,8 +290,8 @@ export function CalendarWorkspace() {
             </div>
           </main>
 
-          {/* 오른쪽: 미니 달력 + AI 요약 — 앱(360) 사이즈에서는 페이지 최상단에 세로로 노출 */}
-          <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-72">
+          {/* 오른쪽: 미니 달력 + AI 요약 — 앱(360) 사이즈에서는 페이지 최상단에 세로로 노출, 웹에서는 스크롤해도 따라오도록 sticky */}
+          <aside className="flex w-full shrink-0 flex-col gap-3 lg:sticky lg:top-3 lg:w-72 lg:self-start">
             <MiniCalendar
               month={month}
               today={today}
@@ -789,7 +797,7 @@ function DayRows({
   return (
     <>
       {day.news.map((n, i) => (
-        <tr key={n.id} className="border-b last:border-b-0 hover:bg-muted/30">
+        <tr key={n.id} className="border-b last:border-b-0">
           {i === 0 && (
             <td
               rowSpan={day.news.length}
@@ -803,7 +811,7 @@ function DayRows({
               type="button"
               onClick={() => openItem(n)}
               title={n.title}
-              className="flex w-full min-w-0 cursor-pointer items-center gap-1.5 text-[12px] hover:text-primary"
+              className="flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] transition-colors hover:bg-primary/5 hover:text-primary"
             >
               <CategoryBar category={n.category} colorActive={colorActive} />
               <RegionBadge region={n.region} />
