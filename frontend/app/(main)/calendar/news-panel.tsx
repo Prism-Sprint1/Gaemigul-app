@@ -6,7 +6,7 @@ import { format, isSameDay } from "date-fns"
 import { ko } from "date-fns/locale/ko"
 import { ChevronDown, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
-import { CAT, NEWS, type NewsItem } from "./news-data"
+import { CAT, type NewsItem } from "./news-data"
 
 export type DayGroup = {
   date: Date
@@ -35,9 +35,9 @@ export function groupByDay(items: NewsItem[]): DayGroup[] {
   return [...byDay.values()].map(buildDayGroup)
 }
 
-/** 특정 날짜의 전체 일정(필터 무시) → 그룹. 없으면 null */
-export function dayGroupOf(d: Date): DayGroup | null {
-  return groupByDay(NEWS.filter((n) => isSameDay(n.publishedAt, d)))[0] ?? null
+/** 특정 날짜의 전체 일정(필터 무시) → 그룹. allNews는 캘린더가 들고 있는 전체(비필터) 목록. 없으면 null */
+export function dayGroupOf(d: Date, allNews: NewsItem[]): DayGroup | null {
+  return groupByDay(allNews.filter((n) => isSameDay(n.publishedAt, d)))[0] ?? null
 }
 
 /* ------------------------------------------------------------------ */
@@ -115,9 +115,9 @@ function DayDetailBody({
           const isOpen = openIds.has(n.id)
           const facts = (
             [
+              ["실제값", n.detail?.actual],
               ["예상치", n.detail?.forecast],
               ["이전치", n.detail?.previous],
-              ["발표처", n.detail?.source],
             ] as const
           ).filter(([, v]) => v)
           return (

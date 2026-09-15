@@ -18,16 +18,18 @@ import {
 } from "date-fns"
 import { ko } from "date-fns/locale/ko"
 import { ChevronLeft, ChevronRight, Play } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { PageTitle } from "@/components/common"
+import { getCalendarEvents } from "@/lib/api/calendar"
 import {
   CAT,
   CATEGORY_GROUPS,
   CATS,
   countryCodeOf,
+  dedupeNewsItems,
   MARKET_HOLIDAYS,
-  NEWS,
   scopeOf,
+  toNewsItem,
   type Category,
   type CategoryGroupId,
   type MarketHoliday,
@@ -111,6 +113,36 @@ export function CalendarWorkspace() {
     itemId: string
   } | null>(null)
 
+  // 백엔드(GET /calendar/events)에서 받아온 전체(미필터) 일정 — 월 그리드가 앞뒤 달 며칠을
+  // 함께 보여줄 수 있어 현재 달 기준 전/현재/다음 달 3개를 합쳐서 들고 있는다
+  const [news, setNews] = useState<NewsItem[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadNews() {
+      const targets = [subMonths(month, 1), month, addMonths(month, 1)]
+      try {
+        const results = await Promise.all(
+          targets.map((d) => getCalendarEvents(d.getFullYear(), d.getMonth() + 1))
+        )
+        if (cancelled) return
+        const items = results
+          .flat()
+          .map(toNewsItem)
+          .filter((n): n is NewsItem => n !== null)
+        setNews(dedupeNewsItems(items))
+      } catch {
+        // 백엔드 호출 실패 시 이전 목록을 유지 — 화면이 빈 상태로 깨지지 않도록 한다
+      }
+    }
+
+    loadNews()
+    return () => {
+      cancelled = true
+    }
+  }, [+month])
+
   const selectGroup = (g: GroupFilter) => {
     setGroupFilter(g)
     setCategorySet(new Set())
@@ -126,23 +158,25 @@ export function CalendarWorkspace() {
   }
 
   const openDay = (d: Date) => {
-    const g = dayGroupOf(d)
+    const g = dayGroupOf(d, news)
     if (g) setPopup({ group: g, itemId: g.list[0].id })
   }
 
-  const openItem = (g: DayGroup, itemId: string) =>
-    setPopup({ group: g, itemId })
+  const openItem = (d: Date, itemId: string) => {
+    const g = dayGroupOf(d, news)
+    if (g) setPopup({ group: g, itemId })
+  }
 
   const filteredNews = useMemo(
     () =>
-      NEWS.filter(
+      news.filter(
         (n) =>
           (groupFilter === "all" ||
             CATEGORY_GROUPS[groupFilter].categories.includes(n.category)) &&
           (categorySet.size === 0 || categorySet.has(n.category)) &&
           (regionFilter === "all" || scopeOf(n.region) === regionFilter)
       ),
-    [groupFilter, categorySet, regionFilter]
+    [news, groupFilter, categorySet, regionFilter]
   )
 
   const filteredHolidays = useMemo(
@@ -568,14 +602,9 @@ function MonthGrid({
   colorActive: boolean
   onSelectDate: (d: Date) => void
   onOpenDay: (d: Date) => void
-  onOpenItem: (g: DayGroup, itemId: string) => void
+  onOpenItem: (d: Date, itemId: string) => void
 }) {
   const weeks = useMemo(() => getMonthGridWeeks(month), [month])
-
-  const openItem = (n: NewsItem) => {
-    const g = dayGroupOf(n.publishedAt)
-    if (g) onOpenItem(g, n.id)
-  }
 
   return (
     <div className="overflow-x-auto">
@@ -649,7 +678,7 @@ function MonthGrid({
                       key={n.id}
                       item={n}
                       colorActive={colorActive}
-                      onClick={() => openItem(n)}
+                      onClick={() => onOpenItem(n.publishedAt, n.id)}
                     />
                   ))}
                   {hiddenCount > 0 && (
@@ -688,7 +717,7 @@ function WeekList({
   news: NewsItem[]
   holidays: MarketHoliday[]
   colorActive: boolean
-  onOpenItem: (g: DayGroup, itemId: string) => void
+  onOpenItem: (d: Date, itemId: string) => void
 }) {
   // 이번 달을 보는 중이면 '오늘(선택일)'부터, 다른 달이면 1일부터 표시
   const rangeStart = isSameMonth(selectedDate, month)
@@ -771,14 +800,9 @@ function DayRows({
 }: {
   day: DayEntry
   colorActive: boolean
-  onOpenItem: (g: DayGroup, itemId: string) => void
+  onOpenItem: (d: Date, itemId: string) => void
 }) {
   const dateLabel = format(day.date, "d일 (EEE)", { locale: ko })
-
-  const openItem = (n: NewsItem) => {
-    const g = dayGroupOf(n.publishedAt)
-    if (g) onOpenItem(g, n.id)
-  }
 
   if (day.holiday) {
     return (
@@ -809,7 +833,7 @@ function DayRows({
           <td className="p-2 text-left">
             <button
               type="button"
-              onClick={() => openItem(n)}
+              onClick={() => onOpenItem(n.publishedAt, n.id)}
               title={n.title}
               className="flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] transition-colors hover:bg-primary/5 hover:text-primary"
             >
@@ -839,7 +863,7 @@ function DayRows({
             {announceLabel(n.publishedAt)}
           </td>
           <td className="p-2 text-left text-[12px] whitespace-nowrap">
-            {n.detail?.forecast ?? "-"}
+            {n.detail?.actual ?? n.detail?.forecast ?? "-"}
           </td>
           <td className="p-2 text-left text-[12px] whitespace-nowrap">
             {n.detail?.previous ?? "-"}
