@@ -6,12 +6,10 @@ import SidebarNav from "./SidebarNav"
 
 export default function Sidebar() {
   return (
-    <aside className="flex w-67.5 min-w-67.5 flex-col justify-between bg-ant-bg">
-      <div>
-        <SidebarNav />
-        <Separator className="w-full" />
-        <TimelineTimer />
-      </div>
+    <aside className="sticky top-18.75 flex h-[calc(100vh-75px)] w-67.5 min-w-67.5 flex-col overflow-hidden bg-ant-bg">
+      <SidebarNav />
+      <Separator className="w-full" />
+      <TimelineTimer />
       <div className="bg-point3/60 p-3 px-5">
         <p className="flex items-center gap-1 text-[14px] font-semibold text-point2">
           <Lightbulb size="16" />
