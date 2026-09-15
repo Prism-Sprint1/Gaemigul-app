@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.database import get_db
 
 from backend.domain.timeline.schemas.market_indicator import IndicatorBarResponse
-from backend.domain.timeline.schemas.report import ReportResponse
+from backend.domain.timeline.schemas.report import ReportListResponse, ReportResponse
 from backend.domain.timeline.schemas.timeline import TimelineSlotResponse
 from backend.domain.timeline.services import glossary, market_indicator_service, report_repository, report_service, timeline_service
 
@@ -60,6 +60,13 @@ async def get_report(type_: str = Query(alias="type"), date_: date | None = Quer
     if type_ not in _REPORT_TYPES:
         raise HTTPException(status_code=404, detail=f"'{type_}'는 없는 보고서 종류입니다. 가능한 값: {', '.join(_REPORT_TYPES)}")
     return await report_service.get_report(session, _REPORT_TYPES[type_], date_ or datetime.now(_KST).date())
+
+
+# GET /timeline/reports?year=2026&month=9 - 월별 보고서 목록 (프런트 브리핑 탭 우측 목록). 주 묶음·주차는 report_service.get_report_list
+# 카드를 누르면 GET /timeline/report?type=(daily|weekly)&date=(end_date)로 상세를 부른다. DB에서 읽기만 한다(주 거래일 판단에 휴장일 조회 캐시 사용)
+@router.get("/reports", response_model=ReportListResponse)
+async def get_report_list(year: int = Query(ge=2000, le=2100), month: int = Query(ge=1, le=12), session: AsyncSession = Depends(get_db)) -> ReportListResponse:
+    return await report_service.get_report_list(session, year, month)
 
 
 # POST /timeline/report/daily?date=2026-09-14 - 일간 보고서 생성·저장 (스케줄러 동작을 수동 실행). date를 빼면 오늘

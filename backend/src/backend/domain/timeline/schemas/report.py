@@ -50,6 +50,34 @@ class ReportTermItem(BaseModel):
     description: str
 
 
+# 보고서 목록의 보고서 하나 (브리핑 탭 우측 목록 카드)
+class ReportListItem(BaseModel):
+    report_type: str  # "DAILY" / "WEEKLY"
+    start_date: date  # 일간은 그날, 주간은 그 주 첫 거래일
+    end_date: date  # 일간은 그날, 주간은 그 주 마지막 거래일 (상세 조회 GET /timeline/report의 date로 쓴다)
+    title: str
+    summary: str | None  # 카드 설명 두 줄
+
+
+# 보고서 목록의 주 묶음 하나 (월~금, 월요일이 속한 달의 주)
+class ReportWeekGroup(BaseModel):
+    year: int  # 월요일 기준 연도
+    month: int  # 월요일 기준 월 (9/28~10/2 주는 9)
+    week_of_month: int  # 그 달의 몇 번째 월요일인지 (9/28 → 4)
+    week_label: str  # "9월 4주차" (주간 카드 배지)
+    start_date: date  # 그 주 첫 거래일 (휴장일 제외, 묶음 제목 "9.28 - 10.2")
+    end_date: date  # 그 주 마지막 거래일
+    weekly: ReportListItem | None  # 주간 보고서 (없으면 null - 일간만 보여준다)
+    dailies: list[ReportListItem]  # 일간 보고서, 날짜순
+
+
+# 보고서 목록 응답 (GET /timeline/reports)
+class ReportListResponse(BaseModel):
+    year: int
+    month: int
+    weeks: list[ReportWeekGroup]  # 최신 주가 먼저
+
+
 # 보고서 전체 응답
 class ReportResponse(BaseModel):
     report_type: str  # "DAILY" / "WEEKLY"

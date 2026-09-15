@@ -3,6 +3,7 @@
 #   generate_daily           일간 보고서 생성·저장 (20:00 슬롯 직후, POST /timeline/report/daily)
 #   generate_weekly          주간 보고서 생성·저장 (그 주 마지막 거래일 일간 보고서 직후, POST /timeline/report/weekly)
 #   get_report               날짜로 보고서 조회 (GET /timeline/report)
+#   get_report_list          월별 보고서 목록 - 주 묶음 (GET /timeline/reports)
 #   to_response              DB 보고서 -> 응답 DTO (비율·증감률·VKOSPI 뱃지 계산 포함)
 #   run_scheduled_reports    20:00 슬롯이 끝나면 timeline_service가 부른다 (휴장일·마지막 거래일 판단 + 실패 로깅)
 #
@@ -24,7 +25,17 @@ from backend.core import image_client, llm_client, storage_client
 from backend.core.database import get_session_factory
 from backend.domain.timeline.models.report import TimelineReport, TimelineReportSector
 from backend.domain.timeline.models.timeline import TimelineSlot
-from backend.domain.timeline.schemas.report import ReportKeywordItem, ReportQuarterItem, ReportResponse, ReportSectionItem, ReportSectorItem, ReportTermItem
+from backend.domain.timeline.schemas.report import (
+    ReportKeywordItem,
+    ReportListItem,
+    ReportListResponse,
+    ReportQuarterItem,
+    ReportResponse,
+    ReportSectionItem,
+    ReportSectorItem,
+    ReportTermItem,
+    ReportWeekGroup,
+)
 from backend.domain.timeline.services import glossary, market_hours, prompts, report_data_service, report_repository, text_review, timeline_repository
 
 _KST = ZoneInfo("Asia/Seoul")
@@ -37,7 +48,7 @@ _POINT_COUNT = 3
 _KEYWORD_COUNT = 3
 _TERM_COUNT = 3
 
-# 보고서 문구 모델. 보고서는 하루 1~2회라 기본 모델(flash-lite)보다 사실 오류가 적은 모델을 쓴다 (무료 하루 20회)
+# 보고서 문구 모델. 보고서는 하루 1~2회라 기본 모델(flash-lite)보다 사실 오류가 적은 모델을 쓴다 (무료 하루 20회 - 해설 8회와 나눠 쓴다)
 # 이 모델이 실패하면(한도 초과 등) 기본 모델로 한 번 더 만든다. None이면 처음부터 기본 모델
 _REPORT_MODEL = "gemini-3.6-flash"
 
@@ -462,6 +473,49 @@ def to_response(report: TimelineReport) -> ReportResponse:
 async def get_report(session: AsyncSession, report_type: str, target_date: date) -> ReportResponse | None:
     report = await report_repository.load_report(session, report_type, target_date)
     return to_response(report) if report else None
+
+
+# ORM 보고서 -> 목록 카드
+def _list_item(report: TimelineReport) -> ReportListItem:
+    return ReportListItem(report_type=report.report_type, start_date=report.start_date, end_date=report.end_date, title=report.title, summary=report.summary)
+
+
+# 월별 보고서 목록 (브리핑 탭 우측 목록). 주(월~금) 단위로 묶는다
+#   주가 속한 달 = 그 주 월요일이 속한 달 (9/28~10/2 주는 9월 목록, 10/5 주부터 10월)
+#   주차 = 그 달의 몇 번째 월요일인지 (9/28 → 9월 4주차)
+#   묶음 범위 = 그 주 거래일만 (추석처럼 휴장일이 있으면 "9.21 - 9.23")
+#   보고서가 하나도 없는 주, 문구가 없는(LLM 실패) 보고서는 뺀다
+#   정렬: 최신 주가 먼저, 주 안의 일간은 날짜순 (주간은 weekly 칸). 주 순서를 바꾸려면 sorted의 reverse를 고친다
+async def get_report_list(session: AsyncSession, year: int, month: int) -> ReportListResponse:
+    first_day = date(year, month, 1)
+    first_monday = first_day + timedelta(days=(7 - first_day.weekday()) % 7)
+    last_day = date(year + (month == 12), month % 12 + 1, 1) - timedelta(days=1)
+    last_monday = last_day - timedelta(days=last_day.weekday())
+
+    by_monday: dict[date, list[TimelineReport]] = {}
+    for report in await report_repository.load_reports_between(session, first_monday, last_monday + timedelta(days=4)):
+        if report.title:
+            by_monday.setdefault(report.start_date - timedelta(days=report.start_date.weekday()), []).append(report)
+
+    weeks = []
+    for monday in sorted(by_monday, reverse=True):
+        reports = by_monday[monday]
+        trading_days = await asyncio.to_thread(_week_trading_days, monday) or sorted(report.start_date for report in reports)
+        week_of_month = (monday.day - 1) // 7 + 1
+        weekly = next((report for report in reports if report.report_type == report_repository.WEEKLY), None)
+        weeks.append(
+            ReportWeekGroup(
+                year=monday.year,
+                month=monday.month,
+                week_of_month=week_of_month,
+                week_label=f"{monday.month}월 {week_of_month}주차",
+                start_date=trading_days[0],
+                end_date=trading_days[-1],
+                weekly=_list_item(weekly) if weekly else None,
+                dailies=[_list_item(report) for report in sorted(reports, key=lambda report: report.start_date) if report.report_type == report_repository.DAILY],
+            )
+        )
+    return ReportListResponse(year=year, month=month, weeks=weeks)
 
 
 # 20:00 슬롯 저장이 끝나면 timeline_service.run_scheduled_collect가 부른다

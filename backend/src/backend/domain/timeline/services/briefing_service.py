@@ -1,7 +1,7 @@
 # briefing_service.py
 # 수집한 데이터로 LLM 브리핑과 불개미(주식 입문자) 해설을 만든다.
 #   1) 브리핑: 수집 데이터 -> 헤드라인 + 부제 + 포인트 3개
-#   2) 불개미 해설: 수집 데이터 + 브리핑 -> 왜 그런지 풀어 설명한 문단 3개
+#   2) 불개미 해설: 수집 데이터 + 브리핑 -> 왜 그런지 풀어 설명한 문단 3개 (해설만 _GUIDE_MODEL)
 #   3) 자동 검사: 퍼센트 표기·비교 표현을 코드로 고치고, 자료에 없는 숫자 등은 WARNING 로그로 남긴다 (text_review.check)
 # 프롬프트 문구는 prompts.py에 있다.
 
@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 
 # 급상승 종목 등락률(전일 종가 대비)에 정규장 상승분이 들어가는 슬롯. 자동 검사에서 "애프터마켓에서 올랐다"를 잡는다
 _AFTERMARKET_SLOTS = {"17:30", "20:00"}
+
+# 해설 모델. 해설은 "왜 그런지" 설명을 만들며 원인을 지어내기 쉬워 기본 모델(flash-lite)보다 사실 오류가 적은 모델을 쓴다
+# 이 모델은 무료 하루 20회다 (해설 8회 + 보고서 1~2회). 실패하면(한도 초과 등) 기본 모델로 한 번 더 만든다. None이면 처음부터 기본 모델
+# 브리핑·뉴스 선별은 기본 모델 그대로다
+_GUIDE_MODEL = "gemini-3.6-flash"
 
 # 브리핑 포인트·해설 문단 개수. 바꾸면 저장되는 개수가 바뀐다 (프롬프트의 출력 형식도 같이 맞출 것)
 _POINT_COUNT = 3
@@ -95,13 +100,21 @@ def _generate_beginner_guides(data: str, briefing: dict | None) -> list[dict]:
     if briefing is None:
         return []
 
-    try:
-        answer = llm_client.generate_json(prompts.BEGINNER_PROMPT.format(data=data, briefing=json.dumps(briefing, ensure_ascii=False)))
-    except (RuntimeError, ValueError, KeyError, httpx.HTTPError) as error:
-        logger.warning("불개미 해설 생성 실패 - %s: %s", type(error).__name__, error)
+    prompt = prompts.BEGINNER_PROMPT.format(data=data, briefing=json.dumps(briefing, ensure_ascii=False))
+    points = []
+    for model in dict.fromkeys([_GUIDE_MODEL or llm_client.DEFAULT_MODEL, llm_client.DEFAULT_MODEL]):
+        try:
+            answer = llm_client.generate_json(prompt, timeout=120.0, model=model)
+        except (RuntimeError, ValueError, KeyError, httpx.HTTPError) as error:
+            logger.warning("불개미 해설 생성 실패 (%s) - %s: %s", model, type(error).__name__, error)
+            continue
+        points = [point for point in answer.get("points", []) if isinstance(point, dict) and point.get("title") and point.get("body")]
+        if points:
+            break
+        logger.warning("불개미 해설 응답에 문단이 없습니다 (%s).", model)
+    if not points:
         return []
 
-    points = [point for point in answer.get("points", []) if isinstance(point, dict) and point.get("title") and point.get("body")]
     return [
         {
             "seq": seq,

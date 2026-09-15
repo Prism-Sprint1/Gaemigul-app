@@ -167,6 +167,14 @@ async def load_report(session: AsyncSession, report_type: str, target_date: date
     return await session.scalar(query)
 
 
+# 목록 조회용 - 시작일이 기간 안인 보고서 전체(일간·주간)를 시작일순으로. 목록에는 제목·요약만 쓰므로 자식 테이블은 읽지 않는다
+async def load_reports_between(session: AsyncSession, start_date: date, end_date: date) -> list[TimelineReport]:
+    result = await session.scalars(
+        select(TimelineReport).where(TimelineReport.start_date >= start_date, TimelineReport.start_date <= end_date).order_by(TimelineReport.start_date, TimelineReport.report_type)
+    )
+    return list(result)
+
+
 # 주간 보고서 재료 - 기간 안의 일간 보고서를 날짜순으로
 async def load_daily_reports(session: AsyncSession, start_date: date, end_date: date) -> list[TimelineReport]:
     result = await session.scalars(
