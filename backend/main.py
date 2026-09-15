@@ -1,5 +1,5 @@
 # main.py
-# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바 갱신 1개 + 슬롯 수집 8개), CORS, 라우터 등록.
+# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바 갱신 1개 + 슬롯 수집 8개 + 히트맵 수집 2개), CORS, 라우터 등록.
 # 보고서는 따로 예약하지 않는다. 20:00 슬롯 작업이 끝나면 timeline_service가 이어서 만든다
 
 import logging
@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.core.config import get_settings
 from backend.core.logging_config import setup_logging
 from backend.domain.calendar.routers.calendar import router as calendar_router
+from backend.domain.heatmap.routers.heatmap import router as heatmap_router
+from backend.domain.heatmap.services import heatmap
 from backend.domain.timeline.routers.timeline import router as timeline_router
 from backend.domain.timeline.services import market_indicator_service, timeline_service
 
@@ -34,6 +36,7 @@ async def lifespan(app: FastAPI):
 
     _register_indicator_job()
     _register_slot_jobs()
+    _register_heatmap_jobs()
 
     jobs = _scheduler.get_jobs()
     if jobs:
@@ -77,6 +80,20 @@ def _register_slot_jobs() -> None:
         )
 
 
+# 히트맵 수집 작업 등록 (히트맵 담당). HEATMAP_ENABLED=false면 등록하지 않는다
+# 저장된 스냅샷을 먼저 복원하고(네트워크 없음), 첫 수집은 서버 시작 직후 백그라운드에서 한 번 돌린다
+# 매분 30초에 확인하되 10분 수집 시점·휴장·마감 여부는 heatmap.refresh_all이 판단한다 (30초 여유는 15:30 마감 체결 반영용)
+# refresh_all은 동기 함수라 스케줄러가 별도 스레드에서 실행한다 (타임라인 슬롯 수집을 막지 않는다)
+def _register_heatmap_jobs() -> None:
+    if not get_settings().heatmap_enabled:
+        logger.warning("히트맵 수집 비활성화 - HEATMAP_ENABLED=false")
+        return
+
+    heatmap.initialize()
+    _scheduler.add_job(heatmap.refresh_all, "date", kwargs={"force": True}, id="heatmap_initial", misfire_grace_time=60)
+    _scheduler.add_job(heatmap.refresh_all, CronTrigger(minute="*", second=30), id="heatmap", max_instances=1, coalesce=True)
+
+
 app = FastAPI(lifespan=lifespan)
 
 # CORS - 허용할 프런트 주소와 메서드. 배포 주소가 생기면 allow_origins에 추가한다
@@ -97,3 +114,4 @@ def read_root():
 # 라우터 등록 - 도메인을 추가하면 여기에 include_router를 추가한다
 app.include_router(timeline_router)
 app.include_router(calendar_router)
+app.include_router(heatmap_router)

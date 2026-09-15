@@ -3,6 +3,7 @@
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +17,14 @@ class Settings(BaseSettings):
     kis_app_key: str | None = None
     kis_app_secret: str | None = None
     kis_base_url: str = "https://openapi.koreainvestment.com:9443"
+
+    # 히트맵 수집 설정. 시세 조회만 사용하며 기존 KIS 계정/토큰을 함께 쓴다.
+    heatmap_enabled: bool = True
+    # 히트맵 KIS 호출 속도(초당). kis_client._get을 거치는 호출에만 적용된다. 계정의 실제 한도에 맞춰 낮출 수 있다.
+    heatmap_requests_per_second: float = Field(default=5.0, gt=0, le=20)
+    # 수능일 등 특별 거래시간은 KRX 공지에 맞춰 날짜별로 지정한다(한국 시간).
+    # 예: {"2026-01-02": {"open": "10:00", "close": "15:30"}}
+    heatmap_session_overrides: dict[str, dict[str, str]] = Field(default_factory=dict)
 
     # 네이버 클라우드 플랫폼(NCP) 뉴스 검색 키 (developers.naver.com 키와 다름) (timeline 뉴스)
     naver_api_key_id: str | None = None
