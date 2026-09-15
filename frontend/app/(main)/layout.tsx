@@ -1,6 +1,6 @@
 "use client"
 
-import { Header, Sidebar } from "@/components/common"
+import { Header, Footer, Sidebar } from "@/components/common"
 import ReportSidebar from "@/components/home/reportSidebar/ReportSidebar"
 import { usePathname } from "next/navigation"
 
@@ -23,6 +23,7 @@ export default function MainLayout({
         </main>
         <ReportSidebar />
       </div>
+      <Footer />
     </>
   )
 }
