@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core import fred_client, kis_client
+from backend.core import dart_client, fed_client, fred_client, kis_client
 from backend.core.database import async_session
 from backend.domain.calendar.schemas.calendar import CalendarEvent
 
@@ -37,6 +37,9 @@ _RELEASE_TIME_ET: dict[str, dt_time] = {
     "UNRATE": dt_time(8, 30),
     # PCE도 BEA가 발표하며(GDP와 같은 release 계열), BEA도 08:30 ET에 발표한다
     "PCE": dt_time(8, 30),
+    # FOMC는 연준이 정례회의 마지막 날 성명서를 항상 14:00 ET에 공개한다고 공식 명시한다
+    # (예: "For release at 2:00 p.m. EDT/EST") - 임의 추정 아님
+    "FOMC": dt_time(14, 0),
 }
 
 _TITLES: dict[str, str] = {
@@ -305,6 +308,188 @@ async def ingest_cpi_from_fred() -> CalendarEvent:
 
 async def ingest_ppi_from_fred() -> CalendarEvent:
     return await _ingest_from_fred("PPI")
+
+
+# FOMC(연방공개시장위원회) - FRED/KIS 둘 다 "회의 일정" 자체를 API로 제공하지 않는다. core/fed_client.py의
+# 정적 표(federalreserve.gov 공식 캘린더를 그대로 옮겨 적음)가 유일한 데이터 소스다.
+# category는 5개 고정값 중 "macro"로 통일한다(별도 "FOMC" category를 만들지 않는다).
+# DB에 indicator 컬럼을 추가하지 않는 대신, id에 이벤트 종류를 접미사로 붙여 코드 내부에서만 구분한다:
+# FOMC_STATEMENT(금리결정 성명서) / FOMC_SEP(경제전망) / FOMC_MINUTES(의사록).
+# FOMC_MEETING(회의 기간 자체)과 FOMC_PRESS_CONFERENCE(기자회견)는 만들지 않기로 결정했다 - 회의
+# 기간 카드는 며칠 뒤 STATEMENT와 사실상 중복된 신호이고, 기자회견도 같은 날 STATEMENT와 거의 같은
+# 시각에 겹치는 내용이라 초보 투자자 캘린더에 굳이 별도 카드로 넣을 실익이 적다고 판단했다(2026-09-15
+# 결정, 이전에 합병/분할·유무상증자를 제외한 것과 같은 기준).
+# previous/forecast/actual은 FRED 경제지표처럼 억지로 채우지 않고 항상 None으로 둔다 - FOMC
+# 일정 자체는 "값"이 아니라 "일정"이기 때문이다. 그래서 status도 FRED처럼 실측값 존재 여부가 아니라
+# 발표 시각이 이미 지났는지(KST 기준 현재 시각과 비교)로 판단한다.
+_FOMC_EVENT_TITLES: dict[str, str] = {
+    "FOMC_STATEMENT": "미국 FOMC 금리결정",
+    "FOMC_SEP": "미국 경제전망(SEP) 공개",
+    "FOMC_MINUTES": "미국 FOMC 의사록 공개",
+}
+
+_FOMC_EVENT_SUMMARIES: dict[str, str] = {
+    "FOMC_STATEMENT": (
+        "FOMC(연방공개시장위원회)가 정례회의를 마치고 미국의 기준금리 목표범위를 발표하는 날입니다. "
+        "이 결정은 미국 국채금리·환율은 물론 한국을 포함한 전 세계 증시에도 큰 영향을 줍니다. 금리를 "
+        "내리거나 인하를 시사하면 시장에 우호적으로, 동결이라도 예상보다 매파적인 발언이 나오면 증시에 "
+        "부담으로 작용할 수 있습니다."
+    ),
+    "FOMC_SEP": (
+        "SEP(경제전망 요약)는 FOMC 위원들이 앞으로의 금리·물가·성장률을 어떻게 내다보는지 보여주는 "
+        "자료로, 연 4회(3·6·9·12월)만 금리결정과 함께 공개됩니다. 위원들이 예상하는 향후 금리를 점으로 "
+        "표시한 '점도표(dot plot)'가 특히 시장의 관심을 크게 받으며, 때로는 그날의 금리 결정 자체보다 "
+        "이 전망치가 증시를 더 크게 움직이기도 합니다."
+    ),
+    "FOMC_MINUTES": (
+        "FOMC 의사록은 정례회의로부터 약 3주 뒤에 공개되며, 위원들이 금리를 결정할 때 어떤 논의를 "
+        "했는지 자세한 내용을 담고 있습니다. 발표 당일 성명서에는 드러나지 않았던 위원들 간의 이견이나 "
+        "향후 정책 방향에 대한 단서가 나올 수 있어 시장이 다시 한번 주목합니다."
+    ),
+}
+
+
+# FOMC 이벤트의 발표(공개) 시각이 이미 지났는지로 RELEASED/SCHEDULED를 가른다.
+# FRED처럼 "실제 값이 존재하는지"로 판단할 수 없다 - actual을 항상 None으로 두기 때문이다.
+def _fomc_status(published_at: str, released_time: str) -> str:
+    announced_at = datetime.strptime(f"{published_at} {released_time}", "%Y-%m-%d %H:%M").replace(tzinfo=_KST)
+    return "RELEASED" if datetime.now(_KST) >= announced_at else "SCHEDULED"
+
+
+def _fomc_event(event_date: str, event_type: str) -> CalendarEvent:
+    published_at, released_time = _to_kst(event_date, "FOMC")
+    return CalendarEvent(
+        id=f"fomc-{event_date}-{event_type}",
+        publishedAt=published_at,
+        time=released_time,
+        region="미국",
+        category="macro",
+        title=_FOMC_EVENT_TITLES[event_type],
+        summary=_FOMC_EVENT_SUMMARIES[event_type],
+        previous=None,
+        forecast=None,
+        actual=None,
+        status=_fomc_status(published_at, released_time),
+    )
+
+
+# core/fed_client.py의 정적 회의 일정에서 지정한 연도의 STATEMENT(전체)/SEP(해당 회의만)/
+# MINUTES(공식 공개일이 확인된 회의만)를 CalendarEvent로 변환해 upsert한다.
+# FRED/KIS ingest 함수들과 달리 외부 API 호출이 없다 - fed_client의 정적 표가 유일한 데이터 소스다.
+async def ingest_fomc_year(year: int) -> list[CalendarEvent]:
+    events: list[CalendarEvent] = []
+    for meeting in fed_client.get_fomc_meetings(year):
+        events.append(_fomc_event(meeting.end_date, "FOMC_STATEMENT"))
+        if meeting.has_sep:
+            events.append(_fomc_event(meeting.end_date, "FOMC_SEP"))
+        if meeting.minutes_date is not None:
+            events.append(_fomc_event(meeting.minutes_date, "FOMC_MINUTES"))
+
+    async with async_session() as session:
+        for event in events:
+            await _upsert_event(session, event)
+        await session.commit()
+
+    return events
+
+
+# DART(전자공시시스템) 잠정실적 공시 -> earnings 이벤트. 3단계 사전조사(37번 항목)에서 실제
+# 라이브 데이터로 확인한 내용을 그대로 코드로 옮긴다:
+# - 삼성전자는 분기마다 "연결재무제표기준영업(잠정)실적(공정공시)" 공시가 2번(1차 가이던스,
+#   2차 상세) 올라온다. 캘린더의 대표 실적 이벤트는 시장이 실제로 반응하는 1차 공시일만 쓴다
+#   (dart_client.get_preliminary_earnings가 이미 1차만 골라서 반환한다).
+# - 매출액/영업이익/당기순이익은 1차 공시 자체(매출/영업이익만 있고 당기순이익은 없음)가 아니라
+#   나중에 확정되는 fnlttSinglAcnt.json(단일회사 주요계정)에서 가져온다 - 조사 시점에는 이미
+#   정기보고서가 제출된 뒤라 세 값 다 확인 가능하다. 그래서 title/summary는 "잠정실적 발표일"과
+#   "그 분기의 확정 실적 수치"를 같이 담는다.
+_DART_QUARTER_REPORT_CODE: dict[int, tuple[str, str]] = {
+    1: ("11011", "4분기(연간)"),  # 1월 공시 = 전년도 4분기/연간 잠정실적
+    4: ("11013", "1분기"),
+    7: ("11012", "2분기"),
+    10: ("11014", "3분기"),
+}
+
+
+# 1차 잠정실적 공시의 rcept_dt(발표월)로 그 공시가 어느 분기 실적인지, fnlttSinglAcnt 조회에
+# 쓸 reprt_code가 무엇인지 판단한다. 삼성전자(12월 결산)가 매년 1/4/7/10월에만 1차 공시를 내는
+# 패턴을 3단계 사전조사에서 실제 데이터로 확인했다 - 그 외 월에 나온 공시는 이 패턴을 벗어난
+# 것이므로 임의로 추정하지 않고 에러를 낸다.
+def _dart_quarter_period(rcept_dt: str) -> tuple[str, str, str]:
+    year = int(rcept_dt[:4])
+    month = int(rcept_dt[4:6])
+    if month not in _DART_QUARTER_REPORT_CODE:
+        raise ValueError(f"1차 잠정실적 공시로 보이지 않는 발표월입니다: {rcept_dt}")
+
+    report_code, quarter_label = _DART_QUARTER_REPORT_CODE[month]
+    bsns_year = year - 1 if month == 1 else year
+    return str(bsns_year), report_code, f"{bsns_year}년 {quarter_label}"
+
+
+# 원 단위 금액을 "조원" 단위 문자열로 변환(소수 첫째자리까지). 값이 없으면 None 그대로 둔다 -
+# 값이 없다고 0으로 채우거나 생략하지 않는다(임의 생성 금지 원칙).
+def _format_trillion_won(amount: int | None) -> str | None:
+    if amount is None:
+        return None
+    return f"{amount / 1_000_000_000_000:.1f}"
+
+
+_DART_EARNINGS_SUMMARY_TEMPLATE = (
+    "{corp_name}의 {period} 잠정실적이 발표되었습니다. 매출액과 영업이익이 가장 먼저 공개되는 "
+    "날로, 시장이 {corp_name}의 실적을 확인하는 주요 일정입니다. 이 분기 확정 실적은 매출액 약 "
+    "{revenue}조원, 영업이익 약 {operating_income}조원, 당기순이익 약 {net_income}조원입니다."
+)
+
+
+def _dart_earnings_event(corp_name: str, stock_code: str, disclosure: dict) -> CalendarEvent:
+    rcept_dt = disclosure["rcept_dt"]
+    published_at = f"{rcept_dt[:4]}-{rcept_dt[4:6]}-{rcept_dt[6:8]}"
+
+    bsns_year, reprt_code, period_label = _dart_quarter_period(rcept_dt)
+    accounts = dart_client.get_key_accounts(disclosure["corp_code"], bsns_year, reprt_code)
+
+    revenue = _format_trillion_won(accounts["revenue"])
+    operating_income = _format_trillion_won(accounts["operating_income"])
+    net_income = _format_trillion_won(accounts["net_income"])
+
+    summary = _DART_EARNINGS_SUMMARY_TEMPLATE.format(
+        corp_name=corp_name,
+        period=period_label,
+        revenue=revenue if revenue is not None else "확인 안 됨",
+        operating_income=operating_income if operating_income is not None else "확인 안 됨",
+        net_income=net_income if net_income is not None else "확인 안 됨",
+    )
+
+    return CalendarEvent(
+        id=f"dart-earnings-{stock_code}-{rcept_dt}",
+        publishedAt=published_at,
+        time=None,
+        region="한국",
+        category="earnings",
+        title=f"{corp_name} 실적 발표",
+        summary=summary,
+        previous=None,
+        forecast=None,
+        actual=revenue,
+        status="RELEASED",
+    )
+
+
+# corp_code/stock_code/corp_name으로 지정한 회사의 1차 잠정실적 공시를 찾아 earnings
+# 이벤트로 upsert한다. 이번 3단계는 삼성전자 1개 기업만 대상으로 한다(30개 기업 확장은 다음
+# 단계 이후 결정 사항).
+async def ingest_preliminary_earnings_from_dart(
+    corp_code: str, stock_code: str, corp_name: str, start_date: str, end_date: str
+) -> list[CalendarEvent]:
+    disclosures = dart_client.get_preliminary_earnings(corp_code, start_date, end_date)
+
+    events = [_dart_earnings_event(corp_name, stock_code, d) for d in disclosures]
+
+    async with async_session() as session:
+        for event in events:
+            await _upsert_event(session, event)
+        await session.commit()
+
+    return events
 
 
 # calendar_events에 upsert - id가 이미 있으면 UPDATE, 없으면 INSERT (36번 항목: 중복 방지)

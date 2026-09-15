@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # FRED(미국 연준 경제 데이터) API - calendar 도메인에서 사용
     fred_api_key: str | None = None
 
+    # DART(전자공시시스템) Open API - calendar 도메인에서 기업 실적 발표일 조사용(테스트 단계)
+    dart_api_key: str | None = None
+
 
 # 설정값을 한 번만 읽어서 재사용 (설정값은 항상 이 함수로 가져올 것)
 @lru_cache
