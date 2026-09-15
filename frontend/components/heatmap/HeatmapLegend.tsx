@@ -3,7 +3,7 @@ const LEGEND_COLORS = ["#2563eb", "#395fa9", "#4b5563", "#ab4447", "#ff2a2a"]
 export default function HeatmapLegend() {
   return (
     <div
-      className="mb-3 flex w-28 w-full flex-col gap-1"
+      className="mb-3 flex w-full flex-col gap-1"
       aria-label="등락률 색상 범례"
     >
       <div className="flex justify-between text-[10px] text-neutral-500">
