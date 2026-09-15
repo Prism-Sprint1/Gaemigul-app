@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core import dart_client, fed_client, fred_client, kis_client
+from backend.core import dart_client, ecos_client, fed_client, fred_client, kis_client
 from backend.core.database import async_session
 from backend.domain.calendar.schemas.calendar import CalendarEvent
 
@@ -158,6 +158,27 @@ def _clean_value(raw: str | None) -> str | None:
     return raw
 
 
+# 지표별 실제 단위(FRED series 메타데이터의 units/units_short를 실제 라이브 호출로 확인한 값을
+# 한국어로 옮김 - 추측 아님): CPI/PPI/PCE는 지수(Index), GDP는 십억 달러, PAYEMS는 천 명,
+# UNRATE는 %. previous/actual 문자열 끝에 붙여서 화면에서 숫자만 보고 오해하지 않도록 한다.
+_UNITS: dict[str, str] = {
+    "CPI": "포인트",  # FRED units: Index 1982-1984=100
+    "PPI": "포인트",  # FRED units: Index 1982=100
+    "GDP": "십억 달러",  # FRED units: Billions of Dollars
+    "PAYEMS": "천 명",  # FRED units: Thousands of Persons
+    "UNRATE": "%",  # FRED units: Percent
+    "PCE": "포인트",  # FRED units: Index 2017=100
+}
+
+
+# 값이 있을 때만 단위를 붙인다 - None(값 없음)에는 단위를 붙이지 않는다(임의 생성 금지 원칙)
+def _with_unit(value: str | None, indicator: str) -> str | None:
+    if value is None:
+        return None
+    unit = _UNITS.get(indicator)
+    return f"{value}{unit}" if unit else value
+
+
 # FRED에서 지정한 지표(indicator: "CPI"/"PPI")의 최신 데이터를 1회 가져와
 # Supabase calendar_events에 저장한다. indicator는 코드 내부에서만 쓰는 세부 식별자이고,
 # 실제 DB에 저장되는 category는 _CATEGORY_OF로 변환한 5개 고정값이다.
@@ -186,8 +207,8 @@ async def _ingest_from_fred(indicator: str) -> CalendarEvent:
         category=_CATEGORY_OF[indicator],
         title=f"{_TITLES[indicator]} - {period_kr}",
         summary=f"{period_kr} {_PERIOD_LABELS[indicator]} 자료입니다. {_SUMMARIES[indicator]}",
-        previous=_clean_value(previous["value"]) if previous else None,
-        actual=actual,
+        previous=_with_unit(_clean_value(previous["value"]) if previous else None, indicator),
+        actual=_with_unit(actual, indicator),
         status="SCHEDULED" if actual is None else "RELEASED",
     )
 
@@ -287,8 +308,8 @@ async def ingest_year_from_fred(indicator: str, year: int) -> list[CalendarEvent
             category=_CATEGORY_OF[indicator],
             title=f"{_TITLES[indicator]} - {period_kr}",
             summary=f"{period_kr} {_PERIOD_LABELS[indicator]} 자료입니다. {_SUMMARIES[indicator]}",
-            previous=previous,
-            actual=actual,
+            previous=_with_unit(previous, indicator),
+            actual=_with_unit(actual, indicator),
             status="SCHEDULED" if actual is None else "RELEASED",
         )
         events.append(event)
@@ -469,7 +490,7 @@ def _dart_earnings_event(corp_name: str, stock_code: str, disclosure: dict) -> C
         summary=summary,
         previous=None,
         forecast=None,
-        actual=revenue,
+        actual=f"{revenue}조원" if revenue is not None else None,
         status="RELEASED",
     )
 
@@ -483,6 +504,160 @@ async def ingest_preliminary_earnings_from_dart(
     disclosures = dart_client.get_preliminary_earnings(corp_code, start_date, end_date)
 
     events = [_dart_earnings_event(corp_name, stock_code, d) for d in disclosures]
+
+    async with async_session() as session:
+        for event in events:
+            await _upsert_event(session, event)
+        await session.commit()
+
+    return events
+
+
+# 한국은행 기준금리 - ECOS는 "그 달의 금리 레벨"만 주고 정확한 결정일은 안 준다(46번 사전조사).
+# 그래서 값이 바뀐 달(YYYYMM)을 실제로 확인한 공식 결정일로 매핑하는 정적 표가 필요하다 -
+# fed_client.py가 FOMC 일정을 정적으로 옮겨둔 것과 같은 구조다. 한국은행 공식 홈페이지
+# (bok.or.kr/portal/singl/baseRate/list.do, 기준금리 추이 목록)에서 실제로 확인한 값만 넣는다.
+# 새로운 결정이 생기면 이 표에 추가해야 한다(연 8회 정도 발생하는 금통위 일정에 맞춰 수동 갱신).
+_BOK_RATE_DECISION_DATES: dict[str, str] = {
+    "202410": "2024-10-11",
+    "202411": "2024-11-28",
+    "202502": "2025-02-25",
+    "202505": "2025-05-29",
+    "202607": "2026-07-16",
+    "202608": "2026-08-27",
+}
+
+_BOK_RATE_SUMMARY = (
+    "한국은행 금융통화위원회가 기준금리를 결정하는 날입니다. 이 결정은 국내 대출·예금 금리는 "
+    "물론 원화 환율과 증시에도 큰 영향을 줍니다. 금리를 내리거나 인하를 시사하면 시장에 "
+    "우호적으로, 동결이라도 예상보다 매파적인 발언이 나오면 증시에 부담으로 작용할 수 있습니다."
+)
+
+
+def _bok_rate_event(decision_date: str, previous: str, actual: str) -> CalendarEvent:
+    return CalendarEvent(
+        id=f"bok-rate-{decision_date.replace('-', '')}",
+        publishedAt=decision_date,
+        time=None,
+        region="한국",
+        category="rate",
+        title="한국은행 기준금리 결정",
+        summary=_BOK_RATE_SUMMARY,
+        previous=f"{previous}%",
+        forecast=None,
+        actual=f"{actual}%",
+        status="RELEASED",
+    )
+
+
+# ECOS 월별 기준금리 시계열에서 값이 바뀐 달만 골라, _BOK_RATE_DECISION_DATES에 공식 결정일이
+# 있는 경우에만 이벤트로 만든다. 매핑이 없는 변경(아직 공식 홈페이지에서 결정일을 확인 못한
+# 경우)은 임의 날짜를 만들지 않고 건너뛴다 - FRED가 예정 발표일 자체가 없는 기간을 건너뛰는
+# 것과 같은 원칙. ECOS는 실제로 발표된 값만 주기 때문에, 아직 결정 안 된 미래 회의는 애초에
+# 데이터 자체가 없어 자동으로 이벤트가 안 만들어진다(FOMC의 "미래 회의는 SCHEDULED로도 만들지
+# 않는다"는 요구사항과 결과적으로 동일).
+async def ingest_bok_rate_decisions(start: str, end: str) -> list[CalendarEvent]:
+    rows = ecos_client.get_base_rate_series(start, end)
+
+    events: list[CalendarEvent] = []
+    previous_value: str | None = None
+    for row in rows:
+        value = row["DATA_VALUE"]
+        if previous_value is not None and value != previous_value:
+            decision_date = _BOK_RATE_DECISION_DATES.get(row["TIME"])
+            if decision_date is not None:
+                events.append(_bok_rate_event(decision_date, previous_value, value))
+        previous_value = value
+
+    async with async_session() as session:
+        for event in events:
+            await _upsert_event(session, event)
+        await session.commit()
+
+    return events
+
+
+# KOSPI200 선물·옵션 만기 - 정규 선물은 분기월(3·6·9·12월)에만 있고, 옵션은 매달 있다(46번
+# 사전조사에서 실제 월물 목록으로 확인). 그래서 분기월은 "선물·옵션 동시만기", 나머지 8개월은
+# "KOSPI200 옵션 만기"로 나눠서 만든다. 미니 KOSPI200 선물(MKI)은 이번 구현 대상이 아니다.
+_FUTOPT_QUARTERLY_MONTHS = (3, 6, 9, 12)
+
+_KOSPI200_CONCURRENT_EXPIRY_SUMMARY = (
+    "이 날은 KOSPI200 선물과 옵션의 만기가 함께 돌아오는 '선물·옵션 동시만기일'입니다. 만기를 "
+    "앞두고 청산되는 차익거래 물량이 몰리면서 장 막판 변동성이 커질 수 있어 주의가 필요합니다."
+)
+
+_KOSPI200_OPTION_EXPIRY_SUMMARY = (
+    "이 날은 KOSPI200 옵션의 만기일입니다. 옵션 포지션을 정리하려는 수요가 몰리면서 장중 "
+    "(특히 장 막판) 변동성이 커질 수 있어요."
+)
+
+
+def _kospi200_expiry_event(expiry_date: str, *, concurrent: bool, today_kst: str) -> CalendarEvent:
+    date_no_dash = expiry_date.replace("-", "")
+    if concurrent:
+        event_id = f"kis-futures-options-expiry-{date_no_dash}"
+        title = "선물·옵션 동시만기"
+        summary = _KOSPI200_CONCURRENT_EXPIRY_SUMMARY
+    else:
+        event_id = f"kis-option-expiry-{date_no_dash}"
+        title = "KOSPI200 옵션 만기"
+        summary = _KOSPI200_OPTION_EXPIRY_SUMMARY
+
+    return CalendarEvent(
+        id=event_id,
+        publishedAt=expiry_date,
+        time=None,
+        region="한국",
+        category="optionExpiry",
+        title=title,
+        summary=summary,
+        previous=None,
+        forecast=None,
+        actual=None,
+        status="SCHEDULED" if expiry_date >= today_kst else "RELEASED",
+    )
+
+
+# KIS에서 조회되는 옵션 월물(get_option_month_list)을 기준으로 만기 이벤트를 만든다.
+# - 분기월(3·6·9·12): 정규 선물 전광판(get_futures_board(""))에서 같은 월물의
+#   futs_last_tr_date를 그대로 쓴다(옵션도 같은 날 만기이므로 별도로 옵션 시세를 조회하지
+#   않는다 - 46번 사전조사에서 두 값이 항상 같다는 것을 실제로 확인함) -> "선물·옵션 동시만기"
+# - 그 외 8개월: 정규 선물이 없으므로 콜풋 전광판(get_option_callput_board)에서 옵션 종목코드
+#   하나를 찾아 get_price("O", ...)로 futs_last_tr_date를 직접 조회한다 -> "KOSPI200 옵션 만기"
+# 콜/풋 개별 행을 각각 이벤트로 만들지 않는다 - 월물당 대표 이벤트 1건.
+async def ingest_kospi200_expiry() -> list[CalendarEvent]:
+    today_kst = datetime.now(_KST).strftime("%Y-%m-%d")
+
+    quarterly_expiry: dict[str, str] = {}
+    for row in kis_client.get_futures_board(""):
+        yymm = row["hts_kor_isnm"].split()[-1]
+        price = kis_client.get_price("F", row["futs_shrn_iscd"])
+        raw_date = price.get("futs_last_tr_date")
+        if raw_date:
+            quarterly_expiry[yymm] = f"{raw_date[0:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
+
+    events: list[CalendarEvent] = []
+    for item in kis_client.get_option_month_list():
+        yymm = item["mtrt_yymm"]
+        month = int(yymm[4:6])
+
+        if month in _FUTOPT_QUARTERLY_MONTHS:
+            expiry_date = quarterly_expiry.get(yymm)
+            if expiry_date is None:
+                # 해당 분기월 정규 선물이 아직 전광판에 없음 - 임의 날짜를 만들지 않고 건너뜀
+                continue
+            events.append(_kospi200_expiry_event(expiry_date, concurrent=True, today_kst=today_kst))
+        else:
+            callput = kis_client.get_option_callput_board(yymm)
+            if not callput:
+                continue
+            price = kis_client.get_price("O", callput[0]["optn_shrn_iscd"])
+            raw_date = price.get("futs_last_tr_date")
+            if not raw_date:
+                continue
+            expiry_date = f"{raw_date[0:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
+            events.append(_kospi200_expiry_event(expiry_date, concurrent=False, today_kst=today_kst))
 
     async with async_session() as session:
         for event in events:
@@ -605,7 +780,7 @@ def _dividend_event_from_kis(record: dict, today_kst: str) -> CalendarEvent | No
         title=title,
         summary=" ".join(summary_parts),
         previous=None,
-        actual=per_sto_divi_amt,
+        actual=f"{per_sto_divi_amt}원" if per_sto_divi_amt else None,
         status="SCHEDULED" if published_at >= today_kst else "RELEASED",
     )
 
@@ -767,7 +942,7 @@ def _ipo_event_from_kis(record: dict, today_kst: str) -> CalendarEvent | None:
         title=title,
         summary=" ".join(summary_parts),
         previous=None,
-        actual=fix_subscr_pri,
+        actual=f"{fix_subscr_pri}원" if fix_subscr_pri else None,
         status="SCHEDULED" if published_at >= today_kst else "RELEASED",
     )
 

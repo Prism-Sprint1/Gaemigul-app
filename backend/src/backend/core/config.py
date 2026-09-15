@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     # DART(전자공시시스템) Open API - calendar 도메인에서 기업 실적 발표일 조사용(테스트 단계)
     dart_api_key: str | None = None
 
+    # 한국은행 ECOS(경제통계시스템) Open API - calendar 도메인에서 한국 기준금리 조사용(테스트 단계)
+    # 인증키가 없으면 "sample"로도 호출 가능하지만 sample은 조회건수가 최대 10건으로 제한된다
+    # (ecos.bok.or.kr에서 발급받은 정식 키가 있으면 .env에 넣을 것)
+    ecos_api_key: str | None = None
+
 
 # 설정값을 한 번만 읽어서 재사용 (설정값은 항상 이 함수로 가져올 것)
 @lru_cache
