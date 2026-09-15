@@ -3,6 +3,8 @@ import localFont from "next/font/local"
 // import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 
+import { Footer, Header, Sidebar } from "@/components/common"
+
 const pretendard = localFont({
   src: "../public/fonts/pretendard/PretendardVariable.woff2",
   display: "swap",
