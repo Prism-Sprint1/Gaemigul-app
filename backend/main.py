@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import get_settings
 from backend.core.logging_config import setup_logging
+from backend.domain.calendar.routers.calendar import router as calendar_router
 from backend.domain.timeline.routers.timeline import router as timeline_router
 from backend.domain.timeline.services import market_indicator_service, timeline_service
 
@@ -95,3 +96,4 @@ def read_root():
 
 # 라우터 등록 - 도메인을 추가하면 여기에 include_router를 추가한다
 app.include_router(timeline_router)
+app.include_router(calendar_router)

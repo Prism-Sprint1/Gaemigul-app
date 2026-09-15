@@ -393,3 +393,146 @@ def get_kospi_master() -> bytes:
     response = _send_with_retry(_KOSPI_MASTER_URL)
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         return archive.read(_KOSPI_MASTER_FILE)
+
+
+# calendar 일정
+# 1. 국내휴장일조회, 2.국내주식 종목추정실적, 3.배당일정, 4.주주총회일정, 5.합병/분할일정, 6.공모주청약일정
+
+_KSD_DIVIDEND_ENDPOINT = "/uapi/domestic-stock/v1/ksdinfo/dividend"
+_KSD_DIVIDEND_TR_ID = "HHKDB669102C0"
+
+
+# 예탁원정보(배당일정) 조회. sht_cd를 주면 그 종목만, 비워두면 전체(페이지당 최대 100건, 연속조회
+# 미구현이라 전체조회 시 일부만 옴 - 종목코드를 지정해서 쓰는 걸 권장)
+# gb1: "0"=배당전체(기본값), "1"=결산배당, "2"=중간배당
+def get_dividend_schedule(f_dt: str, t_dt: str, *, sht_cd: str = "", gb1: str = "0") -> list[dict]:
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.kis_base_url}{_KSD_DIVIDEND_ENDPOINT}",
+        headers={
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {get_access_token()}",
+            "appkey": settings.kis_app_key,
+            "appsecret": settings.kis_app_secret,
+            "tr_id": _KSD_DIVIDEND_TR_ID,
+            "custtype": "P",
+        },
+        params={
+            "CTS": "",
+            "GB1": gb1,
+            "F_DT": f_dt,
+            "T_DT": t_dt,
+            "SHT_CD": sht_cd,
+            "HIGH_GB": "",
+        },
+    )
+    response.raise_for_status()
+    body = response.json()
+    return body.get("output1") or []
+
+
+_KSD_PUB_OFFER_ENDPOINT = "/uapi/domestic-stock/v1/ksdinfo/pub-offer"
+_KSD_PUB_OFFER_TR_ID = "HHKDB669108C0"
+
+
+# 예탁원정보(공모주청약일정, IPO) 조회. sht_cd를 비워두면 전체 시장(1년치가 100건 미만이라
+# 페이지 제한에 안 걸림 - 실제 라이브 호출로 확인함)
+def get_ipo_schedule(f_dt: str, t_dt: str, *, sht_cd: str = "") -> list[dict]:
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.kis_base_url}{_KSD_PUB_OFFER_ENDPOINT}",
+        headers={
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {get_access_token()}",
+            "appkey": settings.kis_app_key,
+            "appsecret": settings.kis_app_secret,
+            "tr_id": _KSD_PUB_OFFER_TR_ID,
+            "custtype": "P",
+        },
+        params={"SHT_CD": sht_cd, "CTS": "", "F_DT": f_dt, "T_DT": t_dt},
+    )
+    response.raise_for_status()
+    body = response.json()
+    return body.get("output1") or []
+
+
+_KSD_PAIDIN_CAPIN_ENDPOINT = "/uapi/domestic-stock/v1/ksdinfo/paidin-capin"
+_KSD_PAIDIN_CAPIN_TR_ID = "HHKDB669100C0"
+
+
+# 예탁원정보(유상증자일정) 조회. gb1: "1"=청약일별(기본값), "2"=기준일별.
+# sht_cd 비워두면 전체 시장(1년치가 100건 미만이라 페이지 제한에 안 걸림)
+def get_paidin_capital_increase_schedule(
+    f_dt: str, t_dt: str, *, sht_cd: str = "", gb1: str = "1"
+) -> list[dict]:
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.kis_base_url}{_KSD_PAIDIN_CAPIN_ENDPOINT}",
+        headers={
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {get_access_token()}",
+            "appkey": settings.kis_app_key,
+            "appsecret": settings.kis_app_secret,
+            "tr_id": _KSD_PAIDIN_CAPIN_TR_ID,
+            "custtype": "P",
+        },
+        params={"CTS": "", "GB1": gb1, "F_DT": f_dt, "T_DT": t_dt, "SHT_CD": sht_cd},
+    )
+    response.raise_for_status()
+    body = response.json()
+    return body.get("output1") or []
+
+
+_KSD_BONUS_ISSUE_ENDPOINT = "/uapi/domestic-stock/v1/ksdinfo/bonus-issue"
+_KSD_BONUS_ISSUE_TR_ID = "HHKDB669101C0"
+
+
+# 예탁원정보(무상증자일정) 조회. 전체 시장 조회 시 1년치가 100건에 걸릴 수 있어(실제 확인함)
+# sht_cd로 종목을 지정해서 쓰는 걸 권장
+def get_bonus_issue_schedule(f_dt: str, t_dt: str, *, sht_cd: str = "") -> list[dict]:
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.kis_base_url}{_KSD_BONUS_ISSUE_ENDPOINT}",
+        headers={
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {get_access_token()}",
+            "appkey": settings.kis_app_key,
+            "appsecret": settings.kis_app_secret,
+            "tr_id": _KSD_BONUS_ISSUE_TR_ID,
+            "custtype": "P",
+        },
+        params={"CTS": "", "F_DT": f_dt, "T_DT": t_dt, "SHT_CD": sht_cd},
+    )
+    response.raise_for_status()
+    body = response.json()
+    return body.get("output1") or []
+
+
+_KSD_MERGER_SPLIT_ENDPOINT = "/uapi/domestic-stock/v1/ksdinfo/merger-split"
+_KSD_MERGER_SPLIT_TR_ID = "HHKDB669104C0"
+
+
+# 예탁원정보(합병_분할일정) 조회. sht_cd를 비워두면 전체 시장 대상(1년치가 30건 안팎이라
+# 배당일정과 달리 페이지 제한에 안 걸림 - 실제 라이브 호출로 확인함)
+def get_merger_split_schedule(f_dt: str, t_dt: str, *, sht_cd: str = "") -> list[dict]:
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.kis_base_url}{_KSD_MERGER_SPLIT_ENDPOINT}",
+        headers={
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {get_access_token()}",
+            "appkey": settings.kis_app_key,
+            "appsecret": settings.kis_app_secret,
+            "tr_id": _KSD_MERGER_SPLIT_TR_ID,
+            "custtype": "P",
+        },
+        params={
+            "CTS": "",
+            "F_DT": f_dt,
+            "T_DT": t_dt,
+            "SHT_CD": sht_cd,
+        },
+    )
+    response.raise_for_status()
+    body = response.json()
+    return body.get("output1") or []

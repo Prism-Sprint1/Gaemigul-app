@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     cloudflare_account_id: str | None = None
     cloudflare_api_token: str | None = None
 
+    # FRED(미국 연준 경제 데이터) API - calendar 도메인에서 사용
+    fred_api_key: str | None = None
+
+    # DART(전자공시시스템) Open API - calendar 도메인에서 기업 실적 발표일 조사용(테스트 단계)
+    dart_api_key: str | None = None
+
     # Supabase Storage 파일 업로드 (timeline 보고서 이미지). URL은 "https://프로젝트ID.supabase.co"
     # 서비스 키는 DB 전체 권한이라 서버에서만 쓴다 (프런트·깃에 넣지 말 것)
     supabase_url: str | None = None
