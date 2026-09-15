@@ -36,6 +36,7 @@ export default function PageTitle({ title, description }: PageTitleType) {
               <TabsTrigger
                 value="timeline"
                 render={<Link href={TIMELINE_PATH} />}
+                nativeButton={false}
                 className="rounded-full px-4 py-1.5 text-neutral-500 data-active:bg-point data-active:text-white data-active:shadow-none"
               >
                 시황
@@ -43,6 +44,7 @@ export default function PageTitle({ title, description }: PageTitleType) {
               <TabsTrigger
                 value="briefing"
                 render={<Link href={BRIEFING_PATH} />}
+                nativeButton={false}
                 className="rounded-full px-4 py-1.5 text-neutral-500 data-active:bg-point data-active:text-white data-active:shadow-none"
               >
                 브리핑
