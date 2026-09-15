@@ -37,7 +37,7 @@ export function FilterBar({
   onToggleCategory: (c: Category) => void
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl lg:sticky lg:top-0 lg:z-10 lg:-mx-5 lg:bg-card lg:px-5 lg:pt-0 lg:pb-3">
+    <div className="flex flex-col gap-3 rounded-2xl lg:sticky lg:top-18.75 lg:z-10 lg:-mx-5 lg:bg-card lg:px-5 lg:pt-4 lg:pb-3">
       <div className="flex flex-nowrap items-center gap-1">
         <div className="flex flex-1 gap-1 rounded-lg bg-muted p-1 text-xs lg:flex-none lg:shrink-0">
           <button
@@ -106,7 +106,9 @@ export function FilterBar({
               categorySet.size > 0 && !categorySet.has(c) && "opacity-40"
             )}
           >
-            <span className={cn("size-1.5 shrink-0 rounded-full", CAT[c].dot)} />
+            <span
+              className={cn("size-1.5 shrink-0 rounded-full", CAT[c].dot)}
+            />
             {CAT[c].label}
           </button>
         ))}

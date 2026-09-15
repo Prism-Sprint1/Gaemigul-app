@@ -7,7 +7,6 @@ import {
 } from "@/components/briefing"
 import { PageTitle } from "@/components/common"
 import { briefingContent } from "@/lib/constant/briefingContent"
-import ReportSidebar from "@/components/home/reportSidebar/ReportSidebar"
 
 export default function BriefingPage() {
   const reportSectionItems = briefingContent.article.map((article) => ({

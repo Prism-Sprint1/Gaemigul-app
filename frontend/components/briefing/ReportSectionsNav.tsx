@@ -24,7 +24,7 @@ export default function ReportSectionsNav({
 
   return (
     <aside className="hidden w-56 shrink-0 lg:block">
-      <div className="sticky top-6 flex flex-col gap-3 rounded-xl bg-white p-4">
+      <div className="sticky top-23.75 flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm">
         <p className="text-xs font-bold tracking-wide text-point">
           REPORT SECTIONS
         </p>

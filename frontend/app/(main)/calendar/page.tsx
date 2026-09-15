@@ -85,7 +85,7 @@ export default function CalendarPage() {
 
   return (
     <div className="flex min-h-svh justify-center bg-background p-3 sm:p-4 lg:p-6">
-      <div className="flex w-full max-w-7xl min-w-0 flex-col gap-3">
+      <div className="flex w-full flex-col gap-3">
         {/* 로고 바로 아래, 페이지 맨 위에 고정되는 타이틀 */}
         <PageTitle
           title="주요 경제 지표와 이벤트 일정"
@@ -150,7 +150,7 @@ export default function CalendarPage() {
           </main>
 
           {/* 오른쪽: 미니 달력 + AI 요약 — 앱(360) 사이즈에서는 페이지 최상단에 세로로 노출, 웹에서는 스크롤해도 따라오도록 sticky */}
-          <aside className="flex w-full shrink-0 flex-col gap-3 lg:sticky lg:top-3 lg:w-72 lg:self-start">
+          <aside className="flex w-full shrink-0 flex-col gap-3 lg:sticky lg:top-23.75 lg:w-72 lg:self-start">
             <MiniCalendar
               month={month}
               today={today}
