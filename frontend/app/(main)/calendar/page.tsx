@@ -1,14 +1,22 @@
 "use client"
 
 import "flag-icons/css/flag-icons.min.css"
-import { isSameMonth, startOfMonth } from "date-fns"
-import { useMemo, useState } from "react"
+import {
+  addDays,
+  addMonths,
+  endOfDay,
+  isSameMonth,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { PageTitle } from "@/components/common"
 import { AiSummaryCard } from "@/components/calendar/ai-summary-card"
 import { FilterBar } from "@/components/calendar/filter-bar"
 import { MiniCalendar } from "@/components/calendar/mini-calendar"
 import { MonthGrid } from "@/components/calendar/month-grid"
 import { WeekList } from "@/components/calendar/week-list"
+import { getCalendarEvents } from "@/lib/api/calendar"
 import {
   toggleCategory,
   type GroupFilter,
@@ -19,9 +27,11 @@ import {
   CATEGORY_GROUPS,
   CATS,
   MARKET_HOLIDAYS,
-  NEWS,
+  dedupeNewsItems,
   scopeOf,
+  toNewsItem,
   type Category,
+  type NewsItem,
 } from "./news-data"
 import { DayDetailDialog, dayGroupOf, type DayGroup } from "./news-panel"
 
@@ -40,15 +50,49 @@ export default function CalendarPage() {
     group: DayGroup
     itemId: string
   } | null>(null)
+  // 현재 달 그리드에 걸치는 이전/다음 달 여분 날짜까지 포함한 전체(비필터) 일정
+  const [allNews, setAllNews] = useState<NewsItem[]>([])
+
+  // 월간 그리드는 앞뒤 달의 여분 날짜도 보여주므로 이전/현재/다음 달을 함께 조회
+  const fetchNews = useCallback(async (anchor: Date) => {
+    try {
+      const months = [addMonths(anchor, -1), anchor, addMonths(anchor, 1)]
+      const results = await Promise.all(
+        months.map((m) => getCalendarEvents(m.getFullYear(), m.getMonth() + 1))
+      )
+      const items = results
+        .flat()
+        .map(toNewsItem)
+        .filter((n): n is NewsItem => n !== null)
+      setAllNews(dedupeNewsItems(items))
+    } catch (error) {
+      console.error("[getCalendarEvents] 실패", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchNews(month)
+  }, [fetchNews, month])
 
   const selectGroup = (g: GroupFilter) => {
     setGroupFilter(g)
     setCategorySet(new Set())
   }
 
-  // 현재 탭에서 고를 수 있는 서브 카테고리 — '전체'면 전체 6종
+  // 현재 탭에서 고를 수 있는 서브 카테고리 — '전체'면 전체 5종
   const subCategories =
     groupFilter === "all" ? CATS : CATEGORY_GROUPS[groupFilter].categories
+
+  // 서브 카테고리 토글 — '전체' 상태(빈 집합)에서 하나를 누르면 그 하나만 선택되고,
+  // 개별 항목을 전부 선택하면 자동으로 다시 '전체' 상태(빈 집합)로 접힌다.
+  const toggleSubCategory = (c: Category) => {
+    setCategorySet((s) => {
+      const next = toggleCategory(s, c)
+      return next.size === subCategories.length ? new Set() : next
+    })
+  }
+
+  const selectAllCategories = () => setCategorySet(new Set())
 
   const selectDate = (d: Date) => {
     setSelectedDate(d)
@@ -56,23 +100,29 @@ export default function CalendarPage() {
   }
 
   const openDay = (d: Date) => {
-    const g = dayGroupOf(d)
+    const g = dayGroupOf(d, allNews)
     if (g) setPopup({ group: g, itemId: g.list[0].id })
   }
 
   const openItem = (g: DayGroup, itemId: string) =>
     setPopup({ group: g, itemId })
 
+  // AI 요약 카드에서 항목 클릭 시 — 요약이 카드 안에서 다 안 보이니 상세 팝업으로 전체 내용을 보여준다
+  const openWeekSummaryItem = (n: NewsItem) => {
+    const g = dayGroupOf(n.publishedAt, allNews)
+    if (g) setPopup({ group: g, itemId: n.id })
+  }
+
   const filteredNews = useMemo(
     () =>
-      NEWS.filter(
+      allNews.filter(
         (n) =>
           (groupFilter === "all" ||
             CATEGORY_GROUPS[groupFilter].categories.includes(n.category)) &&
           (categorySet.size === 0 || categorySet.has(n.category)) &&
           (regionFilter === "all" || scopeOf(n.region) === regionFilter)
       ),
-    [groupFilter, categorySet, regionFilter]
+    [allNews, groupFilter, categorySet, regionFilter]
   )
 
   const filteredHolidays = useMemo(
@@ -82,6 +132,19 @@ export default function CalendarPage() {
       ),
     [regionFilter]
   )
+
+  // AI 요약 카드용 — 선택한 날짜가 속한 주(월~토)의 실제 일정만 모음(필터와 무관하게 항상 전체 기준)
+  const weekStartMs = useMemo(
+    () => +startOfWeek(selectedDate, { weekStartsOn: 1 }),
+    [selectedDate]
+  )
+  const weekNews = useMemo(() => {
+    const weekStart = new Date(weekStartMs)
+    const weekEnd = endOfDay(addDays(weekStart, 5))
+    return allNews
+      .filter((n) => n.publishedAt >= weekStart && n.publishedAt <= weekEnd)
+      .sort((a, b) => a.publishedAt.getTime() - b.publishedAt.getTime())
+  }, [allNews, weekStartMs])
 
   return (
     <div className="flex min-h-svh justify-center bg-background p-3 sm:p-4 lg:p-6">
@@ -95,20 +158,22 @@ export default function CalendarPage() {
         <div className="flex min-w-0 flex-col-reverse gap-3 lg:flex-row">
           {/* 왼쪽: 필터 + 월간/주간 뷰 */}
           <main className="flex min-w-0 flex-1 flex-col gap-3 rounded-xl border bg-card px-3 py-4 shadow-sm sm:pb-5 lg:px-5">
-            {/* 전체/경제지표/실적, 국내/해외, 주별/월별 + 서브 카테고리 필터 — 웹에서는 스크롤해도 상단에 붙어서 따라옴 */}
-            <FilterBar
-              groupFilter={groupFilter}
-              onSelectGroup={selectGroup}
-              regionFilter={regionFilter}
-              onSetRegionFilter={setRegionFilter}
-              viewMode={viewMode}
-              onSetViewMode={setViewMode}
-              subCategories={subCategories}
-              categorySet={categorySet}
-              onToggleCategory={(c) =>
-                setCategorySet((s) => toggleCategory(s, c))
-              }
-            />
+            {/* 필터 — 웹에서는 스크롤해도 상단에 붙어서 따라옴. 데스크톱에서는 탭/토글과 같은 줄 가운데에 현재 월도 같이 표시(주별·월별 공통) */}
+            <div className="rounded-2xl lg:sticky lg:top-18.75 lg:z-10 lg:-mx-5 lg:bg-card lg:px-5 lg:pt-4 lg:pb-3">
+              <FilterBar
+                groupFilter={groupFilter}
+                onSelectGroup={selectGroup}
+                regionFilter={regionFilter}
+                onSetRegionFilter={setRegionFilter}
+                viewMode={viewMode}
+                onSetViewMode={setViewMode}
+                subCategories={subCategories}
+                categorySet={categorySet}
+                onToggleCategory={toggleSubCategory}
+                onSelectAllCategories={selectAllCategories}
+                month={month}
+              />
+            </div>
 
             {/* 앱(모바일): 커다란 월간 캘린더 없이 주별 일정만 표시 */}
             <div className="lg:hidden">
@@ -116,8 +181,8 @@ export default function CalendarPage() {
                 month={month}
                 selectedDate={selectedDate}
                 news={filteredNews}
+                allNews={allNews}
                 holidays={filteredHolidays}
-                colorActive={categorySet.size > 0}
                 onOpenItem={openItem}
               />
             </div>
@@ -130,8 +195,8 @@ export default function CalendarPage() {
                   today={today}
                   selectedDate={selectedDate}
                   news={filteredNews}
+                  allNews={allNews}
                   holidays={filteredHolidays}
-                  colorActive={categorySet.size > 0}
                   onSelectDate={selectDate}
                   onOpenDay={openDay}
                   onOpenItem={openItem}
@@ -141,8 +206,8 @@ export default function CalendarPage() {
                   month={month}
                   selectedDate={selectedDate}
                   news={filteredNews}
+                  allNews={allNews}
                   holidays={filteredHolidays}
-                  colorActive={categorySet.size > 0}
                   onOpenItem={openItem}
                 />
               )}
@@ -163,7 +228,7 @@ export default function CalendarPage() {
                 setSelectedDate(today)
               }}
             />
-            <AiSummaryCard />
+            <AiSummaryCard items={weekNews} onOpenItem={openWeekSummaryItem} />
           </aside>
         </div>
       </div>

@@ -1,5 +1,7 @@
 "use client"
 
+import { format } from "date-fns"
+import { ko } from "date-fns/locale/ko"
 import { cn } from "@/lib/utils"
 import {
   CAT,
@@ -25,6 +27,8 @@ export function FilterBar({
   subCategories,
   categorySet,
   onToggleCategory,
+  onSelectAllCategories,
+  month,
 }: {
   groupFilter: GroupFilter
   onSelectGroup: (g: GroupFilter) => void
@@ -35,11 +39,15 @@ export function FilterBar({
   subCategories: Category[]
   categorySet: Set<Category>
   onToggleCategory: (c: Category) => void
+  /** 서브 카테고리 '전체' 클릭 — categorySet을 비운다(=전부 표시) */
+  onSelectAllCategories: () => void
+  /** 데스크톱에서 탭/토글과 같은 줄 가운데에 표시할 현재 월(주별·월별 뷰 공통) */
+  month: Date
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl lg:sticky lg:top-18.75 lg:z-10 lg:-mx-5 lg:bg-card lg:px-5 lg:pt-4 lg:pb-3">
-      <div className="flex flex-nowrap items-center gap-1">
-        <div className="flex flex-1 gap-1 rounded-lg bg-muted p-1 text-xs lg:flex-none lg:shrink-0">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-nowrap items-center gap-1 lg:grid lg:grid-cols-[auto_1fr_auto]">
+        <div className="flex flex-1 gap-1 rounded-lg bg-muted p-1 text-xs lg:col-start-1 lg:flex-none lg:shrink-0">
           <button
             type="button"
             onClick={() => onSelectGroup("all")}
@@ -59,8 +67,12 @@ export function FilterBar({
           ))}
         </div>
 
+        <div className="hidden text-center text-2xl font-bold tabular-nums lg:col-start-2 lg:block">
+          {format(month, "yyyy년 M월", { locale: ko })}
+        </div>
+
         {/* 국내/해외, 뷰 전환(주별/월별) — 앱(모바일)에서는 둘 다 숨김 */}
-        <div className="ml-auto hidden shrink-0 items-center gap-1 lg:flex">
+        <div className="hidden shrink-0 items-center gap-1 lg:col-start-3 lg:flex">
           <div className="flex gap-1 rounded-lg bg-muted p-1 text-xs">
             {(["domestic", "overseas"] as const).map((r) => (
               <button
@@ -91,8 +103,21 @@ export function FilterBar({
         </div>
       </div>
 
-      {/* 서브 카테고리 — 현재 탭(전체/경제지표/실적)에 속한 카테고리만 다중 선택 */}
+      {/* 서브 카테고리 — 현재 탭(전체/경제지표/실적)에 속한 카테고리만 다중 선택. 아무것도 안 골랐으면(=categorySet 빈 집합) '전체'만 활성으로 보여준다 */}
       <div className="flex flex-nowrap items-center gap-1">
+        <button
+          type="button"
+          onClick={onSelectAllCategories}
+          aria-pressed={categorySet.size === 0}
+          className={cn(
+            "flex shrink-0 cursor-pointer items-center rounded-full border bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap transition-all hover:bg-muted",
+            categorySet.size === 0
+              ? "border-primary/40 bg-primary/10 text-primary"
+              : "opacity-40"
+          )}
+        >
+          전체
+        </button>
         {subCategories.map((c) => (
           <button
             key={c}

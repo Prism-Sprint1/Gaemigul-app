@@ -12,9 +12,6 @@ export type NewsItem = {
   category: Category // 뉴스 분류 및 색상 스타일을 결정하는 카테고리
   region: string // 관련 국가, 지역 또는 기업명
   publishedAt: Date // 뉴스 발표 일시 및 캘린더에 표시할 날짜
-  highlight?: "special" // 있으면 '주요' 배지로 강조 표시
-  replay?: boolean // 실적발표 어닝콜 다시듣기 버튼(더미) 노출 여부
-  url?: string // 원문 기사로 이동할 때 사용하는 선택적 URL
   /** 팝업 상세에만 노출 — 있는 값만 표시 */
   detail?: {
     actual?: string // 실제값

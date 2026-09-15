@@ -1,9 +1,7 @@
 "use client"
 
-import { cn } from "@/lib/utils"
 import { addDays, endOfMonth, format, isSameDay, isSameMonth, startOfDay, startOfMonth } from "date-fns"
 import { ko } from "date-fns/locale/ko"
-import { Play } from "lucide-react"
 import { useMemo } from "react"
 import type { MarketHoliday, NewsItem } from "@/app/(main)/calendar/news-data"
 import { dayGroupOf, type DayGroup } from "@/app/(main)/calendar/news-panel"
@@ -17,15 +15,15 @@ export function WeekList({
   month,
   selectedDate,
   news,
+  allNews,
   holidays,
-  colorActive,
   onOpenItem,
 }: {
   month: Date
   selectedDate: Date
   news: NewsItem[]
+  allNews: NewsItem[]
   holidays: MarketHoliday[]
-  colorActive: boolean
   onOpenItem: (g: DayGroup, itemId: string) => void
 }) {
   // 이번 달을 보는 중이면 '오늘(선택일)'부터, 다른 달이면 1일부터 표시
@@ -89,7 +87,7 @@ export function WeekList({
                   <DayRows
                     key={+day.date}
                     day={day}
-                    colorActive={colorActive}
+                    allNews={allNews}
                     onOpenItem={onOpenItem}
                   />
                 ))}
@@ -104,17 +102,17 @@ export function WeekList({
 
 function DayRows({
   day,
-  colorActive,
+  allNews,
   onOpenItem,
 }: {
   day: DayEntry
-  colorActive: boolean
+  allNews: NewsItem[]
   onOpenItem: (g: DayGroup, itemId: string) => void
 }) {
   const dateLabel = format(day.date, "d일 (EEE)", { locale: ko })
 
   const openItem = (n: NewsItem) => {
-    const g = dayGroupOf(n.publishedAt)
+    const g = dayGroupOf(n.publishedAt, allNews)
     if (g) onOpenItem(g, n.id)
   }
 
@@ -139,7 +137,7 @@ function DayRows({
           {i === 0 && (
             <td
               rowSpan={day.news.length}
-              className="p-2 text-left text-[12px] font-medium whitespace-nowrap text-primary"
+              className={`p-2 text-left text-[12px] font-medium whitespace-nowrap text-primary${day.news.length > 1 ? " align-top" : ""}`}
             >
               {dateLabel}
             </td>
@@ -151,26 +149,9 @@ function DayRows({
               title={n.title}
               className="flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] transition-colors hover:bg-primary/5 hover:text-primary"
             >
-              <CategoryBar category={n.category} colorActive={colorActive} />
+              <CategoryBar category={n.category} />
               <RegionBadge region={n.region} />
-              <span
-                className={cn(
-                  "truncate",
-                  n.highlight === "special" && "font-semibold"
-                )}
-              >
-                {n.highlight === "special" && (
-                  <span className="mr-1 rounded bg-emerald-500/10 px-1 py-0.5 text-[10px] font-semibold text-emerald-600">
-                    주요
-                  </span>
-                )}
-                {n.title}
-              </span>
-              {n.replay && (
-                <span className="ml-1 inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  <Play className="size-2.5" /> 다시듣기
-                </span>
-              )}
+              <span className="truncate">{n.title}</span>
             </button>
           </td>
           <td className="p-2 text-left text-[12px] whitespace-nowrap text-muted-foreground">

@@ -37,7 +37,9 @@ export function groupByDay(items: NewsItem[]): DayGroup[] {
 
 /** 특정 날짜의 전체 일정(필터 무시) → 그룹. allNews는 캘린더가 들고 있는 전체(비필터) 목록. 없으면 null */
 export function dayGroupOf(d: Date, allNews: NewsItem[]): DayGroup | null {
-  return groupByDay(allNews.filter((n) => isSameDay(n.publishedAt, d)))[0] ?? null
+  return (
+    groupByDay(allNews.filter((n) => isSameDay(n.publishedAt, d)))[0] ?? null
+  )
 }
 
 /* ------------------------------------------------------------------ */
