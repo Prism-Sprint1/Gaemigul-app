@@ -9,7 +9,7 @@ export default function MainLayout({
   return (
     <>
       <Header />
-      <div className="flex">
+      <div className="flex" data-main-shell>
         <Sidebar />
         <main className="w-full px-12.5 py-10">{children}</main>
 
