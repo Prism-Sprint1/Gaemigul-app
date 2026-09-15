@@ -1,6 +1,6 @@
+import HeatmapPage from "@/components/heatmap/HeatmapPage"
+import "./heatmap.css"
 
-export default function page() {
-  return (
-    <div>hitmap</div>
-  )
+export default function Page() {
+  return <HeatmapPage />
 }

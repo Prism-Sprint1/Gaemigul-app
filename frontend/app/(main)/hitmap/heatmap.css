@@ -1,0 +1,61 @@
+/* 공통 레이아웃을 사용하는 히트맵 화면에만 반응형 배치를 적용한다. */
+[data-main-shell]:has([data-heatmap-page]) > main {
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  body:has([data-heatmap-page]) header > :not(:first-child) {
+    display: none;
+  }
+
+  body:has([data-heatmap-page]) header > a {
+    min-width: 0;
+    width: 100%;
+    padding: 12px 16px;
+  }
+
+  [data-main-shell]:has([data-heatmap-page]) {
+    display: block;
+  }
+
+  [data-main-shell]:has([data-heatmap-page]) > aside {
+    max-width: none;
+  }
+
+  [data-main-shell]:has([data-heatmap-page]) > aside > :not(nav) {
+    display: none;
+  }
+
+  [data-main-shell]:has([data-heatmap-page]) > aside nav ul {
+    flex-direction: row;
+    gap: 4px;
+  }
+
+  [data-main-shell]:has([data-heatmap-page]) > aside nav li {
+    flex: 1;
+    min-width: 0;
+  }
+
+  [data-main-shell]:has([data-heatmap-page]) > aside nav a {
+    justify-content: center;
+    padding-inline: 4px;
+  }
+
+  [data-main-shell]:has([data-heatmap-page]) > aside nav a > span {
+    font-size: 11px;
+    white-space: nowrap;
+    gap: 4px;
+  }
+
+  [data-main-shell]:has([data-heatmap-page]) > aside nav [data-slot="badge"] {
+    display: none;
+  }
+
+  [data-main-shell]:has([data-heatmap-page]) > main {
+    padding: 24px 16px;
+  }
+
+  [data-heatmap-page] {
+    margin-inline: 0;
+  }
+}
