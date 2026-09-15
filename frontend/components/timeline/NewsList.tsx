@@ -52,16 +52,16 @@ export default function NewsList({ news }: NewsListProps) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex w-full flex-col gap-3">
       <h3 className="text-base font-bold">주요 뉴스</h3>
 
-      <div className={cn("relative", isSlider && "group")}>
+      <div className={cn("relative w-full", isSlider && "group")}>
         <div
           ref={scrollRef}
           onScroll={isSlider ? updateScrollState : undefined}
           className={cn(
             isSlider
-              ? "flex snap-x snap-mandatory scrollbar-none gap-3 overflow-x-auto scroll-smooth pb-1"
+              ? "flex w-full snap-x snap-mandatory scrollbar-none gap-3 overflow-x-auto scroll-smooth pb-1"
               : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
           )}
         >
@@ -74,7 +74,7 @@ export default function NewsList({ news }: NewsListProps) {
               data-news-card
               className={cn(
                 "flex flex-col justify-between gap-3 rounded-lg border border-neutral-200 bg-white p-4 transition-shadow duration-200 hover:shadow-md",
-                isSlider && "w-64 shrink-0 snap-start sm:w-72"
+                isSlider && "w-56 shrink-0 snap-start"
               )}
             >
               <p className="line-clamp-4 text-xs leading-relaxed text-neutral-700">

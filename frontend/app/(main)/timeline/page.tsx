@@ -7,6 +7,7 @@ import { PageTitle } from "@/components/common"
 import { useTimelineSchedule } from "@/components/common/timeline"
 import { TimelineDateHeader, TimelineSection } from "@/components/timeline"
 import { timelineContents } from "@/lib/constant/timelineContent"
+import ReportSidebar from "@/components/home/reportSidebar/ReportSidebar"
 
 // 백엔드 연동 전이라 DB에 데이터가 있는 날짜는 오늘 하루뿐이다.
 // 추후 연동 시 실제로 데이터가 존재하는 날짜 목록으로 교체한다.
@@ -20,7 +21,7 @@ export default function TimelinePage() {
   const isViewingToday = isSameDay(selectedDate, TODAY)
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
+    <div className="flex w-full flex-col gap-6 px-6 py-4">
       <PageTitle
         title="개미들을 위한 실시간 시장 신호"
         description="시장의 급박한 변화와 핵심 뉴스 요약을 페로몬 흔적처럼 빠르게 따라갑니다."
@@ -32,7 +33,7 @@ export default function TimelinePage() {
         onSelect={setSelectedDate}
       />
 
-      <div className="flex flex-col gap-15">
+      <div className="flex w-full flex-col gap-15">
         {items.map((item) => {
           const content = timelineContents.find(
             (timelineContent) => timelineContent.id === item.id

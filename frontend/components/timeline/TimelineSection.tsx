@@ -27,11 +27,11 @@ export default function TimelineSection({
     forceOpen || item.status === "past" || item.status === "current"
 
   return (
-    <section id={item.id} className="flex scroll-mt-6 flex-col gap-5">
+    <section id={item.id} className="flex w-full scroll-mt-6 flex-col gap-5">
       <TimelineSectionHeader title={item.title} time={item.time} />
 
       {isOpen ? (
-        <div className="flex flex-col gap-10 rounded-none border-b border-line-bg bg-neutral-50 p-5">
+        <div className="flex w-full flex-col gap-10 rounded-none border-b border-line-bg bg-neutral-50 p-5">
           {content.marketStats && (
             <MarketStatGrid groups={content.marketStats} />
           )}
