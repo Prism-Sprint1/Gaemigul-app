@@ -1615,3 +1615,200 @@ end_date)` 신규. 기존 `_upsert_event()`(id 충돌 시 UPDATE)를 그대로 �
 - `_dart_quarter_period()`의 "1/4/7/10월에만 1차 공시" 가정이 12월 결산이 아닌 회사에도
   성립하는지 확인 필요(확장 시)
 - `news-data.ts`에는 아직 반영 안 함
+
+## 39. `back/dev` 통합 — calendar 도메인을 팀 공용 dev 브랜치에 병합
+
+지금까지 `back/feat/calendar` 브랜치 위에서만 진행하던 FRED/KIS/FOMC/DART 작업을, 팀이 같이
+쓰는 `back/dev` 브랜치로 병합해서 push했다. `back/dev`에는 그동안 다른 팀원이 만든
+timeline(지표 바·슬롯 수집·보고서)·briefing 도메인이 이미 들어있었고, **calendar 도메인
+자체가 `back/dev`에는 아직 한 번도 합쳐진 적이 없었다** - 그래서 이번 병합은 단순 업데이트가
+아니라 calendar 도메인 전체(backend+frontend)를 `back/dev`에 처음 들여오는 작업이었다.
+
+### 절차
+
+1. 병합 전 `back/feat/calendar`에 남아있던 미커밋 프런트 변경(`calendar-view.tsx`,
+   `news-data.ts`)을 `git stash push -u`로 대피
+2. `git checkout -b back/dev origin/back/dev`로 로컬에 최신 `back/dev` 생성
+3. `git merge back/feat/calendar`로 병합 시도 - 4개 파일 충돌
+4. 각 충돌을 "한쪽만 채택"이 아니라 **양쪽이 각자 추가한 내용을 전부 살리는 방식**으로 해결
+   (아래 상세)
+5. 병합 커밋 생성 - 스모크 테스트로 실제로 서버가 뜨는지 확인 (아래 상세)
+6. `origin/back/dev`에 push (`392944f..96c2341`)
+7. `back/feat/calendar`로 복귀, 1번에서 대피한 변경사항 `git stash pop`으로 복원
+
+### 충돌 해결 내용
+
+- **`backend/src/backend/core/config.py`**: `back/dev` 쪽이 그새 `naver_api_key_id`/
+  `naver_api_key`/`gemini_api_key`/`cloudflare_account_id`/`cloudflare_api_token`/
+  `supabase_url`/`supabase_service_key`를 추가했고, `kis_app_key`/`kis_app_secret`도
+  필수(`str`)에서 선택(`str | None = None`)으로 바뀌어 있었다. 여기에 `back/feat/calendar`의
+  `fred_api_key`/`dart_api_key`를 추가하는 방식으로 합쳤다 - 두 브랜치가 서로 다른 필드를
+  추가한 것이라 실제 내용 충돌은 없었고, 텍스트 위치만 겹친 것이었다
+- **`backend/.env.example`**: 위와 같은 이유로 같은 방식으로 병합(`NAVER_*`/`GEMINI_API_KEY`
+  뒤에 `DART_API_KEY` 추가)
+- **`backend/main.py`**: `back/dev` 쪽이 로그 설정(`setup_logging`)·스케줄러를
+  `BackgroundScheduler`에서 `AsyncIOScheduler` + 슬롯 수집 8개로 크게 확장해뒀었다. import문만
+  충돌났고(`calendar_router` import 위치), 실제 `app.include_router(calendar_router)` 호출부는
+  이미 자동 병합되어 있었다 - import문에 `calendar_router`를 추가하는 것으로 해결
+- **`backend/src/backend/core/kis_client.py`**: 가장 큰 충돌. `back/dev` 쪽이 그새
+  업종지수·등락률/거래량 순위·국내휴장일·예상체결순위·투자자매매동향·지수/종목 기간별 시세·
+  코스피 마스터파일까지 10개 함수를 새로 추가했고, `back/feat/calendar` 쪽은 이번 세션에서
+  만든 배당/합병분할/IPO/유상증자/무상증자 5개 KSD 함수를 추가했다 - 서로 다른 함수를 파일
+  끝에 이어붙인 것뿐이라 두 블록을 순서대로 이어 붙이는 것으로 해결(내용 손실 없음)
+
+### 병합 후 추가로 발견해서 고친 문제
+
+병합 자체는 충돌 없이 끝났지만, `back/dev`의 `core/database.py`가 그새
+`async_session()`(컨텍스트매니저 함수)을 없애고 `get_session_factory()`(세션메이커를 반환,
+호출부에서 `get_session_factory()() as session`으로 열어 써야 함) 구조로 바뀌어 있었다.
+`services/calendar.py`는 이 변경 이전 구조를 그대로 쓰고 있어서, 병합 직후
+`python -c "import main"`으로 실제 import를 시도해보고서야 `ImportError: cannot import name
+'async_session'`를 발견했다. `services/calendar.py`의 `async_session()` 호출 9곳을 전부
+`get_session_factory()()`로 바꾸고 import문도 수정해서 해결 - 병합 자체는 텍스트 충돌이
+없었지만 이런 "충돌 없이 조용히 깨지는" 문제가 있을 수 있다는 걸 보여주는 사례라 남겨둔다.
+
+### 검증
+
+- 4개 충돌 파일 + 후속 수정 파일 전부 `ast.parse()`로 문법 확인
+- `uv run python -c "import main"` - 에러 없이 성공(1차 시도는 위 문제로 실패, 수정 후 재확인)
+- `uv run uvicorn main:app`으로 실제 기동 - 스케줄러 작업 9개(`indicator_bar` +
+  `slot_0730~2000`) 정상 등록, "Application startup complete" 확인
+- `GET /calendar/events?year=2026&month=9` - 13건 정상 응답(macro 카테고리, FRED+FOMC 섞여
+  있음)
+- `GET /timeline/indicators` - 200 정상 응답(calendar 도메인 추가가 기존 timeline 도메인에
+  영향 없음을 확인)
+- `GET /` - 정상 응답
+
+### 결과
+
+- `back/dev`가 `392944f` → `96c2341`(병합 커밋)로 갱신, origin에 push 완료
+- `back/feat/calendar`의 FRED(58)/KIS(85)/FOMC(17)/DART(7) = 167건 calendar 데이터와 관련
+  코드 전체가 `back/dev`에 처음으로 합류
+- `back/feat/calendar` 브랜치 자체는 그대로 유지(삭제하지 않음), 로컬 미커밋 프런트 변경사항도
+  stash pop으로 복원해서 작업 전 상태 그대로 돌아옴
+
+### 남은 것
+
+- `services/calendar.py`의 KIS 함수들(배당/IPO 등)은 여전히 `get_settings()` +
+  수동 `httpx.get()` 방식이고, `back/dev`가 새로 도입한 `_checked_settings()`/`_headers()`/
+  `_get_with_retry()` 공용 헬퍼 스타일로는 통일하지 않았다 - 지금은 정상 동작하지만, 다음에
+  `kis_client.py`를 다시 손볼 일이 있으면 일관성 있게 리팩터링할지 검토
+- `back/dev`에는 이제 `frontend/app/(main)/calendar/` 쪽 UI도 함께 들어갔지만, 이번 세션에서
+  작업한 FOMC/DART 실데이터는 아직 `news-data.ts`에 반영되지 않은 상태로 병합됨(반영은 별도
+  작업 필요)
+
+## 40. DART 실적 이벤트를 SK하이닉스·현대차로 확장
+
+38번 항목에서 삼성전자 1개 기업으로 구현한 DART 실적 이벤트 로직을 SK하이닉스·현대차까지
+확장했다. `get_preliminary_earnings()`/`get_key_accounts()`/`ingest_preliminary_earnings_from_dart()`
+는 처음부터 corp_code/stock_code/corp_name을 인자로 받는 일반 함수였어서(38번 항목에서 이미
+그렇게 설계함), 삼성전자 전용 코드를 복제할 필요는 없었다. 대신 새 기업으로 실제 라이브 데이터를
+확인하는 과정에서 **키워드 매칭 버그를 하나 발견해서 고쳤다.**
+
+### corp_code 확인 (추측 없이 실제 조회)
+
+`get_corp_codes()` + `find_corp_by_stock_code()`로 조회해서 확인:
+
+| 기업 | corp_code | stock_code |
+|---|---|---|
+| 삼성전자 | 00126380 | 005930 |
+| SK하이닉스 | 00164779 | 000660 |
+| 현대차(DART 등록명: 현대자동차) | 00164742 | 005380 |
+
+### 발견한 문제: `_PRELIMINARY_EARNINGS_KEYWORD`가 현대차의 월간 판매실적까지 잘못 잡음
+
+SK하이닉스는 삼성전자와 똑같이 "연결재무제표기준영업(잠정)실적(공정공시)"만 분기당 1건씩(2년간
+7건) 나와서 문제가 없었다. 그런데 **현대차는 이 분기 공시와 별개로 매달 "영업(잠정)실적(공정공시)"
+(접두사 "연결재무제표기준" 없음, 월간 판매실적으로 추정)를 따로 공시하고 있었다** - 기존 키워드
+`"영업(잠정)실적"`은 두 report_nm 모두에 포함된 부분문자열이라, 현대차만 조회하면 분기 실적
+7건이 아니라 21개월치 월간 공시까지 섞여서 **28건**이 걸리는 문제를 실제 라이브 호출로
+발견했다. 키워드를 `"연결재무제표기준영업(잠정)실적"`(접두사까지 포함)으로 좁혀서 해결 -
+수정 후 현대차도 정확히 분기당 1건씩 7건만 잡히는 것을 재확인했고, 삼성전자·SK하이닉스는
+이 변경으로 결과가 달라지지 않는 것도 재확인했다(`core/dart_client.py`).
+
+### 분기 판단 로직(`_dart_quarter_period`) 재검증
+
+3개 기업의 1차 잠정실적 rcept_dt를 전부 확인한 결과, 셋 다 예외 없이 1/4/7/10월에만 공시가
+나왔다 - 38번 항목에서 삼성전자로만 확인했던 "1/4/7/10월 가정"이 SK하이닉스·현대차에도
+그대로 성립하는 것을 확인했다(셋 다 12월 결산이라 성립하는 것으로 보이며, 결산월이 다른
+회사로 더 확장할 때는 재검증 필요 - 원래 남겨둔 다음 단계 항목 그대로 유효).
+
+### 기업별 발표 주기 차이
+
+SK하이닉스·현대차는 삼성전자와 달리 **분기당 1건만** 공시한다(삼성전자처럼 1차 가이던스 +
+2차 상세로 나뉘지 않음). 기존 `get_preliminary_earnings()`의 날짜 클러스터링 로직(45일 간격
+기준으로 그룹을 나누고 그룹의 첫 날짜를 채택)은 그룹에 1건만 있어도 그대로 동작해서 별도
+분기 처리가 필요 없었다.
+
+### 구현
+
+- **수정**: `core/dart_client.py` - `_PRELIMINARY_EARNINGS_KEYWORD` 좁힘, 관련 주석 갱신,
+  모듈 상단 주석에서 "삼성전자 테스트 단계" 표현을 "조회 전용, 저장은 services가 담당"으로 정리
+- **수정**: `scripts/test_dart_earnings.py` - 삼성전자 상수 3개를 `COMPANIES` 리스트(기업당
+  corp_code/corp_name/stock_code)로 교체하고 전체 로직을 기업별 반복으로 변경. 미리보기
+  단계에서 `calendar_service._dart_quarter_period()`를 재사용해 분기 라벨과 계정 수치까지
+  같이 출력하도록 보강(저장 전 검증 강화)
+- `services/calendar.py`는 변경 없음 - 애초에 기업 중립적으로 설계되어 있었다
+
+### 테스트 결과
+
+- 미리보기(DB 저장 없음)에서 3개 기업 각 7건씩 확인 - report_nm/발표일/분기라벨/매출액/영업이익/
+  당기순이익까지 전부 실제 값으로 출력해서 확인
+- 저장 실행: 삼성전자 7 + SK하이닉스 7 + 현대차 7 = **21건 upsert**
+- 재실행(중복 방지 확인): 동일하게 21건 - 삼성전자 7건은 이미 있던 id라 upsert로 덮어쓰기만
+  되고 새 행이 생기지 않았고, SK하이닉스·현대차 14건이 신규로 추가됨
+- Supabase 전체: 167 → **181건**(+14, 신규 2개 기업분만 순증)
+- 각 기업 실제 DART 수치(조원, CFS 기준) 일부:
+
+  | 기업 | 2025 Q1 매출 | 2025 Q1 영업이익 | 2025 Q1 당기순이익 |
+  |---|---|---|---|
+  | 삼성전자 | 79.1 | 6.7 | 8.2 |
+  | SK하이닉스 | 17.6 | 7.4 | 8.1 |
+  | 현대차 | 44.4 | 3.6 | 3.4 |
+
+- `GET /calendar/events`: 2026-01/04월, 2025-10월 각각 조회해서 세 기업의
+  `dart-earnings-{stock_code}-*` 이벤트가 해당 월에 정확히 1건씩(총 3건) 포함되는 것 확인,
+  `actual` 값도 위 표와 일치
+- 기존 데이터 영향 없음: 9월 조회 시 FOMC 2건·FRED 5건 그대로, CPI/PPI/FOMC 등 이번 확장과
+  무관한 데이터는 전혀 변경되지 않음
+
+### 발견된 문제점
+
+- 위에서 설명한 현대차 키워드 오탐(월간 판매실적 vs 분기 잠정실적) - 수정 완료
+- 그 외 새로 발생한 문제 없음(id 스킴이 `dart-earnings-{stock_code}-{rcept_dt}`라 기업 간
+  ID 충돌 가능성 자체가 없었음)
+
+### 다음 단계 — NVIDIA/Apple 연결을 위해 필요한 작업
+
+- DART는 한국 기업 전자공시 시스템이라 미국 기업(NVIDIA/Apple)에는 애초에 적용 불가 - 미국
+  기업은 SEC EDGAR(10-Q/10-K, 8-K 실적 발표) 등 별도 데이터 소스 조사 필요
+- 미국 기업의 "실적 발표일"은 정기보고서 접수일이 아니라 실적 발표(어닝콜) 날짜를 어떻게
+  구할지부터 확인 필요(EDGAR는 재무제표 원본은 주지만 "발표 일정"을 별도로 안 줄 수 있음 -
+  DART의 "1차 잠정실적 vs 정기보고서" 문제와 비슷한 구조가 있을 수 있어 미리 조사 필요)
+- 한국 기업을 더 늘릴 경우 12월 결산이 아닌 회사(일부 금융지주 등)가 있는지 확인하고
+  `_dart_quarter_period()`의 1/4/7/10월 가정이 깨지는지 재검증 필요
+- `news-data.ts`에는 아직 반영 안 함
+
+## 41. 프런트 `/calendar` 실데이터 재반영 — DART 실적 발표 21건 포함 181건
+
+40번 항목에서 확장한 SK하이닉스·현대차 실적 이벤트를 포함해 Supabase 전체 181건을
+`frontend/app/(main)/calendar/news-data.ts`에 다시 반영하고, 실제 화면에서 확인했다.
+19번·29번·35번 항목과 같은 방식(구조/타입/컴포넌트는 그대로, `NEWS` 배열 내용만 교체)이다.
+
+- Supabase에서 181건을 export → TypeScript 리터럴로 변환 → 기존 파일의 헤더(타입/유틸/CAT 등)
+  ·푸터(MARKET_HOLIDAYS 등)는 그대로 두고 `NEWS` 배열만 교체
+- 교체 전 파일 상태 점검 중 사소한 문제 발견: 이전 회차(35번 항목)에서 저장된 파일의 배열
+  마지막 항목과 닫는 대괄호가 한 줄에 붙어 있었다(`...} },]`) - 문법상 문제는 없지만(트레일링
+  콤마 허용) 다음에 또 이 패턴으로 파싱 스크립트를 짜면 헷갈릴 수 있어 이번 재작성 때 정상적인
+  줄바꿈으로 정리됨
+- `npx tsc --noEmit`으로 타입 에러 없음 확인
+- 백엔드(8080)/프런트(3000) 재기동 후 Playwright로 실제 `/calendar` 화면 확인. 오늘(2026-09-15)
+  기준 기본 화면은 9월이라 실적 이벤트가 안 보여서, "이전 달" 버튼을 5회 클릭해 2026년 4월로
+  이동한 뒤 캡처 - 4/7 "삼성전자 실적 발표", 4/23 "SK하이닉스 실적 발표"·"현대차 실적 발표"
+  카드가 정상적으로 함께 표시되는 것 확인(같은 화면에 FOMC 4/9·4/30, 배당·공모주 데이터도
+  그대로 섞여서 잘 보임)
+- 테스트 후 두 서버 모두 종료
+
+### Supabase 최종 상태
+
+전체 181건 (FRED 58 + KIS 85 + FOMC 17 + DART 21), 프런트 `news-data.ts`와 동기화 완료.
