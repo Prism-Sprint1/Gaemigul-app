@@ -31,9 +31,10 @@ _SLOT_KEYWORDS = {
     "20:00": ["증시 전망", "시황", "내일 증시", "코스피", "글로벌 증시"],
 }
 
-# 검색어 하나당 받아올 기사 수 (기본값 / 슬롯별 예외)
-_FETCH_PER_KEYWORD_DEFAULT = 30
-_FETCH_PER_KEYWORD = {"07:30": 50}
+# 검색어 하나당 받아올 기사 수 (기본값 / 슬롯별 예외). 네이버 API 최대값이 100이다
+# 호출 1번에 받는 건수라 늘려도 호출 수(한도 기준)는 그대로다. 30건일 때 오후 슬롯은 구간 안 후보가 3~4건뿐이었다(9/15 15:30)
+_FETCH_PER_KEYWORD_DEFAULT = 100
+_FETCH_PER_KEYWORD: dict[str, int] = {}
 
 # 슬롯별 뉴스 구간 시작. (시작 시각, 전날인지) - 끝은 그 슬롯 시각이다
 # 구간은 [시작, 끝)이라 슬롯끼리 겹치지도 비지도 않는다 (07:30 슬롯 = 전날 20:00 ~ 07:29)
@@ -49,8 +50,9 @@ _SLOT_WINDOW = {
     "20:00": ("17:30", False),
 }
 
-# 구간 안 기사가 _MIN_ITEMS건 미만이면 끝에서 _FALLBACK_HOURS시간 전까지 넓혀 다시 거른다
-_MIN_ITEMS = 3
+# 구간 안 기사가 _MIN_ITEMS건 미만이면 끝에서 _FALLBACK_HOURS시간 전까지 넓혀 다시 거른다 (넓히면 앞 슬롯 기사가 섞일 수 있다)
+# _PICK_MIN과 같게 둔다. 작으면 후보가 하한보다 적어도 넓히지 않아 하한을 못 채운다
+_MIN_ITEMS = 4
 _FALLBACK_HOURS = 6
 
 # 중요도 점수 = 검색어별 순위를 1/(_RANK_BIAS + 순위)로 바꿔 합산
@@ -63,7 +65,7 @@ _CANDIDATE_LIMITS = {"07:30": 60}
 
 # 슬롯당 실을 기사 수의 하한·상한. 바꾸면 저장·응답에 그대로 반영된다
 # (timeline_service._NEWS_LIMIT이 _PICK_MAX를 가져다 쓴다)
-_PICK_MIN = 5
+_PICK_MIN = 4
 _PICK_MAX = 8
 
 
