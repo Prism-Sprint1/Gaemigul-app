@@ -3266,3 +3266,67 @@ push 여부는 사용자 확인 후 진행.
 `backend/tmp_repro_500.py`(front팀이 남긴 디버그용 임시 스크립트로 보임)와
 `.claude/settings.json`(front팀의 로컬 Claude Code 권한 설정)도 함께 들어왔는데,
 이 브랜치 것이 아니라서 그대로 유지했다 - 필요하면 나중에 정리.
+
+## 61. `back/feat/calendar` → `back/dev` push — "backend만" 분리 push 방식이 정착됨
+
+사용자가 "back/feat/calendar 를 pull로 back/dev에 병합하고 push"를 요청했다가 한 번
+"취소"했고("아직 확실히 정할 게 남았다"는 판단으로 보임), 곧바로 "backend를 back/dev에
+병합하고 push"로 명확히 재요청했다. 57번 항목에서 정착된 "backend만 분리해서 push"
+방식(58~60번에서 front/feat/calendar에 했던 것과 동일한 접근)을 back/dev에도 그대로
+적용했다 - 로컬 `back/feat/calendar`(front/feat/calendar와의 전체 merge 이력 포함)를
+건드리지 않고, `origin/back/feat/calendar`(60번에서 이미 backend-calendar 전용으로
+추출해둔 상태)를 `origin/back/dev`에 병합했다.
+
+### 왜 이번에도 격리된 worktree를 썼는가
+
+39번 항목(calendar 도메인을 back/dev에 처음 통합한 원래 작업)과 완전히 같은 절차를
+다시 밟았다 - `back/dev`는 여러 팀원이 공유하는 브랜치라 실수로 로컬 작업 트리를
+망가뜨리면 안 되고, 시험 삼아 확인만 하고 버릴 수도 있어야 한다. `git worktree add
+--detach /tmp/back-dev-merge origin/back/dev`로 완전히 분리된 작업 공간을 만들고,
+거기서만 병합·해결·검증·push까지 다 한 뒤 worktree를 지웠다 - 현재 브랜치
+(`back/feat/calendar`)의 커밋 이력이나 작업 트리는 전혀 건드리지 않았다.
+
+### 충돌 3개 - 전부 39번과 같은 성격("서로 다른 걸 각자 추가한 것뿐")
+
+- **`core/config.py`**: `back/dev`가 그새 `supabase_url`/`supabase_service_key`를
+  추가했고, `back/feat/calendar`는 `ecos_api_key`를 추가했다 - 텍스트 위치만 겹친
+  것이라 둘 다 유지
+- **`core/kis_client.py`**: `back/dev`는 이미 heatmap 전용 함수 묶음
+  (`_wait_for_request_slot`/`_get`/`get_sector_prices`/`get_stock_master` 등, 60번에서
+  front/feat/calendar에도 있었던 것과 같은 계열)을 갖고 있었고, `back/feat/calendar`는
+  국내선물옵션(KOSPI200 만기) 함수 묶음(`get_option_month_list`/`get_futures_board`/
+  `get_option_callput_board`/`get_price`)을 추가했다 - 서로 다른 함수라 두 블록을
+  순서대로 이어붙이는 것으로 해결(39번과 완전히 동일한 패턴)
+- **`domain/calendar/services/calendar.py`**: import문에서 `ecos_client` 추가는
+  단순했지만, **39번에서 이미 한 번 겪었던 "충돌 없이 조용히 깨지는" 문제가 똑같이
+  재발했다** - `back/dev`의 `core/database.py`는 `get_session_factory()`(세션메이커를
+  반환, `get_session_factory()() as session`으로 열어 씀) 구조인데, `back/feat/calendar`
+  쪽에만 있던 BOK 기준금리(`ingest_bok_rate_decisions`)와 KOSPI200 만기
+  (`ingest_kospi200_expiry`) 두 함수가 옛날 `async_session() as session` 패턴 그대로
+  텍스트 충돌 없이 병합돼 들어왔다(39번 이후 추가된 함수라 그때 고쳐진 적이 없어서).
+  `grep`으로 파일 전체에서 `async_session()` 잔여 호출을 찾아 이 2곳만 `sed`로
+  `get_session_factory()()`로 치환해서 해결 - "git 병합 성공 = 실제로 동작함"이 아니라는
+  걸 또 한 번 확인시켜준 사례라 39번처럼 기록해둔다
+
+### 검증
+
+- 수정한 6개 파일(`config.py`/`kis_client.py`/`services/calendar.py`/`schemas/calendar.py`/
+  `models/calendar.py`/`.env.example`) 전부 `py_compile` 통과
+- `uv sync` + `uv run python -c "import main"` 성공(시험용 worktree에 메인 저장소의
+  `.env`를 임시로 복사해서 실제 DB 연결까지 확인한 뒤, 커밋 전에 다시 삭제 - `.env`는
+  `.gitignore`에 있어서 애초에 스테이징되지도 않지만 이중으로 확인함)
+- `uvicorn main:app`으로 실제 기동 - 스케줄러 12개 작업(timeline 8개 + heatmap
+  `heatmap_initial`/`heatmap` 2개 + 기존 `market_vix` 등) 정상 등록, "Application
+  startup complete" 확인
+- `GET /calendar/events?year=2026&month=9` - 15건 응답, `actual_label`("공모가" 등)
+  포함해서 정상 확인
+- `GET /timeline/indicators`, `GET /` - 둘 다 200 정상(calendar 도메인 재통합이 기존
+  timeline/heatmap 도메인에 영향 없음을 확인)
+
+### 결과
+
+- `back/dev`가 `111ee74` → `7989369`(병합 커밋)로 갱신, origin에 push 완료
+- `back/feat/calendar` 로컬 브랜치(front/feat/calendar와의 전체 merge 포함)는 그대로
+  유지, worktree는 삭제
+- `back/feat/calendar`(원격, backend-calendar 전용)와 `back/dev`가 이제 같은
+  calendar 도메인 backend 상태를 공유하게 됨
