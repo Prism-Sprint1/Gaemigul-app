@@ -24,8 +24,9 @@ export interface CalendarEventDto {
   // FRED가 표준 중요도를 제공하지 않아 현재 항상 null
   importance: number | null
   previous: string | null
-  forecast: string | null
   actual: string | null
+  // actual이 구체적으로 무엇에 대한 값인지 알려주는 짧은 라벨(예: "공모가", "주당", "매출액")
+  actual_label: string | null
   status: string
 }
 
@@ -37,6 +38,10 @@ export async function getCalendarEvents(
   const response = await axios.get<CalendarEventDto[]>(CALENDAR_EVENTS_URL, {
     params: { year, month },
   })
+
+  if (!Array.isArray(response.data)) {
+    throw new Error("캘린더 API 응답 형식이 올바르지 않습니다.")
+  }
 
   return response.data
 }

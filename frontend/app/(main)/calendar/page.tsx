@@ -9,7 +9,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PageTitle } from "@/components/common"
 import { WeekPlan } from "@/components/calendar/Weekplan"
 import { BeginnerLessonDialog } from "@/components/calendar/beginner-lesson-dialog"
@@ -46,6 +46,7 @@ import { DayDetailDialog, dayGroupOf, type DayGroup } from "./news-panel"
 
 export default function CalendarPage() {
   const today = useMemo(() => new Date(), [])
+  const currentYear = today.getFullYear()
   const [month, setMonth] = useState<Date>(() => startOfMonth(today))
   const [selectedDate, setSelectedDate] = useState<Date>(today)
   // 앱(모바일)은 주별 고정이라 기본값도 주별로 시작
@@ -64,30 +65,74 @@ export default function CalendarPage() {
   const [allNews, setAllNews] = useState<NewsItem[]>([])
   // 새로고침·월 이동 등으로 재조회하는 동안 각 영역에 스켈레톤을 보여주기 위한 상태
   const [loading, setLoading] = useState(true)
+  const [unavailableYear, setUnavailableYear] = useState<number | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [retryToken, setRetryToken] = useState(0)
+  const requestIdRef = useRef(0)
 
   // 월간 그리드는 앞뒤 달의 여분 날짜도 보여주므로 이전/현재/다음 달을 함께 조회
-  const fetchNews = useCallback(async (anchor: Date) => {
-    setLoading(true)
-    try {
-      const months = [addMonths(anchor, -1), anchor, addMonths(anchor, 1)]
-      const results = await Promise.all(
-        months.map((m) => getCalendarEvents(m.getFullYear(), m.getMonth() + 1))
-      )
-      const items = results
-        .flat()
-        .map(toNewsItem)
-        .filter((n): n is NewsItem => n !== null)
-      setAllNews(dedupeNewsItems(items))
-    } catch (error) {
-      console.error("[getCalendarEvents] 실패", error)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const fetchNews = useCallback(
+    async (anchor: Date) => {
+      const requestId = ++requestIdRef.current
+      setLoading(true)
+      setLoadError(false)
+      if (anchor.getFullYear() !== currentYear) {
+        setAllNews([])
+        setUnavailableYear(anchor.getFullYear())
+        setLoading(false)
+        return
+      }
+
+      setUnavailableYear(null)
+      try {
+        const months = [
+          addMonths(anchor, -1),
+          anchor,
+          addMonths(anchor, 1),
+        ].filter((m) => m.getFullYear() === currentYear)
+        const results = await Promise.allSettled(
+          months.map((m) =>
+            getCalendarEvents(m.getFullYear(), m.getMonth() + 1)
+          )
+        )
+        if (requestId !== requestIdRef.current) return
+
+        const successfulResults = results
+          .filter(
+            (
+              result
+            ): result is PromiseFulfilledResult<
+              Awaited<ReturnType<typeof getCalendarEvents>>
+            > => result.status === "fulfilled"
+          )
+          .flatMap((result) => result.value)
+        const hasFailure = results.some(
+          (result) => result.status === "rejected"
+        )
+        const items = successfulResults
+          .map(toNewsItem)
+          .filter((n): n is NewsItem => n !== null)
+        setAllNews(dedupeNewsItems(items))
+        setLoadError(hasFailure)
+      } catch (error) {
+        console.error("[getCalendarEvents] 실패", error)
+        if (requestId === requestIdRef.current) {
+          setAllNews([])
+          setLoadError(true)
+        }
+      } finally {
+        if (requestId === requestIdRef.current) setLoading(false)
+      }
+    },
+    [currentYear]
+  )
 
   useEffect(() => {
-    fetchNews(month)
-  }, [fetchNews, month])
+    const timer = window.setTimeout(() => {
+      void fetchNews(month)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchNews, month, retryToken])
 
   const selectGroup = (g: GroupFilter) => {
     setGroupFilter(g)
@@ -167,6 +212,10 @@ export default function CalendarPage() {
     () => weeklyKeywordTags(weekNews),
     [weekNews]
   )
+  const emptyMessage =
+    allNews.length === 0
+      ? "조회된 일정이 없습니다."
+      : "현재 필터 조건에 맞는 일정이 없습니다."
 
   return (
     <div className="flex min-h-svh justify-center bg-background p-3 sm:p-4 lg:p-6">
@@ -197,53 +246,86 @@ export default function CalendarPage() {
               />
             </div>
 
-            {/* 앱(모바일): 커다란 월간 캘린더 없이 주별 일정만 표시 */}
-            <div className="lg:hidden">
-              {loading ? (
-                <WeekListSkeleton />
-              ) : (
-                <WeekList
-                  month={month}
-                  selectedDate={selectedDate}
-                  news={filteredNews}
-                  allNews={allNews}
-                  holidays={filteredHolidays}
-                  onOpenItem={openItem}
-                />
-              )}
-            </div>
+            {unavailableYear !== null ? (
+              <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground">
+                이전 데이터를 불러올 수 없습니다.
+              </div>
+            ) : loadError && allNews.length === 0 ? (
+              <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground">
+                <p>일정을 불러오지 못했습니다.</p>
+                <button
+                  type="button"
+                  onClick={() => setRetryToken((token) => token + 1)}
+                  className="rounded-md border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  다시 시도
+                </button>
+              </div>
+            ) : (
+              <>
+                {loadError && (
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <span>일부 일정만 불러왔습니다.</span>
+                    <button
+                      type="button"
+                      onClick={() => setRetryToken((token) => token + 1)}
+                      className="shrink-0 font-semibold underline underline-offset-2"
+                    >
+                      다시 시도
+                    </button>
+                  </div>
+                )}
+                {/* 앱(모바일): 커다란 월간 캘린더 없이 주별 일정만 표시 */}
+                <div className="lg:hidden">
+                  {loading ? (
+                    <WeekListSkeleton />
+                  ) : (
+                    <WeekList
+                      month={month}
+                      selectedDate={selectedDate}
+                      news={filteredNews}
+                      allNews={allNews}
+                      holidays={filteredHolidays}
+                      onOpenItem={openItem}
+                      emptyMessage={emptyMessage}
+                    />
+                  )}
+                </div>
 
-            {/* 데스크톱: 주별/월별 전환 가능 */}
-            <div className="hidden lg:block">
-              {loading ? (
-                viewMode === "month" ? (
-                  <MonthGridSkeleton />
-                ) : (
-                  <WeekListSkeleton />
-                )
-              ) : viewMode === "month" ? (
-                <MonthGrid
-                  month={month}
-                  today={today}
-                  selectedDate={selectedDate}
-                  news={filteredNews}
-                  allNews={allNews}
-                  holidays={filteredHolidays}
-                  onSelectDate={selectDate}
-                  onOpenDay={openDay}
-                  onOpenItem={openItem}
-                />
-              ) : (
-                <WeekList
-                  month={month}
-                  selectedDate={selectedDate}
-                  news={filteredNews}
-                  allNews={allNews}
-                  holidays={filteredHolidays}
-                  onOpenItem={openItem}
-                />
-              )}
-            </div>
+                {/* 데스크톱: 주별/월별 전환 가능 */}
+                <div className="hidden lg:block">
+                  {loading ? (
+                    viewMode === "month" ? (
+                      <MonthGridSkeleton />
+                    ) : (
+                      <WeekListSkeleton />
+                    )
+                  ) : viewMode === "month" ? (
+                    <MonthGrid
+                      month={month}
+                      today={today}
+                      selectedDate={selectedDate}
+                      news={filteredNews}
+                      allNews={allNews}
+                      holidays={filteredHolidays}
+                      onSelectDate={selectDate}
+                      onOpenDay={openDay}
+                      onOpenItem={openItem}
+                    />
+                  ) : (
+                    <WeekList
+                      month={month}
+                      selectedDate={selectedDate}
+                      news={filteredNews}
+                      allNews={allNews}
+                      holidays={filteredHolidays}
+                      onOpenItem={openItem}
+                      emptyMessage={emptyMessage}
+                    />
+                  )}
+                </div>
+              </>
+            )}
           </main>
 
           {/* 오른쪽: 미니 달력 + AI 요약 — 앱(360) 사이즈에서는 페이지 최상단에 세로로 노출, 웹에서는 스크롤해도 따라오도록 sticky */}

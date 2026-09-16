@@ -12,10 +12,11 @@ export type NewsItem = {
   category: Category // 뉴스 분류 및 색상 스타일을 결정하는 카테고리
   region: string // 관련 국가, 지역 또는 기업명
   publishedAt: Date // 뉴스 발표 일시 및 캘린더에 표시할 날짜
+  hasTime: boolean // 발표 시간이 확인된 일정인지 여부
   /** 팝업 상세에만 노출 — 있는 값만 표시 */
   detail?: {
     actual?: string // 실제값
-    forecast?: string // 예상치 (FRED가 제공하지 않아 현재 항상 없음)
+    actualLabel?: string // actual이 무엇에 대한 값인지(예: "공모가", "주당", "매출액") — 없으면 "실제값"으로 표시
     previous?: string // 이전치
     source?: string // 발표처 (백엔드 미제공 필드 — 항상 없음)
     sectors?: string[] // 관련 수혜 섹터 (백엔드 미제공 필드 — 항상 없음)
@@ -80,18 +81,36 @@ function isKnownCategory(value: string): value is Category {
   return (CATS as string[]).includes(value)
 }
 
-/** publishedAt(YYYY-MM-DD) + time(HH:mm, 없으면 자정) → Date. 둘 다 한국시간(KST) 기준 */
-function toPublishedAt(dto: CalendarEventDto): Date {
-  return new Date(`${dto.publishedAt}T${dto.time ?? "00:00"}:00`)
+/** 날짜와 시간을 한국시간(KST)으로 해석한다. 시간이 없으면 날짜 정오를 사용해 날짜가 밀리지 않게 한다. */
+function toPublishedAt(dto: CalendarEventDto): Date | null {
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/
+  const timePattern = /^\d{2}:\d{2}$/
+  if (!datePattern.test(dto.publishedAt)) return null
+  if (dto.time !== null && !timePattern.test(dto.time)) return null
+
+  const value = `${dto.publishedAt}T${dto.time ?? "12:00"}:00+09:00`
+  const publishedAt = new Date(value)
+  return Number.isNaN(publishedAt.getTime()) ? null : publishedAt
 }
 
 /** 백엔드 GET /calendar/events 응답(CalendarEventDto) → 화면에서 쓰는 NewsItem으로 변환 */
 export function toNewsItem(dto: CalendarEventDto): NewsItem | null {
-  if (!isKnownCategory(dto.category)) return null
+  if (
+    !dto.id ||
+    !dto.title ||
+    !dto.summary ||
+    !dto.region ||
+    !isKnownCategory(dto.category)
+  ) {
+    return null
+  }
+
+  const publishedAt = toPublishedAt(dto)
+  if (!publishedAt) return null
 
   const detail: NewsItem["detail"] = {}
   if (dto.actual) detail.actual = dto.actual
-  if (dto.forecast) detail.forecast = dto.forecast
+  if (dto.actual_label) detail.actualLabel = dto.actual_label
   if (dto.previous) detail.previous = dto.previous
 
   return {
@@ -100,7 +119,8 @@ export function toNewsItem(dto: CalendarEventDto): NewsItem | null {
     summary: dto.summary,
     category: dto.category,
     region: dto.region,
-    publishedAt: toPublishedAt(dto),
+    publishedAt,
+    hasTime: dto.time !== null,
     detail: Object.keys(detail).length > 0 ? detail : undefined,
   }
 }
@@ -132,7 +152,6 @@ export const MARKET_HOLIDAYS: MarketHoliday[] = (
     ["2026-08-17", "광복절 대체공휴일", "domestic"],
     ["2026-09-24", "추석 연휴", "domestic"],
     ["2026-09-25", "추석", "domestic"],
-    ["2026-09-28", "추석 대체공휴일", "domestic"],
     ["2026-10-05", "개천절 대체공휴일", "domestic"],
     ["2026-10-09", "한글날", "domestic"],
     ["2026-12-25", "성탄절", "domestic"],

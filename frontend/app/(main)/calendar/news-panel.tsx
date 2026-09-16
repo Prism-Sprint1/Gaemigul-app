@@ -6,6 +6,7 @@ import { format, isSameDay } from "date-fns"
 import { ko } from "date-fns/locale/ko"
 import { ChevronDown, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { formatEconomicValue } from "@/lib/format-economic-value"
 import { CAT, type NewsItem } from "./news-data"
 
 export type DayGroup = {
@@ -117,8 +118,7 @@ function DayDetailBody({
           const isOpen = openIds.has(n.id)
           const facts = (
             [
-              ["실제값", n.detail?.actual],
-              ["예상치", n.detail?.forecast],
+              [n.detail?.actualLabel ?? "실제값", n.detail?.actual],
               ["이전치", n.detail?.previous],
             ] as const
           ).filter(([, v]) => v)
@@ -188,7 +188,9 @@ function DayDetailBody({
                         {facts.map(([k, v]) => (
                           <div key={k} className="flex gap-1">
                             <dt className="text-muted-foreground">{k}</dt>
-                            <dd className="font-medium">{v}</dd>
+                            <dd className="font-medium" title={v}>
+                              {formatEconomicValue(v)}
+                            </dd>
                           </div>
                         ))}
                       </dl>
