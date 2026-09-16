@@ -80,6 +80,6 @@ class TimelineSlotResponse(BaseModel):
     beginner_guides: list[BeginnerGuideItem]  # 최대 3개
     leading_sectors: list[LeadingSectorItem]  # 09:30 / 12:00 / 14:00 / 15:30만
     top_gainers: list[TopGainerItem]  # 08:30 / 17:30 / 20:00만
-    news: list[NewsItem]  # 5~8건
+    news: list[NewsItem]  # 4~8건
     indicators: list[SlotIndicatorItem]  # 07:30만
     intraday_changes: list[IntradayChangeItem]  # 15:30만

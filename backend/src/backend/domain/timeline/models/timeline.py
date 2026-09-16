@@ -4,7 +4,7 @@
 # [테이블 관계] 슬롯 하나에 아래 자식 행들이 붙는다
 #   timeline_slot ─┬─ timeline_briefing_insight      브리핑 포인트 3행
 #                  ├─ timeline_beginner_guide        불개미 해설 3행
-#                  ├─ timeline_news                  뉴스 5~8행
+#                  ├─ timeline_news                  뉴스 4~8행
 #                  ├─ timeline_indicator             지표 6행 (07:30)
 #                  ├─ timeline_intraday_change       장중 변화 3행 (15:30)
 #                  ├─ timeline_top_gainer            급상승 종목 3행 (08:30 / 17:30 / 20:00)
@@ -62,13 +62,14 @@ class TimelineSlot(Base):
     # 저장 시각 (한국 시간)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)
 
-    # 자식 테이블 연결. order_by가 있는 것은 seq 순서로 꺼내진다
+    # 자식 테이블 연결. 모두 순서를 정해 꺼낸다 (seq 칼럼이 있으면 seq, 없으면 저장 순서인 id)
+    # DB는 행을 수정하면 저장 위치가 바뀌어 order_by가 없으면 순서가 섞인다
     insights: Mapped[list["TimelineBriefingInsight"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineBriefingInsight.seq")
     beginner_guides: Mapped[list["TimelineBeginnerGuide"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineBeginnerGuide.seq")
     news: Mapped[list["TimelineNews"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineNews.seq")
-    indicators: Mapped[list["TimelineIndicator"]] = relationship(back_populates="slot", cascade="all, delete-orphan")
-    intraday_changes: Mapped[list["TimelineIntradayChange"]] = relationship(back_populates="slot", cascade="all, delete-orphan")
-    leading_sectors: Mapped[list["TimelineLeadingSector"]] = relationship(back_populates="slot", cascade="all, delete-orphan")
+    indicators: Mapped[list["TimelineIndicator"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineIndicator.id")
+    intraday_changes: Mapped[list["TimelineIntradayChange"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineIntradayChange.id")
+    leading_sectors: Mapped[list["TimelineLeadingSector"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineLeadingSector.id")
     top_gainers: Mapped[list["TimelineTopGainer"]] = relationship(back_populates="slot", cascade="all, delete-orphan", order_by="TimelineTopGainer.seq")
 
 
@@ -123,7 +124,7 @@ class TimelineBeginnerGuide(Base):
     slot: Mapped["TimelineSlot"] = relationship(back_populates="beginner_guides")
 
 
-# 주요 뉴스 - 슬롯당 5~8행
+# 주요 뉴스 - 슬롯당 4~8행
 class TimelineNews(Base):
     __tablename__ = "timeline_news"
 
@@ -219,8 +220,8 @@ class TimelineLeadingSector(Base):
     # 업종 등락률(%, 전일 종가 대비)
     change_rate: Mapped[float] = mapped_column(Float)
 
-    # 이 업종의 대표 종목 (sector.stocks)
-    stocks: Mapped[list["TimelineLeadingSectorStock"]] = relationship(back_populates="sector", cascade="all, delete-orphan")
+    # 이 업종의 대표 종목 (sector.stocks). 저장 순서(상승 1위 -> 거래 1위) 그대로 id순으로 읽는다
+    stocks: Mapped[list["TimelineLeadingSectorStock"]] = relationship(back_populates="sector", cascade="all, delete-orphan", order_by="TimelineLeadingSectorStock.id")
 
     # 저장 시각 (한국 시간)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=_now_kst)

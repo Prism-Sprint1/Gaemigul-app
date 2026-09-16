@@ -31,9 +31,10 @@ _SLOT_KEYWORDS = {
     "20:00": ["증시 전망", "시황", "내일 증시", "코스피", "글로벌 증시"],
 }
 
-# 검색어 하나당 받아올 기사 수 (기본값 / 슬롯별 예외)
-_FETCH_PER_KEYWORD_DEFAULT = 30
-_FETCH_PER_KEYWORD = {"07:30": 50}
+# 검색어 하나당 받아올 기사 수 (기본값 / 슬롯별 예외). 네이버 API 최대값이 100이다
+# 호출 1번에 받는 건수라 늘려도 호출 수(한도 기준)는 그대로다. 30건일 때 오후 슬롯은 구간 안 후보가 3~4건뿐이었다(9/15 15:30)
+_FETCH_PER_KEYWORD_DEFAULT = 100
+_FETCH_PER_KEYWORD: dict[str, int] = {}
 
 # 슬롯별 뉴스 구간 시작. (시작 시각, 전날인지) - 끝은 그 슬롯 시각이다
 # 구간은 [시작, 끝)이라 슬롯끼리 겹치지도 비지도 않는다 (07:30 슬롯 = 전날 20:00 ~ 07:29)
@@ -49,8 +50,9 @@ _SLOT_WINDOW = {
     "20:00": ("17:30", False),
 }
 
-# 구간 안 기사가 _MIN_ITEMS건 미만이면 끝에서 _FALLBACK_HOURS시간 전까지 넓혀 다시 거른다
-_MIN_ITEMS = 3
+# 구간 안 기사가 _MIN_ITEMS건 미만이면 끝에서 _FALLBACK_HOURS시간 전까지 넓혀 다시 거른다 (넓히면 앞 슬롯 기사가 섞일 수 있다)
+# _PICK_MIN과 같게 둔다. 작으면 후보가 하한보다 적어도 넓히지 않아 하한을 못 채운다
+_MIN_ITEMS = 4
 _FALLBACK_HOURS = 6
 
 # 중요도 점수 = 검색어별 순위를 1/(_RANK_BIAS + 순위)로 바꿔 합산
@@ -63,13 +65,38 @@ _CANDIDATE_LIMITS = {"07:30": 60}
 
 # 슬롯당 실을 기사 수의 하한·상한. 바꾸면 저장·응답에 그대로 반영된다
 # (timeline_service._NEWS_LIMIT이 _PICK_MAX를 가져다 쓴다)
-_PICK_MIN = 5
+_PICK_MIN = 4
 _PICK_MAX = 8
+
+# LLM에게 요구하는 최소 건수. 하한(_PICK_MIN)보다 크게 두면 기사가 많은 시간대에 LLM이 하한만 고르는 것을 막는다
+# 후보가 이보다 적으면 후보 수만큼만 요구한다 (기사가 적은 시간대는 _PICK_MIN까지 줄어든다)
+_PICK_TARGET = 5
 
 
 # 네이버가 넣어 보내는 <b> 태그와 &quot; 같은 HTML 특수문자를 없앤다
 def _clean_text(value: str) -> str:
     return html.unescape(re.sub(r"<[^>]+>", "", value)).strip()
+
+
+# 기사 요약에 섞여 오는 언론사 바이라인·기자 메일. 그대로 두면 화면과 LLM 입력에 들어간다
+#   "아주경제=양보연 기자 byeony@ajunews.com 코스피가…" / "[서울=뉴스핌] 이건주 기자 = 14일…" / "…하락하고 있다. | 서울=한스경제 김유진 기자 |"
+# 본문에 나온 "기자"까지 지우지 않도록, 요약 맨 앞이거나 괄호·막대로 감싼 칸일 때만 지운다 (제목에는 쓰지 않는다)
+_EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
+_BYLINE_BAR = re.compile(r"\|\s*[^|]{1,30}기자\s*\|")
+_BYLINE_BRACKET = re.compile(r"(?:\([^)]{1,25}\)|\[[^\]]{1,25}\])\s*(?:[가-힣]{2,4}\s+)*[가-힣]{2,4}\s*기자\s*=\s*")
+_BYLINE_NAMED = re.compile(r"[가-힣A-Za-z]{2,12}\s*=\s*[가-힣]{2,4}\s*기자\s*(?:[=|]\s*)?")
+_BYLINE_HEAD = re.compile(r"^\s*(?:[\[(|][^\])|]{1,25}[\])|]\s*)?(?:[가-힣A-Za-z]{2,12}\s*=\s*)?(?:[가-힣]{2,4}\s+){1,2}기자\s*(?:[=|]\s*)?")
+_CAPTION = re.compile(r"\[사진[^\]]{0,40}\]")
+_SPACES = re.compile(r"\s{2,}")
+
+# 바이라인을 지우고 남는 홀로 된 구분 기호 ("… 있다. /사진=김유진 기자 | …" -> "… 있다. /")
+_DANGLING = re.compile(r"\s[/|]+(?=\s|$)")
+
+
+def _strip_byline(summary: str) -> str:
+    summary = _BYLINE_BAR.sub(" ", _EMAIL.sub(" ", _CAPTION.sub(" ", summary)))
+    summary = _BYLINE_HEAD.sub("", _BYLINE_NAMED.sub("", _BYLINE_BRACKET.sub("", summary)))
+    return _SPACES.sub(" ", _DANGLING.sub("", summary)).strip()
 
 
 # pubDate("Thu, 10 Sep 2026 11:00:00 +0900")를 한국 시간 datetime으로 바꾼다
@@ -92,7 +119,7 @@ def _select_with_llm(time_slot: str, candidates: list[dict], limit: int) -> list
                 title=prompts.SLOT_TITLES[time_slot],
                 focus=prompts.SLOT_FOCUS[time_slot],
                 pick_count=limit,
-                min_count=min(_PICK_MIN, len(candidates)),
+                min_count=min(_PICK_TARGET, len(candidates)),
                 candidates=listed,
             )
         )
@@ -162,7 +189,7 @@ def collect(time_slot: str, *, limit: int = _PICK_MAX, trade_date: date | None =
 
             collected[url] = {
                 "title": _clean_text(item["title"]),
-                "summary": _clean_text(item["description"]),
+                "summary": _strip_byline(_clean_text(item["description"])),
                 "url": url,
                 "published_at": _parse_pub_date(item["pubDate"]),
                 "score": 1 / (_RANK_BIAS + rank),
@@ -173,6 +200,12 @@ def collect(time_slot: str, *, limit: int = _PICK_MAX, trade_date: date | None =
     if len(picked) < _MIN_ITEMS:
         widened = end - timedelta(hours=_FALLBACK_HOURS)
         picked = [item for item in collected.values() if widened <= item["published_at"] < end]
+
+    # 요약이 빈 기사는 뺀다 (제목만 남아 화면이 비고 LLM도 판단할 근거가 없다). 실호출 500건 중 4건뿐이라 후보가 줄어들 걱정은 없다
+    # 단 이것 때문에 하한을 못 채우게 되면 그대로 둔다
+    with_summary = [item for item in picked if item["summary"]]
+    if len(with_summary) >= _MIN_ITEMS:
+        picked = with_summary
 
     # 점수순으로 LLM 후보를 추린다 (최신순으로 자르면 긴 구간의 중요한 기사가 잘린다)
     picked.sort(key=lambda x: x["score"], reverse=True)

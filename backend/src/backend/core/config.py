@@ -36,9 +36,9 @@ class Settings(BaseSettings):
     # Supabase Postgres 연결 문자열. "postgresql+asyncpg://"로 시작해야 한다
     database_url: str | None = None
 
-    # Cloudflare Workers AI 이미지 생성 (timeline 보고서 이미지)
-    cloudflare_account_id: str | None = None
-    cloudflare_api_token: str | None = None
+    # Pollinations 보고서 이미지 생성. 키는 서버에서만 쓴다.
+    pollinations_api_key: str | None = None
+    pollinations_image_model: str = "z-image-turbo"
 
     # FRED(미국 연준 경제 데이터) API - calendar 도메인에서 사용
     fred_api_key: str | None = None

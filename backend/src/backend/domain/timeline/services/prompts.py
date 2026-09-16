@@ -2,12 +2,12 @@
 # LLM 프롬프트 문구와 슬롯 명칭을 모아둔다. 문구만 바꾸고 싶을 때 이 파일만 고치면 된다.
 #   SLOT_TITLES         슬롯 화면 명칭 (timeline_service의 슬롯 정의도 여기서 만든다)
 #   SLOT_FOCUS          슬롯별로 LLM이 무엇을 재료로 무엇에 집중할지
-#   BRIEFING_PROMPT     브리핑 (수집 데이터 -> 헤드라인·부제·포인트 3개)
+#   BRIEFING_PROMPT     브리핑 (수집 데이터 -> 헤드라인·뉴스 포인트 2개. 부제·포인트 1은 briefing_service가 확정 수치로 만든다. 재료가 없으면 부제·포인트 3개)
 #   BEGINNER_PROMPT     불개미 해설 (수집 데이터 + 브리핑 -> 해설 3개)
 #   NEWS_SELECT_PROMPT  뉴스 선별 (후보 기사 -> 실을 기사 번호)
 #   REPORT_PROMPT       일간·주간 보고서 (보고서 재료 -> 섹션 3개·제목·요약·결론·섹션별 쉬운 요약·용어 후보·이미지 소재·분위기)
 #   REPORT_PERIOD       보고서 종류별 기간 설명 (REPORT_PROMPT의 {period}에 들어간다)
-#   IMAGE_SCENE         보고서 이미지 장면 틀 (서울 도심 + 분위기 + 지평선의 원인 소재 + 외국인 자금 흐름. IMAGE_CITY·IMAGE_FLOWS 포함)
+#   IMAGE_SCENE         보고서 클레이 장면 틀 (인물·관련 소품·외국인 이동)
 #   IMAGE_SYMBOLS       보고서 이미지 원인 소재 (LLM이 이름을 고르면 코드가 영어 묘사로 바꾼다)
 #   IMAGE_MOODS         보고서 이미지 분위기 (날씨·빛)
 #   IMAGE_STYLE         이미지 공통 화풍 (소재·분위기로 만든 그림 설명 뒤에 코드가 붙인다)
@@ -51,7 +51,8 @@ SLOT_FOCUS = {
 }
 
 # 브리핑 프롬프트
-# 채우는 값: time_slot, title(SLOT_TITLES), focus(SLOT_FOCUS), now(현재 시각), data(수집 데이터 JSON)
+# 채우는 값: time_slot, title(SLOT_TITLES), focus(SLOT_FOCUS), now(현재 시각), data(수집 데이터 JSON),
+#   written(코드가 쓴 포인트 1 또는 "없음"), point_count(LLM이 쓸 포인트 수)
 # 길이는 [길이], 출력 모양은 [출력 형식]을 고친다 (출력 키를 바꾸면 briefing_service도 같이 고칠 것)
 BRIEFING_PROMPT = """너는 한국 주식시장 브리핑을 쓰는 금융 에디터다.
 
@@ -75,16 +76,20 @@ BRIEFING_PROMPT = """너는 한국 주식시장 브리핑을 쓰는 금융 에�
 1. 숫자는 [확정 수치]와 [뉴스]에 실제로 있는 값만 쓴다. 없는 수치, 종목명, 지표를 지어내지 마라.
 2. 여러 기사의 숫자를 더하거나 빼서 새로운 수치를 만들지 마라.
 3. headline과 subtitle에 숫자를 넣을 때는 [확정 수치]의 값을 우선 써라.
-4. [뉴스]에서 가져온 숫자는 그 기사가 쓰인 시점의 값이다. 지금 값인 것처럼 쓰지 마라.
-   꼭 써야 하면 "OO에 따르면"처럼 기사에서 나온 내용임을 밝혀라.
+4. [뉴스]에서 가져온 숫자는 그 기사가 쓰인 시점의 값이다. 지금 값이나 마감 값인 것처럼 쓰지 마라.
+   꼭 써야 하면 "OO에 따르면"처럼 기사에서 나온 내용임을 밝히고, 요약에 "오후 2시 41분 기준"처럼 시각이 적혀 있으면 그 시각도 함께 쓴다.
+   기사 발행 시각을 문장 앞에 붙이지 마라("오후 2시 44분 뉴스에 따르면" X).
 5. 잘린 요약이라 그 숫자가 실제값인지 전망치인지, 무엇에 대한 값인지 불분명하면 쓰지 마라.
    예를 들어 제품 가격을 계산하려고 환율을 언급한 기사의 숫자를 환율 시황으로 쓰면 안 된다.
+   요약에 없는 주어·대상은 채우지 마라. 요약에 "직원들을 압수수색"이라고 있으면 "회사가 압수수색을 받았다"로 바꿔 쓰지 마라.
+   같은 사건을 다룬 기사가 여러 개면 함께 읽고, 어느 요약에도 없는 내용은 쓰지 마라.
+   아시아·중국·베트남 등 해외 증시 기사의 내용을 국내 증시 이야기처럼 쓰지 마라. 쓰려면 "아시아 증시는"처럼 어느 시장인지 밝혀라.
 6. 매수, 매도, 보유 같은 투자 행동을 권유하지 마라. "지금이 기회다", "담아야 한다" 같은 표현을 쓰지 마라.
    "~로 보는 것이 좋습니다", "~에 주의해야 합니다", "~할 필요가 있습니다", "지켜봐야 합니다"처럼 읽는 사람에게 판단이나 행동을 권하는 표현도 쓰지 마라. 일어난 일과 그 뜻만 쓴다.
    시장에서 일어난 일과 그 배경만 서술한다.
 7. 전망을 쓸 때는 단정하지 말고 근거와 함께 가능성으로 서술해라.
-8. 데이터가 부족하면 억지로 세 개를 채우지 말고 쓸 수 있는 만큼만 써라.
-9. 겁주거나 부추기는 표현을 쓰지 마라.
+8. 데이터가 부족하면 억지로 개수를 채우지 말고 쓸 수 있는 만큼만 써라.
+9. 겁주거나 부추기는 표현을 쓰지 마라. "팔아치웠다", "쓸어 담았다" 같은 구어·과장 표현도 쓰지 마라.
 10. 모든 문장을 "~습니다", "~했습니다" 형태로 끝내라. "~했다", "~보였다" 같은 신문 문체를 쓰지 마라.
 11. 퍼센트는 "%" 기호로 써라. "2.25퍼센트"가 아니라 "2.25%"로 쓴다. 등락률 숫자 뒤에는 반드시 "%"를 붙인다.
 12. 원인이나 이유는 [뉴스]에 그 원인이 적혀 있을 때만 쓴다. 뉴스에 이유가 없으면 이유를 추측해서 쓰지 말고 사실만 쓴다.
@@ -99,9 +104,16 @@ BRIEFING_PROMPT = """너는 한국 주식시장 브리핑을 쓰는 금융 에�
 [길이]
 - headline: 30자 이내. 오늘 시장을 한마디로 요약한 제목. 무엇이 어떻게 됐는지(방향·원인·주인공)가 드러나게 쓴다.
   "~동향", "~현황", "~흐름", "주요 뉴스"처럼 내용이 없는 제목은 쓰지 마라 (예: "긴축 경계감에 코스피 하락")
-- subtitle: 80자 이내 한 문장. headline을 뒷받침하는 핵심 숫자나 사실. "~입니다"처럼 이 글이 무엇인지 소개하는 문장은 쓰지 마라
+- subtitle: 80자 이내. headline을 뒷받침하는 핵심 숫자·사실을 명사형으로 짧게 이어 쓴다. "~습니다", "~입니다"로 끝나는 문장으로 쓰지 마라
+  (좋은 예: "나스닥 0.56%·S&P500 0.48% 하락, 원·달러 환율 1,348.4원" / 나쁜 예: "코스피는 외국인 순매도 속에 약세를 보이고 있습니다.")
 - points[].title: 30자 이내. 그 문단의 소제목
 - points[].body: 2~3문장, 150자 이내
+
+[이미 작성된 포인트]
+{written}
+
+[포인트 개수]
+points에는 {point_count}개를 써라. 이미 작성된 포인트가 있으면, 그 수치를 반복하지 말고 [뉴스]에 나온 배경·원인·주요 사건을 한 문단에 하나씩 써라.
 
 [출력 형식]
 설명이나 코드 블록 없이 아래 JSON만 출력해라.
@@ -110,8 +122,6 @@ BRIEFING_PROMPT = """너는 한국 주식시장 브리핑을 쓰는 금융 에�
   "headline": "...",
   "subtitle": "...",
   "points": [
-    {{"title": "...", "body": "..."}},
-    {{"title": "...", "body": "..."}},
     {{"title": "...", "body": "..."}}
   ]
 }}
@@ -141,7 +151,8 @@ BEGINNER_PROMPT = """너는 주식을 막 시작한 사람에게 오늘 시황�
 - 나쁜 예: "국제유가(원유의 국제 거래 가격)가 올라 뉴욕증시가 하락했습니다."
   (단어만 정의했다. 유가와 주가가 무슨 상관인지는 여전히 모른다)
 - 좋은 예: "기름값이 오르면 물건을 만들고 옮기는 비용이 늘어납니다. 비용이 늘면 기업이 남기는 돈이
-  줄어들 것으로 보기 때문에, 투자자들이 주식을 내놓으면서 주가가 내려갑니다."
+  줄어들 수 있어, 유가 상승은 일반적으로 주가에 부담이 되는 요인으로 여겨집니다."
+  (원리만 풀었다. 오늘 누가 왜 주식을 팔았는지는 단정하지 않았다)
 
 [용어를 다루는 방법]
 1. 전문 용어에 괄호를 붙여 뜻을 설명하지 마라. 단어 뜻은 화면에서 따로 안내한다.
@@ -152,6 +163,7 @@ BEGINNER_PROMPT = """너는 주식을 막 시작한 사람에게 오늘 시황�
 
 [규칙]
 1. [데이터]와 [브리핑]에 없는 사실을 새로 만들지 마라. 설명은 덧붙여도 되지만 없는 수치나 종목을 지어내면 안 된다.
+   해외 증시(아시아·중국 등) 기사의 내용을 국내 증시 이야기처럼 쓰지 마라. 오늘 급상승 종목의 거래량·유동성처럼 [데이터]에 없는 종목 사정을 짐작해 쓰지 마라.
 2. 숫자를 나열하지 마라. 숫자는 브리핑에 이미 있다. 꼭 필요하면 문단당 하나만 쓴다.
 3. 각 문단은 초보자가 가질 법한 궁금증 하나를 골라 답하는 형태로 써라.
    "무엇이 일어났다"가 아니라 "왜 그런 일이 일어나는지", "그게 투자자에게 무슨 의미인지"를 쓴다.
@@ -168,6 +180,7 @@ BEGINNER_PROMPT = """너는 주식을 막 시작한 사람에게 오늘 시황�
 11. "무엇 때문에 이런 일이 일어났는지"(사건의 원인)는 [데이터]의 뉴스에 적혀 있어야 한다. 뉴스에 없는 원인을 지어내지 마라.
     원인이 뉴스에 있을 때, 그 원인이 왜 그런 결과로 이어지는지 일반적인 원리를 풀어 쓰는 것은 괜찮다(위 좋은 예처럼).
     종목이 왜 올랐는지 뉴스에 없으면 "이유는 뉴스에 나오지 않았다"는 사실과 그 움직임의 일반적인 의미만 설명해라.
+    기업의 발표 뒤 주가가 오르지 않은 이유가 뉴스에 없으면 "미리 반영됐다", "차익 실현이 나왔다"고 추측하지 마라.
 12. "주도 섹터"가 모두 마이너스면 시장이 내린 날 가장 적게 내린 업종이다. 부진한 업종으로 설명하지 마라.
 13. 기사에 앞으로 일어날 일로 적힌 것은 일어난 일처럼 쓰지 마라.
 14. "거래가 몰려서 올랐다", "거래가 집중되면서 업종이 힘을 받았다"처럼 거래대금·거래 1위를 오른 원인으로 쓰지 마라.
@@ -176,6 +189,14 @@ BEGINNER_PROMPT = """너는 주식을 막 시작한 사람에게 오늘 시황�
     그 숫자가 무엇을 뜻하는지(예: 상승 1위와 거래 1위의 차이), 또는 [데이터]의 뉴스 중 초보자가 궁금해할 다른 사건을 설명해라.
 16. "급상승 종목" 등락률은 전일 종가 대비다. 17:30·20:00에는 정규장 상승분이 포함돼 있으므로 "애프터마켓에서 OO% 올랐다"고 쓰지 마라.
     "전일 종가보다 OO% 높은 가격"처럼 기준을 밝혀 쓴다.
+17. 외국인·기관·개인 같은 투자자가 오늘 왜 사고팔았는지(우려·기대·판단)는 뉴스에 그 이유가 적혀 있을 때만 써라.
+    일반 원리를 그날 실제 매매의 이유로 단정하지 마라.
+    - 나쁜 예: "기업 이익이 줄어들 것이라는 우려 때문에 외국인과 기관이 주식을 팔았습니다." (뉴스에 없는 속마음을 지어냈다)
+    - 좋은 예: "이런 비용 부담은 일반적으로 주가에 불리한 요인으로 여겨집니다." (원리만 썼다)
+    매매 사실은 뉴스에 있는 그대로 "뉴스에 따르면 외국인과 기관은 주식을 판 쪽이 더 많았습니다"처럼 따로 쓴다.
+18. "팔아치웠다", "쓸어 담았다" 같은 구어·과장 표현을 쓰지 마라. 하루 하락을 "약세장"(길게 이어지는 하락장)이라고 부르지 마라.
+    뉴스가 "급등·급락"이라고 쓴 대상에만 그 말을 쓴다. 여러 대상을 묶어 한꺼번에 "급등했다"고 쓰지 마라.
+19. 기간 평균·누적 수치에는 원문의 집계 기간과 기준을 반드시 붙이고 오늘 장중 값처럼 쓰지 마라. 금리·환율과 매매 사실이 함께 나와도 인과를 만들지 말며, 인수 소식에 사업 안정 기대나 "확실한 호재" 같은 근거 없는 평가를 덧붙이지 마라.
 
 [길이]
 - points[].title: 30자 이내. 그 문단이 무엇을 설명하는지 알 수 있는 제목
@@ -294,6 +315,8 @@ REPORT_PROMPT = """너는 한국 주식시장 보고서를 쓰는 금융 에디�
    "~로 보는 것이 좋습니다", "~에 주의해야 합니다", "~할 필요가 있습니다", "지켜봐야 합니다"처럼 읽는 사람에게 판단이나 행동을 권하는 표현도 쓰지 마라. 일어난 일과 그 뜻만 쓴다.
 6. 전망을 쓸 때는 단정하지 말고 근거와 함께 가능성으로 서술해라.
 7. 겁주거나 부추기는 표현을 쓰지 마라.
+   "팔아치웠다", "쓸어 담았다" 같은 구어·과장 표현을 쓰지 마라. "주식을 많이 팔았습니다", "순매도했습니다"처럼 사실대로 쓴다.
+   외국인·기관·개인이 왜 사고팔았는지(우려·기대·판단)는 [뉴스]에 그 이유가 적혀 있을 때만 쓴다. 일반 원리를 그날 매매의 이유로 단정하지 마라.
 8. 문장은 "~습니다", "~했습니다" 형태로 끝내라. "~했다", "~보였다" 같은 신문 문체를 쓰지 마라.
    title, sections[].title, keywords[].title은 문장이 아니라 제목이다. "~습니다"를 붙이지 말고 명사형으로 끝낸다(예: "금리·유가 악재에 코스피 3%대 급락").
    매매 금액은 [확정 수치]처럼 "3조 3,363억원 순매도"로 방향 단어와 함께 쓰고, 금액 앞에 "+", "-" 기호를 붙이지 마라.
@@ -303,6 +326,7 @@ REPORT_PROMPT = """너는 한국 주식시장 보고서를 쓰는 금융 에디�
     "OO에 따르면"은 [뉴스]에서 온 내용에만 붙이고, [확정 수치] 값에는 붙이지 마라.
     [주목할 섹터]는 등락률 1위 업종이다. 등락률이 마이너스면 "가장 적게 내린 업종"이다. 부진한 업종으로 쓰지 마라.
     "혼조"는 오르는 것과 내리는 것이 섞였을 때만 쓴다. 지수가 한 방향으로 크게 움직였으면 쓰지 마라.
+    거래대금 증가를 오른 원인처럼 쓰지 마라("거래가 늘며 올랐다" X). 거래대금은 따로 사실로만 쓴다.
     "홀로", "유일하게", "가장 크게" 같은 비교 표현은 [확정 수치]에서 다른 대상과 비교해 확인될 때만 쓴다.
 11. terms에는 네가 쓴 보고서 본문에 실제로 나온 어려운 금융 용어를 중요한 순서로 최대 5개 적어라.
     description은 주식을 처음 하는 사람이 알아듣게 한 문장으로 쓴다.
@@ -366,71 +390,76 @@ REPORT_PROMPT = """너는 한국 주식시장 보고서를 쓰는 금융 에디�
 {data}
 """
 
-# 보고서 이미지 장면. 한국 증시(서울 도심)를 주인공으로 두고, LLM이 고른 원인 소재를 멀리 지평선에 세운다 (report_service._image_scene이 채운다)
-#   {city} IMAGE_CITY / {mood} IMAGE_MOODS 값 / {causes} IMAGE_SYMBOLS 값을 이은 것 / {flow} IMAGE_FLOWS 값
-# 소재를 늘어놓는 방식보다 "무엇이 한국 증시에 영향을 줬는지"가 읽혀서 이 구성을 쓴다
-IMAGE_SCENE = "{city} {mood}, while far in the distance on the horizon stand {causes}{flow}, one unified scene"
-IMAGE_SCENE_NO_CAUSE = "{city} {mood}{flow}, one unified scene"
-IMAGE_CITY = "a modern Seoul city skyline with a tall slim tower on a hill in the foreground"
+# 보고서 이미지 장면. 문구 생성 방식과 재료 키는 유지하고 그림의 표현만 바꾼다.
+IMAGE_SCENE = "{city} Market mood: {mood}. Related miniature props: {causes}. {flow}"
+IMAGE_SCENE_NO_CAUSE = "{city} Market mood: {mood}. {flow}"
+IMAGE_CITY = (
+    "One coherent handcrafted miniature market room with warm plaster walls, wooden window frames and desk. "
+    "One friendly clay beginner investor seated at the center or right third is the main focal character. "
+    "Related economic props sit in the window or on shelves, smaller and slightly out of focus."
+)
 
-# 외국인 자금 흐름 (이름 -> 장면에 붙는 영어 문구). "없음"은 붙이지 않는다
+# 자금 흐름은 작은 보조 인물의 이동으로 나타낸다. 주인공보다 작게, 방향 화살표도 작게 둔다.
 IMAGE_FLOWS = {
-    "외국인 매도": ", and a gust of wind blows gold coins away from the city toward the horizon",
-    "외국인 매수": ", and a stream of gold coins flows from the horizon into the city",
-    "없음": "",
+    "외국인 매도": "One smaller foreign investor puppet with a natural rounded prominent nose and a neutral business suit carries a brown suitcase OUT through the doorway, three-quarter rear view, leg crossing the threshold. A small dark-brown arrow points OUT along the movement. Respectful friendly design.",
+    "외국인 매수": "One smaller foreign investor puppet in a neutral business suit carries a brown suitcase INTO the room, facing inward and crossing the threshold. A small dark-brown arrow points INTO the room. Respectful friendly design.",
+    "없음": "No secondary people, suitcases or money-flow arrows.",
 }
 
-# 보고서 이미지 소재 (원인·배경). LLM이 이름(키)을 고르면 코드가 영어 묘사(값)로 바꿔 장면의 지평선에 세운다
-# 이미지 AI가 알아보기 쉬운 구체적인 사물로 적는다. 멀리 서 있으므로 건물·설비는 실루엣("the silhouette of"), 작은 사물은 거대하게("giant") 쓴다
-# 실루엣으로 쓰면 건물 박공 같은 곳에 가짜 글자가 덜 생긴다. 칩처럼 건물 사이에 묻히는 사물은 하늘에 띄운다("floating high in the sky"). 글자가 들어가는 사물(지폐·서류·화면·간판)과 사람·화살표·그래프는 넣지 않는다
-# 소재를 추가하면 LLM 선택지가 늘어난다 (키는 보고서에 자주 나오는 말로)
+# 이름은 기존 LLM 선택지 그대로 유지한다. 방향은 소재 이름이 아니라 제공된 보고서 문구를 따른다.
 IMAGE_SYMBOLS = {
-    "반도체": "a giant glowing microchip floating high in the sky",
-    "인공지능(AI)": "a giant glowing AI brain-shaped chip floating high in the sky",
-    "금리·연준·중앙은행": "the dark silhouette of a large domed central bank building",
-    "국채·채권": "a giant stack of plain sealed bond folders",
-    "물가": "a giant shopping cart full of groceries",
-    "유가·원유": "the silhouettes of oil pump jacks and oil barrels",
-    "환율·달러": "a giant balance scale holding two piles of plain gold coins",
-    "해외 증시": "a giant globe",
-    "변동성·불안": "rough ocean waves tossing a small sailboat",
-    "수출·무역": "the silhouettes of cargo ships and stacked containers at a port",
-    "중동·지정학": "the silhouettes of desert oil derricks",
-    "섬유·의류": "giant colorful rolls of fabric and a sewing machine",
-    "자동차": "the silhouette of a giant modern electric car",
-    "조선": "the silhouette of a giant ship in a shipyard",
-    "건설": "the silhouettes of tall construction cranes",
-    "제약·바이오": "giant medicine capsules and laboratory flasks",
-    "화학": "giant laboratory flasks with colorful liquid",
-    "철강·금속": "the silhouettes of steel mill chimneys and rolled steel coils",
-    "금융·은행": "the silhouette of a giant bank vault door",
-    "통신": "the silhouette of a tall telecommunication tower sending signal waves",
-    "전기·가스·에너지": "the silhouettes of power transmission towers and wind turbines",
-    "항공·운송": "a passenger airplane flying over cargo trucks",
-    "게임·엔터·문화": "a giant game controller under colorful stage spotlights",
-    "음식료": "a golden wheat field with a giant basket of bread",
-    "부동산": "the silhouettes of apartment buildings",
-    "유통": "a giant shopping bag in front of storefronts",
-    "IT 서비스": "giant glowing cloud server racks",
+    "반도체": "a small matte microchip",
+    "인공지능(AI)": "a small brain-shaped chip",
+    "금리·연준·중앙은행": "a miniature unlettered neoclassical central bank and beige coin stacks",
+    "국채·채권": "plain unlettered bond folders",
+    "물가": "a miniature grocery basket",
+    "유가·원유": "dark brown oil barrels and a small oil pump",
+    "환율·달러": "a balance scale holding neutral beige coin stacks",
+    "해외 증시": "a small neutral globe",
+    "변동성·불안": "a small unmarked uneven balance",
+    "수출·무역": "a miniature cargo ship and containers",
+    "중동·지정학": "miniature desert oil derricks",
+    "섬유·의류": "neutral fabric rolls and a sewing machine",
+    "자동차": "a miniature car",
+    "조선": "a miniature ship in a shipyard",
+    "건설": "small construction cranes",
+    "제약·바이오": "neutral medicine capsules and laboratory flasks",
+    "화학": "matte laboratory flasks",
+    "철강·금속": "miniature steel coils",
+    "금융·은행": "a small unmarked bank vault",
+    "통신": "a miniature telecommunications tower",
+    "전기·가스·에너지": "miniature power transmission towers and wind turbines",
+    "항공·운송": "a miniature airplane and cargo truck",
+    "게임·엔터·문화": "a neutral game controller",
+    "음식료": "a miniature bread basket",
+    "부동산": "miniature apartment buildings",
+    "유통": "a plain shopping bag",
+    "IT 서비스": "miniature server racks",
 }
 
-# 보고서 이미지 분위기. 방향(화살표·그래프)은 이미지 AI가 반대로 그리므로 날씨와 빛으로만 나타낸다
+# 분위기는 표정에만 쓴다. KOSPI 방향을 분위기만으로 추정하지 않는다.
 IMAGE_MOODS = {
-    "강한 상승": "under a bright clear sky with warm golden sunlight",
-    "상승": "under a clear blue sky with soft warm sunlight",
-    "혼조": "under a partly cloudy sky with sunlight breaking through",
-    "보합": "under a calm soft overcast sky",
-    "하락": "under gray clouds with soft cool light",
-    "급락": "under dark gray storm clouds with dim cool light",
+    "강한 상승": "a pleased, calmly optimistic expression",
+    "상승": "a gently hopeful expression",
+    "혼조": "a thoughtful expression",
+    "보합": "a calm neutral expression",
+    "하락": "a mildly concerned expression",
+    "급락": "a concerned but not panicked expression",
 }
 
-# 이미지 공통 화풍. 소재·분위기로 만든 그림 설명 뒤에 붙는다 (report_service._image_scene)
-# 사이트 디자인(밝은 회색 바탕·빨간 포인트·차콜 글자·카드형 UI)에 맞춘 플랫 일러스트. 바꾸면 모든 보고서 이미지의 화풍이 바뀐다
-# 정사각형으로 생성되지만 화면에서는 가로로 긴 배너로 가운데를 잘라 쓰므로, 주요 소재를 세로 가운데 띠에 모으게 한다
+# Pollinations는 글자 없는 클레이 장면만 만든다. 한글 제목·라벨은 image_client가 고정 좌표에 합성한다.
 IMAGE_STYLE = (
-    "clean modern flat vector illustration in a minimal fintech style, soft light warm gray and muted blue tones "
-    "with vivid red accents and charcoal details, simple rounded shapes, subtle soft shadows, "
-    "one unified scene with the main subjects grouped together in the vertical middle of the image, "
-    "full-bleed background with no borders, frames, bars or stripes, "
-    "no text, no letters, no numbers, no logos, no people, no faces, no arrows, no charts, no graphs"
+    "A photographed physical stop-motion clay miniature, cozy vintage Czech puppet craftsmanship. "
+    "Visible fingerprint ridges and hand-shaped imperfections, soft matte clay, real knitted fabric. "
+    "Warm beige plaster, brown wood, warm-gray clothing, soft warm studio light, gentle shadows. "
+    "Wide 3:1 composition, one continuous richly staged room filling the entire frame edge to edge. "
+    "Central seated person and main wall symbol in sharp focus; smaller background props softly focused. "
+    "Only the explicitly specified props belong in the scene. Neutral beige, taupe, brown and warm gray "
+    "everywhere except the single explicitly specified market-arrow accent. "
+    "Keep the doorway movement arrow small and dark brown. "
+    "Keep the upper 115 pixels visually quiet with the same continuous plaster-wall texture because the application overlays a title there. "
+    "Continue the room, wooden floor or workbench texture through the lower 70 pixels edge to edge; keep it visually quiet but never blank or white because keyword plaques are overlaid there. "
+    "Place all important people, arrows and props inside the middle horizontal band without cropping. "
+    "Absolutely no text, letters, numbers, signs, labels, logos, watermarks or pseudo-writing anywhere. "
+    "No empty margin, no bottom white band, no infographic layout, no split panels."
 )

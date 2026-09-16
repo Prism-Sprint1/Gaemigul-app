@@ -99,7 +99,7 @@ class TimelineReport(Base):
     sections: Mapped[list["TimelineReportSection"]] = relationship(back_populates="report", cascade="all, delete-orphan", order_by="TimelineReportSection.seq")
     quarters: Mapped[list["TimelineReportQuarter"]] = relationship(back_populates="report", cascade="all, delete-orphan", order_by="TimelineReportQuarter.seq")
     # 섹터 카드는 한 개라 순서가 없다. 목록 형태는 다른 자식 테이블과 저장 방식을 맞추기 위해서다 (report.sectors[0])
-    sectors: Mapped[list["TimelineReportSector"]] = relationship(back_populates="report", cascade="all, delete-orphan")
+    sectors: Mapped[list["TimelineReportSector"]] = relationship(back_populates="report", cascade="all, delete-orphan", order_by="TimelineReportSector.id")
     keywords: Mapped[list["TimelineReportKeyword"]] = relationship(back_populates="report", cascade="all, delete-orphan", order_by="TimelineReportKeyword.seq")
     terms: Mapped[list["TimelineReportTerm"]] = relationship(back_populates="report", cascade="all, delete-orphan", order_by="TimelineReportTerm.seq")
 
