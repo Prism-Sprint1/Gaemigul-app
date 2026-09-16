@@ -142,3 +142,23 @@
 * {
   box-sizing: border-box;
 }
+
+@keyframes chat-in {
+  0% {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(16px) scale(0.94);
+  }
+  60% {
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-chat-in {
+  animation: chat-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
