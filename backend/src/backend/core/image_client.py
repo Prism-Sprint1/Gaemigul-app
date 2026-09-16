@@ -53,9 +53,17 @@ def _fit_font(draw: ImageDraw.ImageDraw, text: str, width: int, height: int, max
     return _korean_font(12)
 
 
-def _draw_centered_text(draw: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], maximum: int) -> None:
+def _draw_centered_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    box: tuple[int, int, int, int],
+    maximum: int,
+    *,
+    horizontal_padding: int = 8,
+    vertical_padding: int = 4,
+) -> None:
     left, top, right, bottom = box
-    font = _fit_font(draw, text, right - left - 16, bottom - top - 8, maximum)
+    font = _fit_font(draw, text, right - left - horizontal_padding * 2, bottom - top - vertical_padding * 2, maximum)
     bounds = draw.textbbox((0, 0), text, font=font, stroke_width=1)
     x = left + (right - left - (bounds[2] - bounds[0])) / 2 - bounds[0]
     y = top + (bottom - top - (bounds[3] - bounds[1])) / 2 - bounds[1]
@@ -80,15 +88,18 @@ def _draw_wood_plaque(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int],
 
 
 def _title_box(draw: ImageDraw.ImageDraw, headline: str) -> tuple[int, int, int, int]:
-    """제목 길이에 맞춰 가운데 정렬된 목재 간판 크기를 계산한다."""
-    font = _korean_font(50)
+    """제목 길이에 맞추되 화면·글자 양쪽에 일정한 여백을 둔 작은 목재 간판을 계산한다."""
+    side_margin = 64
+    horizontal_padding = 28
+    max_width = _WIDTH - side_margin * 2
+    font = _fit_font(draw, headline, max_width - horizontal_padding * 2, 44, 38)
     bounds = draw.textbbox((0, 0), headline, font=font)
     text_width = bounds[2] - bounds[0]
     text_height = bounds[3] - bounds[1]
-    width = min(1080, max(520, text_width + 92))
-    height = min(104, max(78, text_height + 42))
+    width = min(max_width, max(300, text_width + horizontal_padding * 2))
+    height = min(72, max(58, text_height + 22))
     left = (_WIDTH - width) // 2
-    return left, 18, left + width, 18 + height
+    return left, 12, left + width, 12 + height
 
 
 def _fill_frame_with_scene(image: Image.Image) -> Image.Image:
@@ -118,8 +129,8 @@ def add_korean_labels(content: bytes, *, headline: str, labels: list[str]) -> by
 
     # 상단 제목은 장면 속 목재 간판처럼 보이도록 그림자·나뭇결·못 장식을 함께 그린다.
     title_box = _title_box(draw, headline)
-    _draw_wood_plaque(draw, title_box, radius=14, pegs=True)
-    _draw_centered_text(draw, headline, title_box, 50)
+    _draw_wood_plaque(draw, title_box, radius=11, pegs=True)
+    _draw_centered_text(draw, headline, title_box, 38, horizontal_padding=28, vertical_padding=9)
 
     # 키워드는 배경을 가리지 않는 개별 목재 명패로 올리고 제목과 같은 서체·재질을 쓴다.
     visible = [label for label in labels if label][:4]

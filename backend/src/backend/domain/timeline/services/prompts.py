@@ -393,10 +393,20 @@ REPORT_PROMPT = """너는 한국 주식시장 보고서를 쓰는 금융 에디�
 # 보고서 이미지 장면. 문구 생성 방식과 재료 키는 유지하고 그림의 표현만 바꾼다.
 IMAGE_SCENE = "{city} Market mood: {mood}. Related miniature props: {causes}. {flow}"
 IMAGE_SCENE_NO_CAUSE = "{city} Market mood: {mood}. {flow}"
-IMAGE_CITY = (
-    "One coherent handcrafted miniature market room with warm plaster walls, wooden window frames and desk. "
-    "One friendly clay beginner investor seated at the center or right third is the main focal character. "
-    "Related economic props sit in the window or on shelves, smaller and slightly out of focus."
+IMAGE_MAIN_LAYOUTS = (
+    "A handcrafted miniature securities office with a broad plaster wall, one wooden desk and a side doorway. The main clay beginner investor stands beside the desk, facing the market symbol.",
+    "A handcrafted miniature market observation room with a wide window, a low wooden bench and a side doorway. The main clay beginner investor sits on the bench, watching the market symbol.",
+    "A handcrafted miniature exchange lobby with warm plaster pillars, a central wooden information desk and a side exit. The main clay beginner investor stands at the center of the lobby.",
+    "A handcrafted miniature home study with a wooden cabinet, a compact writing desk and a side doorway. The main clay beginner investor sits at the desk, studying the market symbol.",
+    "A handcrafted miniature market strategy room with a broad planning table, a tall side window and a side doorway. The main clay beginner investor stands beside the table, facing the market symbol.",
+)
+
+IMAGE_SECTION_LAYOUTS = (
+    "A handcrafted miniature analyst workshop with a long wooden workbench and shallow wall shelves. The main clay beginner investor sits at the right third, examining the cause props.",
+    "A handcrafted miniature research library with a central display table, small wooden bookcases and a warm plaster wall. The main clay beginner investor stands at the right third, comparing the cause props.",
+    "A handcrafted miniature economic laboratory with a sturdy wooden table, small cabinets and a wide window. The main clay beginner investor sits at the right third, inspecting the cause props.",
+    "A handcrafted miniature newsroom studio with a low wooden presentation table and softly focused shelving. The main clay beginner investor stands at the right third, arranging the cause props.",
+    "A handcrafted miniature economic archive room with a wide wooden map table, shallow document drawers and warm plaster walls. The main clay beginner investor sits at the right third, tracing the cause props.",
 )
 
 # 자금 흐름은 작은 보조 인물의 이동으로 나타낸다. 주인공보다 작게, 방향 화살표도 작게 둔다.
@@ -457,7 +467,7 @@ IMAGE_STYLE = (
     "Only the explicitly specified props belong in the scene. Neutral beige, taupe, brown and warm gray "
     "everywhere except the single explicitly specified market-arrow accent. "
     "Keep the doorway movement arrow small and dark brown. "
-    "Keep the upper 115 pixels visually quiet with the same continuous plaster-wall texture because the application overlays a title there. "
+    "The upper 82 pixels must be completely bare uninterrupted plaster wall, edge to edge: no frames, shelves, windows, props, marks or shapes there, because the application overlays a compact title. "
     "Continue the room, wooden floor or workbench texture through the lower 70 pixels edge to edge; keep it visually quiet but never blank or white because keyword plaques are overlaid there. "
     "Place all important people, arrows and props inside the middle horizontal band without cropping. "
     "Absolutely no text, letters, numbers, signs, labels, logos, watermarks or pseudo-writing anywhere. "

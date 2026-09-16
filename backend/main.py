@@ -1,6 +1,5 @@
 # main.py
-# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바·VIX·슬롯 수집), CORS, 라우터 등록.
-# 보고서는 따로 예약하지 않는다. 20:00 슬롯 작업이 끝나면 timeline_service가 이어서 만든다
+# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바·VIX·슬롯·보고서), CORS, 라우터 등록.
 
 import logging
 from contextlib import asynccontextmanager
@@ -16,7 +15,7 @@ from backend.core.logging_config import setup_logging
 from backend.domain.market.routers.market import router as market_router
 from backend.domain.market.services import vix_service
 from backend.domain.timeline.routers.timeline import router as timeline_router
-from backend.domain.timeline.services import market_indicator_service, timeline_service
+from backend.domain.timeline.services import market_indicator_service, report_service, timeline_service
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +35,7 @@ async def lifespan(app: FastAPI):
     _register_indicator_job()
     _register_vix_job()
     _register_slot_jobs()
+    _register_report_job()
 
     jobs = _scheduler.get_jobs()
     if jobs:
@@ -94,6 +94,21 @@ def _register_slot_jobs() -> None:
             args=[slot_key],
             id=f"slot_{slot_key}",
         )
+
+
+# 일간·주간 보고서는 20:00 슬롯과 분리해 20:05에 만든다.
+# KIS의 투자자 수급·업종 거래대금이 20:00 직후에도 정산되는 것을 실데이터로 확인해 5분의 여유를 둔다.
+def _register_report_job() -> None:
+    if not get_settings().database_url:
+        return
+
+    _scheduler.add_job(
+        report_service.run_scheduled_reports,
+        CronTrigger(hour=20, minute=5),
+        id="timeline_reports",
+        max_instances=1,
+        coalesce=True,
+    )
 
 
 app = FastAPI(lifespan=lifespan)
