@@ -100,22 +100,16 @@ function mapNews(slot: ApiTimelineSlot): NewsItem[] {
 function mapSectors(slot: ApiTimelineSlot): SectorItem[] | undefined {
   if (slot.leading_sectors.length === 0) return undefined
 
-  return slot.leading_sectors.map((sector, index) => {
-    const topStock = sector.stocks[0]
-
-    return {
-      id: `${slot.slot_key}-sector-${index}`,
-      name: sector.name,
-      rate: formatRate(sector.change_rate),
-      topStock: topStock
-        ? {
-            name: topStock.name,
-            badge: topStock.label,
-            rate: formatRate(topStock.change_rate),
-          }
-        : { name: "-", badge: "", rate: "0.00%" },
-    }
-  })
+  return slot.leading_sectors.map((sector, index) => ({
+    id: `${slot.slot_key}-sector-${index}`,
+    name: sector.name,
+    rate: formatRate(sector.change_rate),
+    stocks: sector.stocks.map((stock) => ({
+      name: stock.name,
+      badge: stock.label,
+      rate: formatRate(stock.change_rate),
+    })),
+  }))
 }
 
 function mapFeaturedStocks(slot: ApiTimelineSlot): FeaturedStock[] | undefined {

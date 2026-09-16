@@ -76,8 +76,8 @@ export type SectorItem = {
   id: string
   name: string
   rate: string
-  /** 섹터 대표 종목 1개만 보여준다. */
-  topStock: SectorStock
+  /** 상승 1위·거래 1위 1~2개. 같은 종목이면 백엔드가 "상승·거래 1위" 한 줄로 합쳐서 보낸다. */
+  stocks: SectorStock[]
 }
 
 /** 급등/급락 여부와 무관하게 시장에서 주목받는 특징 종목. */

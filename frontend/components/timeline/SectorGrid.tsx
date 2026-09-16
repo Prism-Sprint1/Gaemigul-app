@@ -27,26 +27,33 @@ export default function SectorGrid({ sectors }: SectorGridProps) {
             >
               {sector.rate}
             </strong>
-            <div className="flex items-center justify-between border-t border-neutral-100 pt-2 text-xs">
-              <span className="flex items-center gap-1.5">
-                <span className="font-medium">{sector.topStock.name}</span>
-                <Badge
-                  variant="outline"
-                  className="text-[10px] text-neutral-500"
+            <div className="flex flex-col gap-1.5 border-t border-neutral-100 pt-2">
+              {sector.stocks.map((stock) => (
+                <div
+                  key={stock.badge || stock.name}
+                  className="flex items-center justify-between text-xs"
                 >
-                  {sector.topStock.badge}
-                </Badge>
-              </span>
-              <span
-                className={cn(
-                  "font-semibold",
-                  isPositiveRate(sector.topStock.rate)
-                    ? "text-increase"
-                    : "text-decrease"
-                )}
-              >
-                {sector.topStock.rate}
-              </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="font-medium">{stock.name}</span>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] text-neutral-500"
+                    >
+                      {stock.badge}
+                    </Badge>
+                  </span>
+                  <span
+                    className={cn(
+                      "font-semibold",
+                      isPositiveRate(stock.rate)
+                        ? "text-increase"
+                        : "text-decrease"
+                    )}
+                  >
+                    {stock.rate}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         ))}
