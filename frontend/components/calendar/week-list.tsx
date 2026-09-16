@@ -1,6 +1,14 @@
 "use client"
 
-import { addDays, endOfMonth, format, isSameDay, isSameMonth, startOfDay, startOfMonth } from "date-fns"
+import {
+  addDays,
+  endOfMonth,
+  format,
+  isSameDay,
+  isSameMonth,
+  startOfDay,
+  startOfMonth,
+} from "date-fns"
 import { ko } from "date-fns/locale/ko"
 import { useMemo } from "react"
 import type { MarketHoliday, NewsItem } from "@/app/(main)/calendar/news-data"
@@ -77,7 +85,9 @@ export function WeekList({
                 <tr className="border-b bg-muted/40 text-[12px] text-muted-foreground">
                   <th className="w-20 p-2 text-left font-semibold">날짜</th>
                   <th className="p-2 text-left font-semibold">일정</th>
-                  <th className="w-36 p-2 text-left font-semibold">발표</th>
+                  <th className="w-36 p-2 text-left font-semibold">
+                    발표 시간
+                  </th>
                   <th className="w-20 p-2 text-left font-semibold">현재</th>
                   <th className="w-20 p-2 text-left font-semibold">이전</th>
                 </tr>
@@ -137,7 +147,7 @@ function DayRows({
           {i === 0 && (
             <td
               rowSpan={day.news.length}
-              className={`p-2 text-left text-[12px] font-medium whitespace-nowrap text-primary${day.news.length > 1 ? " align-top" : ""}`}
+              className={`p-2 text-left text-[12px] font-medium whitespace-nowrap text-primary${day.news.length > 1 ? "align-top" : ""}`}
             >
               {dateLabel}
             </td>
