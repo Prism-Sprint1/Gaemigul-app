@@ -2925,3 +2925,81 @@ export function formatEconomicValue(raw: string | null | undefined): string
 - 지금은 `calendar_events`의 값만 대상으로 했다 - `market_indicator_service`가 다루는
   실시간 지수/등락률(코스피·코스닥·환율 등, 사이드바 티커)은 이번 요청의 "주가, 등락률...
   은 제외" 원칙에 따라 건드리지 않았다.
+
+## 57. PAYEMS "천 명" 축약값을 실제 인원 수로 DB에 직접 저장 - 56번과 달리 이번엔 DB를 바꿈
+
+사용자가 "calendar_events 테이블의 previous 값이 안 변했는데?"라고 물어서(56번 작업은
+DB를 안 건드리고 화면 표시만 바꾸는 것이었으므로 DB 자체가 그대로인 게 맞다고 설명했다),
+이어서 "데이터테이블에서 previous와 actual 컬럼에서 천 명이라고 되어 있는 것을 1000명의
+수로 표현해줘(158861천 명→158861000 명)"라고 요청했다. "컬럼"이라는 표현과 "158861천
+명→158861000 명"이라는 구체적 예시가 DB 저장값 자체를 가리키고 있어서, 56번과 달리 이번엔
+DB에 실제로 반영해야 하는 요청인지 애매했다. AskUserQuestion으로 "화면 표시만 바꿀지 DB
+값 자체를 바꿀지" 확인했고, 사용자가 "이런 수치(천 명)는 읽기도 보기도 힘드니 수정하는
+게 옳다"고 답해서 DB 저장값을 실제로 바꾸는 쪽으로 진행했다.
+
+### 왜 이건 "값을 임의로 바꾸는 것"이 아닌가
+
+앞선 여러 작업(48·55·56번)에서 반복해온 원칙은 "실제 값을 추정·변경·생성하지 않는다"이다.
+이번 변경은 그 원칙을 어기지 않는다 - "158861천 명"은 애초에 "158,861,000명"이라는 같은
+값을 "천 명" 단위로 축약 표기한 것뿐이고, 1000을 곱해서 실제 인원 수로 풀어 쓰는 것은
+정보의 손실이나 추정 없이 완전히 동일한 값을 다른 배수로 다시 쓰는 것이다(158861 × 1000 =
+158861000, 수학적으로 항상 성립).
+
+### 변경한 파일
+
+- **`services/calendar.py`**:
+  - `_UNITS` 딕셔너리에서 `"PAYEMS": "천 명"` 제거(주석도 갱신)
+  - `_expand_payems_thousands(value: str) -> str` 신규 - `round(float(value) * 1000)`으로
+    실제 인원 수 문자열을 만든다
+  - `_with_unit`에 PAYEMS 전용 분기 추가: `f"{_expand_payems_thousands(value)} 명"`
+    (다른 지표는 기존처럼 `_UNITS` 딕셔너리 조회 그대로)
+  - `_ingest_from_fred`/`ingest_year_from_fred` 두 곳 다 `_with_unit`을 그대로 호출하므로
+    별도 수정 없이 이 변경이 자동으로 적용된다
+- **`scripts/expand_payems_thousands.py`**(신규, 1회성 백필): `id LIKE 'fred-PAYEMS-%'`인
+  행만 대상으로 `previous`/`actual`이 `"숫자천 명"` 패턴이면 `"{숫자*1000} 명"`으로
+  UPDATE. 이미 변환된 값은 정규식이 매치되지 않아 건드리지 않으므로 재실행해도 안전(멱등)
+- **`frontend/lib/format-economic-value.ts`**: `formatEconomicValue`가 단위 `"명"`(이미
+  실제 인원 수로 풀린 값)을 인식해서 `formatKoreanCount(numeric)`을 그대로 적용하도록
+  케이스 추가(기존 `"천명"` 케이스는 혹시 남아있을 옛 데이터를 위해 `numeric * 1000`
+  버전 그대로 유지 - 하위 호환)
+- `frontend/app/(main)/calendar/news-data.ts`: 19곳의 `"XXXXXX천 명"`을
+  `sed -E 's/([0-9]+)천 명/\1000 명/g'`로 `"XXXXXX000 명"`으로 일괄 치환(200개 행 수
+  불변, 다른 값은 건드리지 않음을 `grep`으로 확인)
+
+### 검증
+
+- `uv run python scripts/expand_payems_thousands.py` 실행 → "11건 변경, 0건 스킵" 확인
+- DB를 직접 조회해서 `fred-PAYEMS-2026-01-01` ~ `-11-01` 11개 행 전부
+  `previous`/`actual`이 `"158432000 명"` 형태로 바뀐 것을 확인
+- FastAPI 서버를 띄우고 `GET /calendar/events?year=2026&month=2` 직접 호출 →
+  `"previous": "158432000 명", "actual": "158592000 명"`로 API 응답에서도 확인
+- `npx tsc --noEmit` 통과, `npm run dev` + Playwright로 `/calendar` 화면 확인 -
+  "약 1억 5,859만 명"/"약 1억 5,843만 명"으로 56번 때와 동일하게 정상 표시(값 자체가
+  바뀐 게 아니라 저장 형식만 바뀌었으므로 화면 결과는 그대로임을 재확인)
+
+### 56번과의 관계
+
+56번에서 만든 화면 포맷터(`formatEconomicValue`)는 "DB는 그대로 두고 화면에서만 변환"
+원칙으로 만들었는데, 이번에 DB 저장 형식 자체가 바뀌면서 포맷터도 그에 맞춰 최소한만
+수정했다(새 단위 `"명"` 케이스 추가). 다른 지표(CPI/PPI/PCE/GDP/UNRATE)의 저장 형식과
+포맷터 동작은 이번 변경과 무관하게 그대로다.
+
+### 후속 수정 - "158861000 명" → "158861000명"(숫자와 "명" 사이 공백 제거)
+
+바로 다음 요청으로 사용자가 공백을 빼달라고 했다. 값은 그대로 두고 표기만 고치는
+것이라 간단히 처리했다:
+
+- `services/calendar.py`: `_with_unit`의 PAYEMS 분기를 `f"{...} 명"` → `f"{...}명"`으로
+  수정(공백 제거)
+- **`scripts/fix_payems_space.py`**(신규, 1회성): `id LIKE 'fred-PAYEMS-%'`인 행의
+  `previous`/`actual`에서 `REPLACE(컬럼, ' 명', '명')`만 적용 - 11건 갱신
+- `news-data.ts`: `sed -E 's/([0-9]) 명"/\1명"/g'`로 19곳의 `" 명"`을 `"명"`으로 일괄
+  치환(패턴을 "숫자 + 공백 + 명 + 닫는 따옴표"로 좁혀서 summary 본문 텍스트 등 다른
+  곳의 "명"은 건드리지 않도록 함 - 치환 전후로 개수를 대조해 확인)
+- 정규식 파서(`RAW_PATTERN`)가 숫자와 단위 사이 공백을 `\s*`로 이미 허용하고 있어서
+  `formatEconomicValue`는 공백 유무와 무관하게 동일하게 동작 - 프런트 포맷터 코드는
+  수정할 필요가 없었다
+
+검증: DB 직접 조회로 `"158432000명"` 형태 확인, `tsc --noEmit` 통과, Playwright로
+화면의 `title` 툴팁(원본값)이 `"158592000명"`(공백 없음)으로 나오고 표시값("약 1억
+5,859만 명")은 그대로임을 확인.
