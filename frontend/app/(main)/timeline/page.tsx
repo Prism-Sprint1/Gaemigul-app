@@ -6,9 +6,13 @@ import { format, isSameDay, startOfDay } from "date-fns"
 import { PageTitle } from "@/components/common"
 import { useTimelineSchedule } from "@/components/common/timeline"
 import { TimelineDateHeader, TimelineSection } from "@/components/timeline"
+<<<<<<< HEAD
 import { getTimelineDay, getTimelineGlossary } from "@/lib/api/timeline"
 import { mapSlotToContent } from "@/lib/timeline-mapper"
 import type { ApiTimelineSlot } from "@/lib/types/TimelineType"
+=======
+import { timelineContents } from "@/lib/constant/timelineContent"
+>>>>>>> 417a5403824a674ccf01b6c32189b97a377db9be
 
 const TODAY = startOfDay(new Date())
 // 백엔드가 실데이터를 쌓기 시작한 날짜. 이전 날짜는 캘린더에서 선택할 수 없다.

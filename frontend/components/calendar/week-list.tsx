@@ -1,13 +1,16 @@
 "use client"
 
-import { cn } from "@/lib/utils"
-import { addDays, endOfMonth, format, isSameDay, isSameMonth, startOfDay, startOfMonth } from "date-fns"
+import { addDays, format, isSameDay, isSameMonth, startOfDay } from "date-fns"
 import { ko } from "date-fns/locale/ko"
-import { Play } from "lucide-react"
 import { useMemo } from "react"
 import type { MarketHoliday, NewsItem } from "@/app/(main)/calendar/news-data"
 import { dayGroupOf, type DayGroup } from "@/app/(main)/calendar/news-panel"
-import { announceLabel, weekOfMonth } from "@/lib/calendar"
+import {
+  announceLabel,
+  weekLabelOf,
+  weekOwnedRangeOfMonth,
+} from "@/lib/calendar"
+import { formatEconomicValue } from "@/lib/format-economic-value"
 import { CategoryBar } from "./category-bar"
 import { RegionBadge } from "./region-badge"
 
@@ -17,22 +20,29 @@ export function WeekList({
   month,
   selectedDate,
   news,
+  allNews,
   holidays,
-  colorActive,
   onOpenItem,
+  emptyMessage = "표시할 일정이 없습니다",
 }: {
   month: Date
   selectedDate: Date
   news: NewsItem[]
+  allNews: NewsItem[]
   holidays: MarketHoliday[]
-  colorActive: boolean
   onOpenItem: (g: DayGroup, itemId: string) => void
+  emptyMessage?: string
 }) {
-  // 이번 달을 보는 중이면 '오늘(선택일)'부터, 다른 달이면 1일부터 표시
-  const rangeStart = isSameMonth(selectedDate, month)
-    ? startOfDay(selectedDate)
-    : startOfMonth(month)
-  const rangeEnd = endOfMonth(month)
+  // 이번 달이 "주인"인 주만 범위로 삼는다 — 예: 8/1이 속한 주는 7월 소유라 8월 범위에서 빠지고
+  // (7월 범위에만 나타남), 8/31이 속한 주는 9월 소유라 8월 범위에서 빠진다(9월 범위에만 나타남)
+  const ownedRange = weekOwnedRangeOfMonth(month)
+  // 이번 달을 보는 중이면 '오늘(선택일)'부터, 다른 달이면 이번 달 소유 범위의 시작부터 표시
+  const rangeStart =
+    isSameMonth(selectedDate, month) &&
+    startOfDay(selectedDate) > ownedRange.start
+      ? startOfDay(selectedDate)
+      : ownedRange.start
+  const rangeEnd = ownedRange.end
 
   const dayEntries = useMemo(() => {
     const entries: DayEntry[] = []
@@ -49,29 +59,40 @@ export function WeekList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [+rangeStart, +rangeEnd, news, holidays])
 
+  // 월초/월말 경계 주는 날짜가 더 많이 속한 달 기준으로 묶는다(weekLabelOf) — 예: 7/27~8/1은
+  // 7월 날짜가 더 많으므로 8월 뷰에서도 "7월 5주"로 표시되고 "8월 1주"로 새로 넘어가지 않는다
   const weeks = useMemo(() => {
-    const map = new Map<number, DayEntry[]>()
+    const map = new Map<
+      string,
+      { month: Date; weekNo: number; days: DayEntry[] }
+    >()
     for (const entry of dayEntries) {
-      const w = weekOfMonth(entry.date, month)
-      map.set(w, [...(map.get(w) ?? []), entry])
+      const { month: ownerMonth, weekNo } = weekLabelOf(entry.date)
+      const key = `${ownerMonth.getFullYear()}-${ownerMonth.getMonth()}-${weekNo}`
+      const group = map.get(key)
+      if (group) {
+        group.days.push(entry)
+      } else {
+        map.set(key, { month: ownerMonth, weekNo, days: [entry] })
+      }
     }
-    return [...map.entries()].sort(([a], [b]) => a - b)
-  }, [dayEntries, month])
+    return [...map.values()].sort((a, b) => +a.days[0].date - +b.days[0].date)
+  }, [dayEntries])
 
   if (weeks.length === 0) {
     return (
       <p className="py-16 text-center text-sm text-muted-foreground">
-        표시할 일정이 없습니다
+        {emptyMessage}
       </p>
     )
   }
 
   return (
     <div className="space-y-6">
-      {weeks.map(([weekNo, days]) => (
-        <div key={weekNo}>
+      {weeks.map(({ month: ownerMonth, weekNo, days }) => (
+        <div key={`${+ownerMonth}-${weekNo}`}>
           <h3 className="mb-2 text-[14px] font-bold text-primary">
-            {format(month, "M월")} {weekNo}주차
+            {format(ownerMonth, "M월")} {weekNo}주차
           </h3>
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full min-w-135 text-sm">
@@ -79,8 +100,10 @@ export function WeekList({
                 <tr className="border-b bg-muted/40 text-[12px] text-muted-foreground">
                   <th className="w-20 p-2 text-left font-semibold">날짜</th>
                   <th className="p-2 text-left font-semibold">일정</th>
-                  <th className="w-36 p-2 text-left font-semibold">발표</th>
-                  <th className="w-20 p-2 text-left font-semibold">현재</th>
+                  <th className="w-36 p-2 text-left font-semibold">
+                    발표 시간
+                  </th>
+                  <th className="w-24 p-2 text-left font-semibold">현재</th>
                   <th className="w-20 p-2 text-left font-semibold">이전</th>
                 </tr>
               </thead>
@@ -89,7 +112,7 @@ export function WeekList({
                   <DayRows
                     key={+day.date}
                     day={day}
-                    colorActive={colorActive}
+                    allNews={allNews}
                     onOpenItem={onOpenItem}
                   />
                 ))}
@@ -104,42 +127,39 @@ export function WeekList({
 
 function DayRows({
   day,
-  colorActive,
+  allNews,
   onOpenItem,
 }: {
   day: DayEntry
-  colorActive: boolean
+  allNews: NewsItem[]
   onOpenItem: (g: DayGroup, itemId: string) => void
 }) {
   const dateLabel = format(day.date, "d일 (EEE)", { locale: ko })
 
   const openItem = (n: NewsItem) => {
-    const g = dayGroupOf(n.publishedAt)
+    const g = dayGroupOf(n.publishedAt, allNews)
     if (g) onOpenItem(g, n.id)
-  }
-
-  if (day.holiday) {
-    return (
-      <tr className="border-b last:border-b-0">
-        <td className="p-2 text-left text-[12px] font-medium whitespace-nowrap text-primary">
-          {dateLabel}
-        </td>
-        <td colSpan={4} className="p-2 text-left text-[12px] text-red-500">
-          📍 {day.holiday.scope === "domestic" ? "국내" : "해외"} 휴장일 (
-          {day.holiday.label})
-        </td>
-      </tr>
-    )
   }
 
   return (
     <>
+      {day.holiday && (
+        <tr className="border-b last:border-b-0">
+          <td className="p-2 text-left text-[12px] font-medium whitespace-nowrap text-primary">
+            {dateLabel}
+          </td>
+          <td colSpan={4} className="p-2 text-left text-[12px] text-red-500">
+            📍 {day.holiday.scope === "domestic" ? "국내" : "해외"} 휴장일 (
+            {day.holiday.label})
+          </td>
+        </tr>
+      )}
       {day.news.map((n, i) => (
         <tr key={n.id} className="border-b last:border-b-0">
           {i === 0 && (
             <td
               rowSpan={day.news.length}
-              className="p-2 text-left text-[12px] font-medium whitespace-nowrap text-primary"
+              className={`p-2 text-left text-[12px] font-medium whitespace-nowrap text-primary${day.news.length > 1 ? "align-top" : ""}`}
             >
               {dateLabel}
             </td>
@@ -151,36 +171,29 @@ function DayRows({
               title={n.title}
               className="flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] transition-colors hover:bg-primary/5 hover:text-primary"
             >
-              <CategoryBar category={n.category} colorActive={colorActive} />
+              <CategoryBar category={n.category} />
               <RegionBadge region={n.region} />
-              <span
-                className={cn(
-                  "truncate",
-                  n.highlight === "special" && "font-semibold"
-                )}
-              >
-                {n.highlight === "special" && (
-                  <span className="mr-1 rounded bg-emerald-500/10 px-1 py-0.5 text-[10px] font-semibold text-emerald-600">
-                    주요
-                  </span>
-                )}
-                {n.title}
-              </span>
-              {n.replay && (
-                <span className="ml-1 inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  <Play className="size-2.5" /> 다시듣기
-                </span>
-              )}
+              <span className="truncate">{n.title}</span>
             </button>
           </td>
           <td className="p-2 text-left text-[12px] whitespace-nowrap text-muted-foreground">
-            {announceLabel(n.publishedAt)}
+            {n.hasTime ? announceLabel(n.publishedAt) : "시간 미정"}
           </td>
-          <td className="p-2 text-left text-[12px] whitespace-nowrap">
-            {n.detail?.forecast ?? "-"}
+          <td
+            className="p-2 text-left text-[12px] whitespace-nowrap"
+            title={n.detail?.actual}
+          >
+            {n.detail?.actual
+              ? n.detail.actualLabel
+                ? `${n.detail.actualLabel} ${formatEconomicValue(n.detail.actual)}`
+                : formatEconomicValue(n.detail.actual)
+              : "-"}
           </td>
-          <td className="p-2 text-left text-[12px] whitespace-nowrap">
-            {n.detail?.previous ?? "-"}
+          <td
+            className="p-2 text-left text-[12px] whitespace-nowrap"
+            title={n.detail?.previous}
+          >
+            {formatEconomicValue(n.detail?.previous)}
           </td>
         </tr>
       ))}

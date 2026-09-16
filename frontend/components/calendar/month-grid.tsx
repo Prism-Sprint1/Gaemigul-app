@@ -13,8 +13,8 @@ export function MonthGrid({
   today,
   selectedDate,
   news,
+  allNews,
   holidays,
-  colorActive,
   onSelectDate,
   onOpenDay,
   onOpenItem,
@@ -23,8 +23,8 @@ export function MonthGrid({
   today: Date
   selectedDate: Date
   news: NewsItem[]
+  allNews: NewsItem[]
   holidays: MarketHoliday[]
-  colorActive: boolean
   onSelectDate: (d: Date) => void
   onOpenDay: (d: Date) => void
   onOpenItem: (g: DayGroup, itemId: string) => void
@@ -32,7 +32,7 @@ export function MonthGrid({
   const weeks = useMemo(() => getMonthGridWeeks(month), [month])
 
   const openItem = (n: NewsItem) => {
-    const g = dayGroupOf(n.publishedAt)
+    const g = dayGroupOf(n.publishedAt, allNews)
     if (g) onOpenItem(g, n.id)
   }
 
@@ -53,9 +53,12 @@ export function MonthGrid({
         <div className="grid grid-cols-6 gap-px overflow-hidden bg-border">
           {weeks.flat().map((d) => {
             const inMonth = isSameMonth(d, month)
-            const dayNews = news
-              .filter((n) => isSameDay(n.publishedAt, d))
-              .sort((a, b) => a.publishedAt.getTime() - b.publishedAt.getTime())
+            // 그리드에 걸치는 전달/다음달 여분 날짜는 일정을 표시하지 않는다
+            const dayNews = inMonth
+              ? news
+                  .filter((n) => isSameDay(n.publishedAt, d))
+                  .sort((a, b) => a.publishedAt.getTime() - b.publishedAt.getTime())
+              : []
             const holiday = holidays.find((h) => isSameDay(h.date, d))
             const holidayRows = holiday ? 1 : 0
             const total = holidayRows + dayNews.length
@@ -107,7 +110,6 @@ export function MonthGrid({
                     <EventRow
                       key={n.id}
                       item={n}
-                      colorActive={colorActive}
                       onClick={() => openItem(n)}
                     />
                   ))}
