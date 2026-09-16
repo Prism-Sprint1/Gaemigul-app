@@ -1,20 +1,20 @@
 # market_indicator.py
-# GET /timeline/indicators 응답 형태(DTO)
+# 최상단 지표 바 응답 형태(DTO). GET /timeline/indicators가 쓴다.
 
 from datetime import datetime
 
 from pydantic import BaseModel
 
 
-# 지표 카드 하나에 들어가는 값
+# 지표 하나
 class MarketIndicatorItem(BaseModel):
-    code: str  # 내부에서 구분용으로 쓰는 값 (kospi, kosdaq 등)
-    name: str  # 화면에 보여줄 이름 (KOSPI, KOSDAQ 등)
-    price: float  # 현재가
-    change_rate: float  # 전일 대비 등락률(%). 0보다 크면 상승, 작으면 하락
+    code: str  # 내부 구분값 (kospi, kosdaq 등)
+    name: str  # 화면 이름 (KOSPI, KOSDAQ 등)
+    price: float  # 현재가 (장이 닫혀 있으면 마지막 값)
+    change_rate: float  # 전일 대비 등락률(%)
 
 
-# GET /timeline/indicators가 최종적으로 돌려주는 전체 응답
+# 지표 바 전체 응답
 class IndicatorBarResponse(BaseModel):
-    updated_at: datetime  # 이 응답을 만든 시각
+    updated_at: datetime  # 응답을 만든 시각
     items: list[MarketIndicatorItem]
