@@ -4,8 +4,6 @@
 
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
-import logging
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -16,27 +14,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.core.config import get_settings
 from backend.core.logging_config import setup_logging
 from backend.domain.calendar.routers.calendar import router as calendar_router
-from backend.domain.heatmap.routers.heatmap import router as heatmap_router
-from backend.domain.heatmap.services import heatmap
+# from backend.domain.heatmap.routers.heatmap import router as heatmap_router
+# from backend.domain.heatmap.services import heatmap
 from backend.domain.market.routers.market import router as market_router
 from backend.domain.market.services import vix_service
 from backend.domain.timeline.routers.timeline import router as timeline_router
-from backend.domain.timeline.services import market_indicator_service
-from backend.core.config import get_settings
-from backend.domain.heatmap.routers.heatmap import router as heatmap_router
-from backend.domain.heatmap.services import heatmap
+from backend.domain.timeline.services import market_indicator_service, timeline_service
 
-# minute="0,30" -> 매 시 0분/30분에 실행. 이 값을 바꾸면 갱신 주기가 바뀐다(예: "0,15,30,45"면 15분마다).
-_KST = ZoneInfo("Asia/Seoul")
-_logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
-
-def _refresh_indicators(*, force: bool = False) -> None:
-    # 외부 시세 장애가 앱 시작 자체를 막지 않도록 기존 지표 수집도 백그라운드에서 실행.
-    try:
-        market_indicator_service.refresh_all(force=force)
-    except Exception:
-        _logger.exception("시장 지표 갱신 실패: 마지막 수집값을 유지합니다.")
+# 예약 작업 스케줄러 (한국 시간 기준)
+# AsyncIOScheduler는 서버의 이벤트 루프에서 돌아 async 함수를 실행할 수 있다. 서버가 떠 있을 때만 동작한다
+# misfire_grace_time: 예약 시각보다 이 초만큼 늦어도 실행한다. 늘리면 맥이 잠들었다 깬 뒤에도
+#   지난 슬롯이 실행되는데, 그러면 그 시각이 아닌 값이 저장되므로 짧게 둔다
+_scheduler = AsyncIOScheduler(timezone=ZoneInfo("Asia/Seoul"), job_defaults={"misfire_grace_time": 10})
 
 
 # 서버 시작·종료 시 실행
@@ -48,7 +39,7 @@ async def lifespan(app: FastAPI):
     _register_indicator_job()
     _register_vix_job()
     _register_slot_jobs()
-    _register_heatmap_jobs()
+    # _register_heatmap_jobs()
 
     jobs = _scheduler.get_jobs()
     if jobs:
@@ -113,14 +104,14 @@ def _register_slot_jobs() -> None:
 # 저장된 스냅샷을 먼저 복원하고(네트워크 없음), 첫 수집은 서버 시작 직후 백그라운드에서 한 번 돌린다
 # 매분 30초에 확인하되 10분 수집 시점·휴장·마감 여부는 heatmap.refresh_all이 판단한다 (30초 여유는 15:30 마감 체결 반영용)
 # refresh_all은 동기 함수라 스케줄러가 별도 스레드에서 실행한다 (타임라인 슬롯 수집을 막지 않는다)
-def _register_heatmap_jobs() -> None:
-    if not get_settings().heatmap_enabled:
-        logger.warning("히트맵 수집 비활성화 - HEATMAP_ENABLED=false")
-        return
+# def _register_heatmap_jobs() -> None:
+#     if not get_settings().heatmap_enabled:
+#         logger.warning("히트맵 수집 비활성화 - HEATMAP_ENABLED=false")
+#         return
 
-    heatmap.initialize()
-    _scheduler.add_job(heatmap.refresh_all, "date", kwargs={"force": True}, id="heatmap_initial", misfire_grace_time=60)
-    _scheduler.add_job(heatmap.refresh_all, CronTrigger(minute="*", second=30), id="heatmap", max_instances=1, coalesce=True)
+#     heatmap.initialize()
+#     _scheduler.add_job(heatmap.refresh_all, "date", kwargs={"force": True}, id="heatmap_initial", misfire_grace_time=60)
+#     _scheduler.add_job(heatmap.refresh_all, CronTrigger(minute="*", second=30), id="heatmap", max_instances=1, coalesce=True)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -143,5 +134,5 @@ def read_root():
 # 라우터 등록 - 도메인을 추가하면 여기에 include_router를 추가한다
 app.include_router(timeline_router)
 app.include_router(calendar_router)
-app.include_router(heatmap_router)
+# app.include_router(heatmap_router)
 app.include_router(market_router)
