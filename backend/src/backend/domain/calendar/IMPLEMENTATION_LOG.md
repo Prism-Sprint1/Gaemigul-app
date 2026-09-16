@@ -3003,3 +3003,266 @@ DB에 실제로 반영해야 하는 요청인지 애매했다. AskUserQuestion�
 검증: DB 직접 조회로 `"158432000명"` 형태 확인, `tsc --noEmit` 통과, Playwright로
 화면의 `title` 툴팁(원본값)이 `"158592000명"`(공백 없음)으로 나오고 표시값("약 1억
 5,859만 명")은 그대로임을 확인.
+
+## 58. `front/feat/calendar` pull 시도 - 브랜치 자체에 미해결 병합 충돌이 커밋돼 있어 보류
+
+사용자가 "backend를 push 하고 front/feat/calendar pull해줘"라고 요청했다. backend push는
+평소대로 진행했고(`2105e4e`, 57번 PAYEMS 변경 포함), `front/feat/calendar` pull은 51번의
+`front/dev` 조사와 같은 방식으로 - 실제 merge 전에 먼저 안전하게 검증하다가 진짜 문제를
+발견해서 중단했다.
+
+### 검증 방법 - 격리된 git worktree에서 시험 merge (본 작업 트리는 전혀 건드리지 않음)
+
+`git diff --stat`만으로는 실제 merge 시 충돌이 나는지 알 수 없어서(front/dev 때처럼
+"파일이 삭제/치환된 것처럼" 보여도 실제로는 git이 3-way merge로 깔끔하게 합칠 수 있는
+경우가 있다), `/tmp/merge-test-worktree`에 `git worktree add --detach`로 현재
+`back/feat/calendar` HEAD를 복제한 뒤 그 안에서만 `git merge --no-commit --no-ff
+origin/front/feat/calendar`를 실행해서 실제 결과를 확인했다. 이 방식이면 진짜 merge
+결과를 볼 수 있으면서도 현재 작업 트리(커밋 안 된 프런트 변경사항 포함)는 전혀 위험에
+노출되지 않는다.
+
+### 발견 - git 자체는 충돌 없이 merge에 성공했지만, `front/feat/calendar`의 커밋된 코드에
+이미 풀리지 않은 병합 마커가 들어있었다
+
+`git merge`는 "Automatic merge went well"이라고 보고했다(진짜 3-way 충돌은 없었다는
+뜻). 하지만 merge 결과물을 열어보니 다음 3개 파일에 `<<<<<<< HEAD` / `=======` /
+`>>>>>>> f40daca3...` 형태의 **git 충돌 마커 문자열이 코드 안에 그대로 박혀 있었다**:
+
+- `backend/main.py`
+- `backend/src/backend/core/config.py`
+- `backend/src/backend/core/kis_client.py`
+
+`git show origin/front/feat/calendar:backend/src/backend/core/config.py`로 직접
+확인한 결과, 이 마커는 내 merge 때문에 생긴 게 아니라 **`front/feat/calendar` 브랜치에
+이미 이 상태로 커밋되어 있었다**. 커밋 이력을 추적해보니 `f40daca`("feat:heatmap 구현",
+`front/dev`)를 `front/feat/calendar`에 합친 커밋(`1a362b3`, "Merge branch 'front/dev'
+... into front/feat/calendar")에서 누군가 충돌을 해결하지 않고 그대로 커밋한 것으로
+보인다. 즉 지금 GitHub의 `front/feat/calendar` 브랜치는 **이 3개 파일이 Python
+문법 오류 상태**라 그대로 pull하면 백엔드 서버 자체가 뜨지 않는다.
+
+### 그 외 확인한 내용(참고용 - 실제 병합은 아직 안 함)
+
+- `models/calendar.py`/`schemas/calendar.py`/`services/calendar.py`(이번 세션에서
+  많이 수정한 파일들)는 실제로는 충돌 없이 깔끔하게 merge됐다 - `actual_label` 필드도
+  그대로 살아있었다
+- `core/kis_client.py`는 (충돌 마커 구간만 빼면) 이 브랜치의 KSD 배당/IPO/선물옵션
+  함수와 front 쪽 heatmap 함수(`get_sector_prices`/`get_stock_quotes` 등)가 함께
+  들어있어서, 두 기능이 텍스트 레벨에서는 공존 가능한 것으로 보인다
+- 프런트 `calendar` 쪽은 이미 52번에서 이 브랜치가 `front/dev`를 기준으로 재구성한
+  상태라 `front/feat/calendar`의 최신 구조(`page.tsx`+`components/calendar/*`)와도
+  큰 틀에서 호환되는 것으로 보인다(단, 실제 최종 병합 시 재검증 필요)
+
+### 판단 및 다음 단계
+
+3개 파일의 문법 오류는 내가 임의로 고쳐서 병합할 수도 있는 단순한 내용으로 보였지만
+(양쪽 내용을 그대로 합치면 될 걸로 보임), `core/` 공용 파일과 다른 팀 브랜치를 고치는
+일이라 사용자에게 먼저 확인했다. 사용자가 "지금은 pull 보류, front팀에게 먼저 알림"을
+선택해서, **실제 pull/merge는 진행하지 않았고** 시험용 worktree(`/tmp/merge-test-worktree`)는
+`git worktree remove --force`로 정리했다. `back/feat/calendar`의 작업 트리와 커밋
+이력은 이번 조사로 전혀 변경되지 않았다.
+
+다음 단계: front팀이 `front/feat/calendar`의 저 3개 파일 충돌 마커를 해결해서 다시
+푸시하면, 그때 이 worktree 시험 merge 절차를 다시 실행해서 진짜로 깨끗하게 합쳐지는지
+재확인한 뒤 진행한다.
+
+## 59. front팀에게 전달할 내용 — `front/feat/calendar`에서 고쳐야 하는 것들
+
+사용자가 "저쪽(front)에서 수정해야하는 내용을 문서로 적어줘"라고 요청했다. 58번 이후
+`front/feat/calendar`를 실제로 merge해보면서 새로 발견한 것까지 포함해 front팀에
+전달할 체크리스트를 정리한다.
+
+### 1. (58번 재확인) 3개 파일에 git 병합 충돌 마커가 해결 안 된 채 커밋되어 있음
+
+`front/dev`(heatmap, 커밋 `f40daca`)를 `front/feat/calendar`에 합친 커밋(`1a362b3`)에서
+충돌을 안 지우고 그대로 커밋했다. 2025-09-16 오늘 다시 fetch해서 재확인했는데도 아직
+그대로다(고쳐지지 않음). 영향받는 파일과 해결 방법:
+
+- **`backend/main.py`**: `app.include_router(calendar_router)`와
+  `app.include_router(heatmap_router)` 둘 다 남기면 됨(마커 3줄만 삭제).
+- **`backend/src/backend/core/config.py`**: heatmap 설정 필드(`heatmap_enabled`,
+  `heatmap_requests_per_second`, `heatmap_session_overrides`)와 `database_url`
+  둘 다 남기면 됨 - 서로 무관한 필드라 순서 상관없음.
+- **`backend/src/backend/core/kis_client.py`**: 충돌 구간(276~635줄)이 커서 두 그룹의
+  함수가 통째로 걸렸다. `_download_master` 함수는 front/dev쪽(zip 압축 해제 로직 -
+  함수 위 주석과 실제로 일치하는 완성된 구현)을 채택하고, 그 아래 두 그룹의 함수
+  (calendar 도메인의 `get_dividend_schedule`/`get_ipo_schedule`/`get_merger_split_schedule`/
+  `get_option_month_list`/`get_futures_board`/`get_price` 등과, heatmap 도메인의
+  `_read_master_cache`/`get_sector_master`/`_parse_stock_master`/`get_stock_master`
+  등)는 전부 삭제 없이 유지하면 됨 - 서로 다른 도메인이 쓰는 별개 함수라 겹치지 않는다.
+
+마커를 다 지운 뒤 `uv run python -c "import backend.main"`으로 문법 오류 없이 import되는지
+확인하고 다시 push해달라고 전달할 것.
+
+### 2. (신규) `frontend/lib/api/calendar.ts`의 `CalendarEventDto`가 지금 백엔드 스키마와 안 맞음
+
+`front/feat/calendar`의 프런트는 이미 정적 `NEWS` 배열을 없애고 `GET /calendar/events`를
+실시간으로 호출하는 방식으로 발전해 있다(`getCalendarEvents()` + `toNewsItem()`) - 이
+자체는 이 세션이 지금까지 해온 "DB export → news-data.ts 수동 동기화" 방식보다 훨씬
+올바른 구조다. 문제는 이 DTO 타입이 만들어진 시점(2e0de23 근처)의 백엔드 스키마를
+기준으로 하고 있어서, 그 이후 이 브랜치(`back/feat/calendar`)에서 백엔드 스키마가
+두 번 바뀐 걸 반영하지 못하고 있다:
+
+```ts
+// frontend/lib/api/calendar.ts (front/feat/calendar, 현재)
+export interface CalendarEventDto {
+  ...
+  previous: string | null
+  forecast: string | null   // ← 55번에서 calendar_events 컬럼 자체를 삭제함. 백엔드가
+                             //   이 필드를 더 이상 응답에 내려주지 않는다.
+  actual: string | null
+  status: string
+  // actual_label이 없음 ← 54번에서 추가한 필드. "주당"/"공모가"/"매출액" 라벨이
+  //                        여기 없어서 화면에 반영이 안 된다.
+}
+```
+
+`toNewsItem()`(`frontend/app/(main)/calendar/news-data.ts`)도 `dto.forecast`를 그대로
+읽어서 `detail.forecast`에 매핑하고 있는데, 이제 항상 `undefined`만 오니 죽은 코드다.
+front팀에 전달할 수정 내용:
+
+1. `CalendarEventDto`에서 `forecast: string | null` 필드 삭제
+2. `CalendarEventDto`에 `actual_label: string | null` 필드 추가
+3. `NewsItem["detail"]`에 `actualLabel?: string` 추가, `toNewsItem()`에서
+   `if (dto.actual_label) detail.actualLabel = dto.actual_label` 매핑 추가
+4. 화면에서 `actual`/`previous` 값을 보여줄 때 `actualLabel`이 있으면
+   `"{actualLabel} {값}"` 형태로 같이 보여주면 54번에서 만든 라벨(예: "주당 880원",
+   "공모가 8300원", "매출액 79.0조원")이 정상적으로 화면에 나온다
+
+### 3. (참고) 화면 표시 단위 변환(56·57번)은 이 세션에서 이식 예정 - front팀 조치 불필요
+
+`calendar_events`의 `actual`/`previous`는 여전히 API 원본 값 그대로 내려온다
+(`"158861000명"`, `"32486.066십억 달러"` 등 - 56·57번에서 DB에는 원본을 그대로 두기로
+했고, PAYEMS만 "천 명" 축약을 실제 인원 수로 풀어 저장하도록 바꿨다). 이 값을 "약 1억
+5,886만 명"처럼 사람이 읽기 쉽게 바꾸는 `formatEconomicValue()`(`frontend/lib/format-
+economic-value.ts`)는 이번에 `back/feat/calendar`에서 `front/feat/calendar` 구조 위로
+직접 이식하는 작업이라(59번 뒷부분에서 진행), front팀이 별도로 손댈 필요는 없다.
+
+### 실제로 merge를 완료함 - 위 1·2번 내용을 front팀 대신 직접 반영했다
+
+문서만 써두고 끝낸 게 아니라, 사용자가 "front/feat/calendar를 pull 받아줘"라고 다시
+요청해서 실제로 병합까지 완료했다. `back/feat/calendar`의 미커밋 프런트 작업(52~57번)을
+먼저 커밋(`18a18de`)한 뒤 `git merge --no-commit --no-ff origin/front/feat/calendar`를
+실행했는데, 예상보다 훨씬 큰 충돌이 났다(`page.tsx`/`news-data.ts`/`news-panel.tsx` 및
+`components/calendar/*` 8개 파일, `lib/calendar.ts` - 총 10개 파일). 원인은
+`front/feat/calendar`가 조사 시점(51번) 이후 스스로도 프런트를 더 발전시켜서, 정적
+`NEWS` 배열을 완전히 없애고 `getCalendarEvents()`+`toNewsItem()`으로 백엔드를 실시간
+호출하는 구조로 이미 바뀌어 있었기 때문이다 - 이 세션의 "front/dev 기준 재구성"(52번)과
+저쪽의 "front/dev 기준 재구성 + 실시간 API화"가 같은 파일들을 서로 다르게 더 발전시킨
+것.
+
+결정한 병합 방향(사용자 승인): **저쪽(실시간 API) 구조를 그대로 채택**하고 그 위에
+**이 세션에서 만든 기능만 다시 이식**한다. 절차:
+
+1. 충돌난 10개 파일을 전부 `git show origin/front/feat/calendar:<path> > <path>`로
+   덮어써서 "저쪽 그대로"로 만듦(`git checkout --theirs`가 이 환경에서 왜인지
+   "Updated 0 paths"만 출력하고 실제로 반영이 안 되는 문제가 있어서, 더 확실한
+   `git show` 방식으로 바꿔 진행함)
+2. 이제 쓸모없어진 `weekly-summary-panel.tsx`(52번에서 만든 팝업 컴포넌트 - 저쪽의 새
+   `AiSummaryCard`는 실제 주간 일정을 직접 받아서 렌더링하고 클릭 시 기존
+   `DayDetailDialog`를 그대로 열기 때문에 별도 다이얼로그가 필요 없어짐) 삭제
+3. 59번 위쪽에서 문서화했던 수정 내용(1~4번)을 front팀 대신 직접 반영:
+   `lib/api/calendar.ts`의 `CalendarEventDto`에서 `forecast` 삭제·`actual_label` 추가,
+   `news-data.ts`의 `NewsItem.detail`에 `actualLabel` 추가 및 `toNewsItem()` 매핑,
+   `week-list.tsx`/`news-panel.tsx`에서 `actualLabel` 접두 + `formatEconomicValue()`
+   적용, `lib/calendar.ts`의 `announceLabel`에서 "발표 예정" 접미사 제거(50번 항목의
+   요구사항을 새 구조에도 유지)
+4. 58·59번에서 발견한, `front/feat/calendar`에 이미 커밋되어 있던 미해결 git 충돌
+   마커 3개(`backend/main.py`, `core/config.py`, `core/kis_client.py`)도 함께
+   해결했다 - 59번에서 문서화한 방법 그대로: `main.py`/`config.py`는 양쪽 다 유지,
+   `kis_client.py`는 Python 스크립트로 정확한 위치에 재조립(`_download_master`는
+   zip 압축 해제 버전 채택, calendar/heatmap 양쪽 함수 전부 보존) - 재조립 후
+   `python3 -m py_compile`과 `uv run python -c "import main"`으로 문법·임포트 확인함
+
+주의: 처음 merge를 커밋할 때(`4d40ef0`) 이 4번 이식 작업이 실수로 스테이징에서 빠져서
+(theirs로 checkout한 뒤 편집한 시점이 `git add`보다 늦었음) 별도 후속 커밋
+(`8e9d1e6`)으로 나뉘었다 - `git show HEAD:<path>`로 실제 커밋된 내용에 이식 결과가
+들어있는지 재확인해서 잡아냈다.
+
+### 검증 (실사용 화면까지 직접 확인)
+
+- `npx tsc --noEmit` 통과
+- 백엔드 서버(`uv run uvicorn main:app`)를 실제로 띄워서 `import main` 문법 오류 없음과
+  `GET /calendar/events` 응답에 `forecast` 키가 없고 `actual_label`이 채워져 오는 것을
+  확인
+- 프런트(`npm run dev`, `NEXT_PUBLIC_API_BASE_URL`이 로컬 `.env.local`에서 8080으로
+  지정돼 있어 백엔드도 8080으로 맞춰 띄움)를 Playwright로 직접 조작해서:
+  - 실시간으로 불러온 실제 일정이 화면에 정상 표시됨(더 이상 `news-data.ts`의 정적
+    스냅샷이 아니라 매번 `GET /calendar/events`를 호출)
+  - "공모가 14600원"/"공모가 10000원"(IPO), "주당 880원" 등 라벨이 새 구조에서도
+    정상 표시
+  - PAYEMS "약 1억 5,859만 명"/"약 1억 5,843만 명"이 새 구조에서도 정상 변환됨
+  - 일정을 클릭해 여는 상세 팝업에서 "실제값 주당 880원"이 정상 표시됨(news-panel.tsx
+    이식분 확인)
+  - "이번주 AI 요약" 카드가 실제 이번 주 일정(예: "와이즈플래닛컴퍼니 공모주 청약")을
+    실시간으로 보여줌 - 저쪽 구조가 가진 개선점
+
+### 남은 것
+
+`back/feat/calendar`에는 이제 이 merge 커밋이 로컬에만 있고 아직 push하지 않았다.
+push 여부는 사용자 확인 후 진행.
+
+## 60. `front/feat/calendar` 2차 pull — front팀이 그 사이 더 발전시킨 내용 재병합
+
+사용자가 다시 "front/feat/calendar 를 pull"이라고 요청했다. `git fetch`로 확인해보니
+59번에서 병합한 시점(`1a362b3`) 이후 front팀이 새 커밋 3개(`b54aeb5`/`c0f97d7`/
+`e2a35c8`)를 추가로 푸시해뒀다:
+
+- **`e2a35c8`**: 57번에서 이 브랜치가 만든 PAYEMS 실인원수 저장 수정을 그대로 이식 -
+  커밋 메시지에 "back/feat/calendar에서 이미 반영된 수정을 이식"이라고 명시돼 있고
+  Claude Sonnet 5 co-author 표기도 있다(front팀도 Claude Code로 작업 중)
+- **`b54aeb5`**: 58·59번에서 발견한 `main.py`/`config.py`/`kis_client.py`의 미해결
+  git 충돌 마커를 front팀이 스스로 해결. 초보자용 "베끄로 레슨" 기능
+  (`beginner-lessons.ts`, `beginner-lesson-dialog.tsx`, `beginner-lesson-teaser.tsx`)과
+  로딩 스켈레톤(`calendar-skeletons.tsx`) 추가, `ai-summary-card.tsx` →
+  `Weekplan.tsx`로 이름 변경
+- **`c0f97d7`**: "2025년으로 넘어가면 데이터 없음 처리" - `news-data.ts`/`page.tsx`
+  등 다수 개선(날짜 파싱 검증 강화, `hasTime` 필드 추가), **`format-economic-value.ts`도
+  이 커밋에서 이식되어 있었다** - 음수 처리와 `toLocaleString` 활용 등 59번 때보다
+  더 다듬어진 버전으로 발전해 있었다
+
+### 재병합 절차 및 충돌 해결
+
+이번엔 `git merge --no-commit --no-ff origin/front/feat/calendar`가 8개 파일에서
+충돌을 냈지만, 59번 때와 달리 대부분 "같은 걸 양쪽이 비슷하게 고친" 사소한 충돌이었다
+(59번에서 이미 구조를 맞춰뒀기 때문). 파일별 해결:
+
+- `services/calendar.py`: PAYEMS 주석 문구 차이만 있어서 이 브랜치 버전 유지
+- `kis_client.py`: front팀이 heatmap 함수 묶음을 `_download_master` 바로 뒤로
+  재배치했는데, 이 브랜치의 59번 정리본은 파일 끝에 같은 함수들을 중복으로 갖고
+  있었다 - front팀 위치로 통일하고 파일 끝 중복 정의 블록을 삭제
+- `format-economic-value.ts`(add/add 충돌): front팀 버전이 더 다듬어져 있어 통째로 채택
+- `lib/api/calendar.ts`, `news-data.ts`: `actual_label` 관련 주석 문구 차이뿐 -
+  front팀 버전 유지
+- `news-panel.tsx`: 이 브랜치는 facts 배열을 만들 때 미리 `formatEconomicValue()`를
+  적용했는데, front팀은 `[라벨, 원본값]`만 배열에 담고 렌더링(`<dd>`) 시점에 한 번만
+  포맷하는 방식으로 이미 개선해뒀다(코드 다른 곳에 이미 `{formatEconomicValue(v)}`가
+  있었음) - 중복 포맷팅을 없애기 위해 front팀 방식 채택
+- `lib/calendar.ts`: front팀이 새로 만든 `weekLabelOf`/`weekOwnedRangeOfMonth`
+  (월 경계에 걸친 주를 "날짜가 더 많이 속한 달" 기준으로 정확히 배정하는 함수,
+  목요일 기준 ISO 8601 방식)는 그대로 채택하고, `announceLabel`은 이 브랜치의
+  접미사 없는 버전을 유지(front팀 버전엔 트레일링 공백이 남아있는 사소한 흠이 있었음)
+- `week-list.tsx`: front팀이 추가한 `hasTime` 필드 기반 "시간 미정" 표시(시간이
+  아예 확인 안 된 이벤트용)와, 이 브랜치의 "발표일이 지나면 -" 규칙(50번 항목)을
+  둘 다 살려서 `!hasTime → "시간 미정"`, `지난 경우 → "-"`, `그 외 → announceLabel`
+  세 갈래로 합침 - 어느 한쪽만 적용하면 다른 쪽이 다루던 케이스를 놓치게 됨
+
+### 검증
+
+- `npx tsc --noEmit` 통과
+- `python3 -m py_compile main.py core/config.py core/kis_client.py
+  domain/calendar/services/calendar.py` 문법 확인 + `uv run python -c "import main"`
+  임포트 확인 - 전부 통과
+- 백엔드(8080)+프런트(3000) 재기동 후 `/calendar` 화면 Playwright로 직접 확인:
+  - 새로 추가된 "이번 주, 주린이 탈출"(베끄로 레슨 티저)와 "이번 주엔 이런 일정이
+    있어요" 카드가 정상 렌더링됨 - 사용자가 이전에 물어봤던 "이번주에는 이런 일정이
+    있어요" 문구가 바로 이 front팀의 새 기능이었음이 확인됨(그때는 아직 push되기
+    전이라 저장소에 없었던 것)
+  - "공모가 14600원"/"공모가 10000원" 등 54번 라벨이 새 구조에서도 계속 정상 표시
+  - "시간 미정"(공모주 청약처럼 시간 정보가 없는 이벤트) 표시도 정상 작동
+
+### 남은 것
+
+이번 merge(`a658836`)도 아직 로컬에만 있고 push하지 않았다. `backend/tmp_check_columns.py`/
+`backend/tmp_repro_500.py`(front팀이 남긴 디버그용 임시 스크립트로 보임)와
+`.claude/settings.json`(front팀의 로컬 Claude Code 권한 설정)도 함께 들어왔는데,
+이 브랜치 것이 아니라서 그대로 유지했다 - 필요하면 나중에 정리.

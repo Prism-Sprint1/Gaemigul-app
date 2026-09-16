@@ -951,7 +951,7 @@ def _ipo_event_from_kis(record: dict, today_kst: str) -> CalendarEvent | None:
     if fix_subscr_pri:
         summary_parts.append(f"공모가는 {fix_subscr_pri}원입니다.")
     if lead_mgr:
-        summary_parts.append(f"주간사: {lead_mgr}.")
+        summary_parts.append(f"주관사: {lead_mgr}.")
     if list_dt:
         summary_parts.append(f"상장(예정)일: {list_dt}.")
 
