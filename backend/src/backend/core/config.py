@@ -27,16 +27,9 @@ class Settings(BaseSettings):
     # Supabase Postgres 연결 문자열. "postgresql+asyncpg://"로 시작해야 한다
     database_url: str | None = None
 
-    # Cloudflare Workers AI 이미지 생성 (timeline 보고서 이미지)
-    cloudflare_account_id: str | None = None
-    cloudflare_api_token: str | None = None
-
-    # 이미지 생성 서비스 선택 - "cloudflare"(기본) / "pollinations"(시험용). 지우면 Cloudflare
-    image_provider: str = "cloudflare"
-    # Pollinations 이미지 생성 (enter.pollinations.ai에서 발급하는 sk_ 비밀 키, 서버에서만 쓴다)
+    # Pollinations 보고서 이미지 생성. 키는 서버에서만 쓴다.
     pollinations_api_key: str | None = None
-    # Pollinations 이미지 모델 id (예: black-forest-labs/flux.2-pro, black-forest-labs/flux.1-schnell)
-    pollinations_image_model: str = "black-forest-labs/flux.2-pro"
+    pollinations_image_model: str = "z-image-turbo"
 
     # Supabase Storage 파일 업로드 (timeline 보고서 이미지). URL은 "https://프로젝트ID.supabase.co"
     # 서비스 키는 DB 전체 권한이라 서버에서만 쓴다 (프런트·깃에 넣지 말 것)
