@@ -159,22 +159,33 @@ def _clean_value(raw: str | None) -> str | None:
 
 
 # 지표별 실제 단위(FRED series 메타데이터의 units/units_short를 실제 라이브 호출로 확인한 값을
-# 한국어로 옮김 - 추측 아님): CPI/PPI/PCE는 지수(Index), GDP는 십억 달러, PAYEMS는 천 명,
-# UNRATE는 %. previous/actual 문자열 끝에 붙여서 화면에서 숫자만 보고 오해하지 않도록 한다.
+# 한국어로 옮김 - 추측 아님): CPI/PPI/PCE는 지수(Index), GDP는 십억 달러, UNRATE는 %.
+# previous/actual 문자열 끝에 붙여서 화면에서 숫자만 보고 오해하지 않도록 한다.
+# PAYEMS(천 명 단위)는 예외 - "158861천 명"처럼 축약된 값 그대로 저장하면 사람이 읽기
+# 어렵다는 지적에 따라 여기 넣지 않고 _with_unit에서 실제 인원 수로 풀어서
+# 저장한다("158861" → "158861000 명").
 _UNITS: dict[str, str] = {
     "CPI": "포인트",  # FRED units: Index 1982-1984=100
     "PPI": "포인트",  # FRED units: Index 1982=100
     "GDP": "십억 달러",  # FRED units: Billions of Dollars
-    "PAYEMS": "천 명",  # FRED units: Thousands of Persons
     "UNRATE": "%",  # FRED units: Percent
     "PCE": "포인트",  # FRED units: Index 2017=100
 }
+
+
+# PAYEMS는 FRED가 "천 명" 단위로 값을 준다(예: "158861" = 158,861천 명). 축약값을 그대로
+# 저장하지 않고 실제 인원 수로 곱해서 저장한다 - 값을 추정/변경하는 게 아니라 단위 배수를
+# 풀어서 표현하는 것뿐이다(158861 * 1000 = 158861000, 수학적으로 동일한 값).
+def _expand_payems_thousands(value: str) -> str:
+    return str(round(float(value) * 1000))
 
 
 # 값이 있을 때만 단위를 붙인다 - None(값 없음)에는 단위를 붙이지 않는다(임의 생성 금지 원칙)
 def _with_unit(value: str | None, indicator: str) -> str | None:
     if value is None:
         return None
+    if indicator == "PAYEMS":
+        return f"{_expand_payems_thousands(value)}명"
     unit = _UNITS.get(indicator)
     return f"{value}{unit}" if unit else value
 
