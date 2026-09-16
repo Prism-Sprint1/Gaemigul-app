@@ -7,7 +7,7 @@
 #   NEWS_SELECT_PROMPT  뉴스 선별 (후보 기사 -> 실을 기사 번호)
 #   REPORT_PROMPT       일간·주간 보고서 (보고서 재료 -> 섹션 3개·제목·요약·결론·섹션별 쉬운 요약·용어 후보·이미지 소재·분위기)
 #   REPORT_PERIOD       보고서 종류별 기간 설명 (REPORT_PROMPT의 {period}에 들어간다)
-#   IMAGE_SCENE         보고서 이미지 장면 틀 (서울 도심 + 분위기 + 지평선의 원인 소재 + 외국인 자금 흐름. IMAGE_CITY·IMAGE_FLOWS 포함)
+#   IMAGE_SCENE         보고서 클레이 장면 틀 (인물·관련 소품·외국인 이동)
 #   IMAGE_SYMBOLS       보고서 이미지 원인 소재 (LLM이 이름을 고르면 코드가 영어 묘사로 바꾼다)
 #   IMAGE_MOODS         보고서 이미지 분위기 (날씨·빛)
 #   IMAGE_STYLE         이미지 공통 화풍 (소재·분위기로 만든 그림 설명 뒤에 코드가 붙인다)
@@ -180,6 +180,7 @@ BEGINNER_PROMPT = """너는 주식을 막 시작한 사람에게 오늘 시황�
 11. "무엇 때문에 이런 일이 일어났는지"(사건의 원인)는 [데이터]의 뉴스에 적혀 있어야 한다. 뉴스에 없는 원인을 지어내지 마라.
     원인이 뉴스에 있을 때, 그 원인이 왜 그런 결과로 이어지는지 일반적인 원리를 풀어 쓰는 것은 괜찮다(위 좋은 예처럼).
     종목이 왜 올랐는지 뉴스에 없으면 "이유는 뉴스에 나오지 않았다"는 사실과 그 움직임의 일반적인 의미만 설명해라.
+    기업의 발표 뒤 주가가 오르지 않은 이유가 뉴스에 없으면 "미리 반영됐다", "차익 실현이 나왔다"고 추측하지 마라.
 12. "주도 섹터"가 모두 마이너스면 시장이 내린 날 가장 적게 내린 업종이다. 부진한 업종으로 설명하지 마라.
 13. 기사에 앞으로 일어날 일로 적힌 것은 일어난 일처럼 쓰지 마라.
 14. "거래가 몰려서 올랐다", "거래가 집중되면서 업종이 힘을 받았다"처럼 거래대금·거래 1위를 오른 원인으로 쓰지 마라.
@@ -195,6 +196,7 @@ BEGINNER_PROMPT = """너는 주식을 막 시작한 사람에게 오늘 시황�
     매매 사실은 뉴스에 있는 그대로 "뉴스에 따르면 외국인과 기관은 주식을 판 쪽이 더 많았습니다"처럼 따로 쓴다.
 18. "팔아치웠다", "쓸어 담았다" 같은 구어·과장 표현을 쓰지 마라. 하루 하락을 "약세장"(길게 이어지는 하락장)이라고 부르지 마라.
     뉴스가 "급등·급락"이라고 쓴 대상에만 그 말을 쓴다. 여러 대상을 묶어 한꺼번에 "급등했다"고 쓰지 마라.
+19. 기간 평균·누적 수치에는 원문의 집계 기간과 기준을 반드시 붙이고 오늘 장중 값처럼 쓰지 마라. 금리·환율과 매매 사실이 함께 나와도 인과를 만들지 말며, 인수 소식에 사업 안정 기대나 "확실한 호재" 같은 근거 없는 평가를 덧붙이지 마라.
 
 [길이]
 - points[].title: 30자 이내. 그 문단이 무엇을 설명하는지 알 수 있는 제목
@@ -388,71 +390,76 @@ REPORT_PROMPT = """너는 한국 주식시장 보고서를 쓰는 금융 에디�
 {data}
 """
 
-# 보고서 이미지 장면. 한국 증시(서울 도심)를 주인공으로 두고, LLM이 고른 원인 소재를 멀리 지평선에 세운다 (report_service._image_scene이 채운다)
-#   {city} IMAGE_CITY / {mood} IMAGE_MOODS 값 / {causes} IMAGE_SYMBOLS 값을 이은 것 / {flow} IMAGE_FLOWS 값
-# 소재를 늘어놓는 방식보다 "무엇이 한국 증시에 영향을 줬는지"가 읽혀서 이 구성을 쓴다
-IMAGE_SCENE = "{city} {mood}, while far in the distance on the horizon stand {causes}{flow}, one unified scene"
-IMAGE_SCENE_NO_CAUSE = "{city} {mood}{flow}, one unified scene"
-IMAGE_CITY = "a modern Seoul city skyline with a tall slim tower on a hill in the foreground"
+# 보고서 이미지 장면. 문구 생성 방식과 재료 키는 유지하고 그림의 표현만 바꾼다.
+IMAGE_SCENE = "{city} Market mood: {mood}. Related miniature props: {causes}. {flow}"
+IMAGE_SCENE_NO_CAUSE = "{city} Market mood: {mood}. {flow}"
+IMAGE_CITY = (
+    "One coherent handcrafted miniature market room with warm plaster walls, wooden window frames and desk. "
+    "One friendly clay beginner investor seated at the center or right third is the main focal character. "
+    "Related economic props sit in the window or on shelves, smaller and slightly out of focus."
+)
 
-# 외국인 자금 흐름 (이름 -> 장면에 붙는 영어 문구). "없음"은 붙이지 않는다
+# 자금 흐름은 작은 보조 인물의 이동으로 나타낸다. 주인공보다 작게, 방향 화살표도 작게 둔다.
 IMAGE_FLOWS = {
-    "외국인 매도": ", and a gust of wind blows gold coins away from the city toward the horizon",
-    "외국인 매수": ", and a stream of gold coins flows from the horizon into the city",
-    "없음": "",
+    "외국인 매도": "One smaller foreign investor puppet with a natural rounded prominent nose and a neutral business suit carries a brown suitcase OUT through the doorway, three-quarter rear view, leg crossing the threshold. A small dark-brown arrow points OUT along the movement. Respectful friendly design.",
+    "외국인 매수": "One smaller foreign investor puppet in a neutral business suit carries a brown suitcase INTO the room, facing inward and crossing the threshold. A small dark-brown arrow points INTO the room. Respectful friendly design.",
+    "없음": "No secondary people, suitcases or money-flow arrows.",
 }
 
-# 보고서 이미지 소재 (원인·배경). LLM이 이름(키)을 고르면 코드가 영어 묘사(값)로 바꿔 장면의 지평선에 세운다
-# 이미지 AI가 알아보기 쉬운 구체적인 사물로 적는다. 멀리 서 있으므로 건물·설비는 실루엣("the silhouette of"), 작은 사물은 거대하게("giant") 쓴다
-# 실루엣으로 쓰면 건물 박공 같은 곳에 가짜 글자가 덜 생긴다. 칩처럼 건물 사이에 묻히는 사물은 하늘에 띄운다("floating high in the sky"). 글자가 들어가는 사물(지폐·서류·화면·간판)과 사람·화살표·그래프는 넣지 않는다
-# 소재를 추가하면 LLM 선택지가 늘어난다 (키는 보고서에 자주 나오는 말로)
+# 이름은 기존 LLM 선택지 그대로 유지한다. 방향은 소재 이름이 아니라 제공된 보고서 문구를 따른다.
 IMAGE_SYMBOLS = {
-    "반도체": "a giant glowing microchip floating high in the sky",
-    "인공지능(AI)": "a giant glowing AI brain-shaped chip floating high in the sky",
-    "금리·연준·중앙은행": "the dark silhouette of a large domed central bank building",
-    "국채·채권": "a giant stack of plain sealed bond folders",
-    "물가": "a giant shopping cart full of groceries",
-    "유가·원유": "the silhouettes of oil pump jacks and oil barrels",
-    "환율·달러": "a giant balance scale holding two piles of plain gold coins",
-    "해외 증시": "a giant globe",
-    "변동성·불안": "rough ocean waves tossing a small sailboat",
-    "수출·무역": "the silhouettes of cargo ships and stacked containers at a port",
-    "중동·지정학": "the silhouettes of desert oil derricks",
-    "섬유·의류": "giant colorful rolls of fabric and a sewing machine",
-    "자동차": "the silhouette of a giant modern electric car",
-    "조선": "the silhouette of a giant ship in a shipyard",
-    "건설": "the silhouettes of tall construction cranes",
-    "제약·바이오": "giant medicine capsules and laboratory flasks",
-    "화학": "giant laboratory flasks with colorful liquid",
-    "철강·금속": "the silhouettes of steel mill chimneys and rolled steel coils",
-    "금융·은행": "the silhouette of a giant bank vault door",
-    "통신": "the silhouette of a tall telecommunication tower sending signal waves",
-    "전기·가스·에너지": "the silhouettes of power transmission towers and wind turbines",
-    "항공·운송": "a passenger airplane flying over cargo trucks",
-    "게임·엔터·문화": "a giant game controller under colorful stage spotlights",
-    "음식료": "a golden wheat field with a giant basket of bread",
-    "부동산": "the silhouettes of apartment buildings",
-    "유통": "a giant shopping bag in front of storefronts",
-    "IT 서비스": "giant glowing cloud server racks",
+    "반도체": "a small matte microchip",
+    "인공지능(AI)": "a small brain-shaped chip",
+    "금리·연준·중앙은행": "a miniature unlettered neoclassical central bank and beige coin stacks",
+    "국채·채권": "plain unlettered bond folders",
+    "물가": "a miniature grocery basket",
+    "유가·원유": "dark brown oil barrels and a small oil pump",
+    "환율·달러": "a balance scale holding neutral beige coin stacks",
+    "해외 증시": "a small neutral globe",
+    "변동성·불안": "a small unmarked uneven balance",
+    "수출·무역": "a miniature cargo ship and containers",
+    "중동·지정학": "miniature desert oil derricks",
+    "섬유·의류": "neutral fabric rolls and a sewing machine",
+    "자동차": "a miniature car",
+    "조선": "a miniature ship in a shipyard",
+    "건설": "small construction cranes",
+    "제약·바이오": "neutral medicine capsules and laboratory flasks",
+    "화학": "matte laboratory flasks",
+    "철강·금속": "miniature steel coils",
+    "금융·은행": "a small unmarked bank vault",
+    "통신": "a miniature telecommunications tower",
+    "전기·가스·에너지": "miniature power transmission towers and wind turbines",
+    "항공·운송": "a miniature airplane and cargo truck",
+    "게임·엔터·문화": "a neutral game controller",
+    "음식료": "a miniature bread basket",
+    "부동산": "miniature apartment buildings",
+    "유통": "a plain shopping bag",
+    "IT 서비스": "miniature server racks",
 }
 
-# 보고서 이미지 분위기. 방향(화살표·그래프)은 이미지 AI가 반대로 그리므로 날씨와 빛으로만 나타낸다
+# 분위기는 표정에만 쓴다. KOSPI 방향을 분위기만으로 추정하지 않는다.
 IMAGE_MOODS = {
-    "강한 상승": "under a bright clear sky with warm golden sunlight",
-    "상승": "under a clear blue sky with soft warm sunlight",
-    "혼조": "under a partly cloudy sky with sunlight breaking through",
-    "보합": "under a calm soft overcast sky",
-    "하락": "under gray clouds with soft cool light",
-    "급락": "under dark gray storm clouds with dim cool light",
+    "강한 상승": "a pleased, calmly optimistic expression",
+    "상승": "a gently hopeful expression",
+    "혼조": "a thoughtful expression",
+    "보합": "a calm neutral expression",
+    "하락": "a mildly concerned expression",
+    "급락": "a concerned but not panicked expression",
 }
 
-# 이미지 공통 화풍. 소재·분위기로 만든 그림 설명 뒤에 붙는다 (report_service._image_scene)
-# 사이트 디자인(밝은 회색 바탕·빨간 포인트·차콜 글자·카드형 UI)에 맞춘 플랫 일러스트. 바꾸면 모든 보고서 이미지의 화풍이 바뀐다
-# 정사각형으로 생성되지만 화면에서는 가로로 긴 배너로 가운데를 잘라 쓰므로, 주요 소재를 세로 가운데 띠에 모으게 한다
+# Pollinations는 글자 없는 클레이 장면만 만든다. 한글 제목·라벨은 image_client가 고정 좌표에 합성한다.
 IMAGE_STYLE = (
-    "clean modern flat vector illustration in a minimal fintech style, soft light warm gray and muted blue tones "
-    "with vivid red accents and charcoal details, simple rounded shapes, subtle soft shadows, "
-    "one unified scene with the main subjects grouped together in the vertical middle of the image, "
-    "full-bleed background with no borders, frames, bars or stripes, "
-    "no text, no letters, no numbers, no logos, no people, no faces, no arrows, no charts, no graphs"
+    "A photographed physical stop-motion clay miniature, cozy vintage Czech puppet craftsmanship. "
+    "Visible fingerprint ridges and hand-shaped imperfections, soft matte clay, real knitted fabric. "
+    "Warm beige plaster, brown wood, warm-gray clothing, soft warm studio light, gentle shadows. "
+    "Wide 3:1 composition, one continuous richly staged room filling the entire frame edge to edge. "
+    "Central seated person and main wall symbol in sharp focus; smaller background props softly focused. "
+    "Only the explicitly specified props belong in the scene. Neutral beige, taupe, brown and warm gray "
+    "everywhere except the single explicitly specified market-arrow accent. "
+    "Keep the doorway movement arrow small and dark brown. "
+    "Keep the upper 115 pixels visually quiet with the same continuous plaster-wall texture because the application overlays a title there. "
+    "Continue the room, wooden floor or workbench texture through the lower 70 pixels edge to edge; keep it visually quiet but never blank or white because keyword plaques are overlaid there. "
+    "Place all important people, arrows and props inside the middle horizontal band without cropping. "
+    "Absolutely no text, letters, numbers, signs, labels, logos, watermarks or pseudo-writing anywhere. "
+    "No empty margin, no bottom white band, no infographic layout, no split panels."
 )

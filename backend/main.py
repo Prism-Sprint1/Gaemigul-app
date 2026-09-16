@@ -1,5 +1,5 @@
 # main.py
-# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바 갱신 1개 + 슬롯 수집 8개), CORS, 라우터 등록.
+# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바·VIX·슬롯 수집), CORS, 라우터 등록.
 # 보고서는 따로 예약하지 않는다. 20:00 슬롯 작업이 끝나면 timeline_service가 이어서 만든다
 
 import logging
@@ -15,6 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import get_settings
 from backend.core.logging_config import setup_logging
+from backend.domain.market.routers.market import router as market_router
+from backend.domain.market.services import vix_service
 from backend.domain.timeline.routers.timeline import router as timeline_router
 from backend.domain.timeline.services import market_indicator_service, timeline_service
 
@@ -34,6 +36,7 @@ async def lifespan(app: FastAPI):
     setup_logging()
 
     _register_indicator_job()
+    _register_vix_job()
     _register_slot_jobs()
 
     jobs = _scheduler.get_jobs()
@@ -60,6 +63,23 @@ def _register_indicator_job() -> None:
         return
 
     _scheduler.add_job(market_indicator_service.refresh_all, CronTrigger(minute="0,10,20,30,40,50"), id="indicator_bar")
+
+
+# 메인 페이지 VIX 갱신 작업 등록 (24시간, 매시 00분·30분).
+# 서버 시작 시 한 번 채우고 실패해도 예약 작업은 등록해 다음 00·30분에 다시 시도한다. KIS 호출은 kis_client 토큰 캐시를 그대로 쓴다.
+def _register_vix_job() -> None:
+    try:
+        vix_service.refresh()
+    except Exception as error:
+        logger.warning("VIX 초기 갱신 실패 - %s: %s", type(error).__name__, error)
+
+    _scheduler.add_job(
+        vix_service.refresh,
+        CronTrigger(minute="0,30"),
+        id="market_vix",
+        max_instances=1,
+        coalesce=True,
+    )
 
 
 # 슬롯 수집 작업 등록 (하루 8회). 시각은 timeline_service.SLOT_COLLECT_TIMES에서 바꾼다
@@ -97,4 +117,4 @@ def read_root():
 
 # 라우터 등록 - 도메인을 추가하면 여기에 include_router를 추가한다
 app.include_router(timeline_router)
-app.include_router(heatmap_router)
+app.include_router(market_router)

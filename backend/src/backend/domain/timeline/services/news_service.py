@@ -78,6 +78,27 @@ def _clean_text(value: str) -> str:
     return html.unescape(re.sub(r"<[^>]+>", "", value)).strip()
 
 
+# 기사 요약에 섞여 오는 언론사 바이라인·기자 메일. 그대로 두면 화면과 LLM 입력에 들어간다
+#   "아주경제=양보연 기자 byeony@ajunews.com 코스피가…" / "[서울=뉴스핌] 이건주 기자 = 14일…" / "…하락하고 있다. | 서울=한스경제 김유진 기자 |"
+# 본문에 나온 "기자"까지 지우지 않도록, 요약 맨 앞이거나 괄호·막대로 감싼 칸일 때만 지운다 (제목에는 쓰지 않는다)
+_EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
+_BYLINE_BAR = re.compile(r"\|\s*[^|]{1,30}기자\s*\|")
+_BYLINE_BRACKET = re.compile(r"(?:\([^)]{1,25}\)|\[[^\]]{1,25}\])\s*(?:[가-힣]{2,4}\s+)*[가-힣]{2,4}\s*기자\s*=\s*")
+_BYLINE_NAMED = re.compile(r"[가-힣A-Za-z]{2,12}\s*=\s*[가-힣]{2,4}\s*기자\s*(?:[=|]\s*)?")
+_BYLINE_HEAD = re.compile(r"^\s*(?:[\[(|][^\])|]{1,25}[\])|]\s*)?(?:[가-힣A-Za-z]{2,12}\s*=\s*)?(?:[가-힣]{2,4}\s+){1,2}기자\s*(?:[=|]\s*)?")
+_CAPTION = re.compile(r"\[사진[^\]]{0,40}\]")
+_SPACES = re.compile(r"\s{2,}")
+
+# 바이라인을 지우고 남는 홀로 된 구분 기호 ("… 있다. /사진=김유진 기자 | …" -> "… 있다. /")
+_DANGLING = re.compile(r"\s[/|]+(?=\s|$)")
+
+
+def _strip_byline(summary: str) -> str:
+    summary = _BYLINE_BAR.sub(" ", _EMAIL.sub(" ", _CAPTION.sub(" ", summary)))
+    summary = _BYLINE_HEAD.sub("", _BYLINE_NAMED.sub("", _BYLINE_BRACKET.sub("", summary)))
+    return _SPACES.sub(" ", _DANGLING.sub("", summary)).strip()
+
+
 # pubDate("Thu, 10 Sep 2026 11:00:00 +0900")를 한국 시간 datetime으로 바꾼다
 def _parse_pub_date(value: str) -> datetime:
     return parsedate_to_datetime(value).astimezone(_KST)
@@ -168,7 +189,7 @@ def collect(time_slot: str, *, limit: int = _PICK_MAX, trade_date: date | None =
 
             collected[url] = {
                 "title": _clean_text(item["title"]),
-                "summary": _clean_text(item["description"]),
+                "summary": _strip_byline(_clean_text(item["description"])),
                 "url": url,
                 "published_at": _parse_pub_date(item["pubDate"]),
                 "score": 1 / (_RANK_BIAS + rank),
@@ -179,6 +200,12 @@ def collect(time_slot: str, *, limit: int = _PICK_MAX, trade_date: date | None =
     if len(picked) < _MIN_ITEMS:
         widened = end - timedelta(hours=_FALLBACK_HOURS)
         picked = [item for item in collected.values() if widened <= item["published_at"] < end]
+
+    # 요약이 빈 기사는 뺀다 (제목만 남아 화면이 비고 LLM도 판단할 근거가 없다). 실호출 500건 중 4건뿐이라 후보가 줄어들 걱정은 없다
+    # 단 이것 때문에 하한을 못 채우게 되면 그대로 둔다
+    with_summary = [item for item in picked if item["summary"]]
+    if len(with_summary) >= _MIN_ITEMS:
+        picked = with_summary
 
     # 점수순으로 LLM 후보를 추린다 (최신순으로 자르면 긴 구간의 중요한 기사가 잘린다)
     picked.sort(key=lambda x: x["score"], reverse=True)
