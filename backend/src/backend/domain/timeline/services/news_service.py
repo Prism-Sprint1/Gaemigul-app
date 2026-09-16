@@ -68,6 +68,10 @@ _CANDIDATE_LIMITS = {"07:30": 60}
 _PICK_MIN = 4
 _PICK_MAX = 8
 
+# LLM에게 요구하는 최소 건수. 하한(_PICK_MIN)보다 크게 두면 기사가 많은 시간대에 LLM이 하한만 고르는 것을 막는다
+# 후보가 이보다 적으면 후보 수만큼만 요구한다 (기사가 적은 시간대는 _PICK_MIN까지 줄어든다)
+_PICK_TARGET = 5
+
 
 # 네이버가 넣어 보내는 <b> 태그와 &quot; 같은 HTML 특수문자를 없앤다
 def _clean_text(value: str) -> str:
@@ -94,7 +98,7 @@ def _select_with_llm(time_slot: str, candidates: list[dict], limit: int) -> list
                 title=prompts.SLOT_TITLES[time_slot],
                 focus=prompts.SLOT_FOCUS[time_slot],
                 pick_count=limit,
-                min_count=min(_PICK_MIN, len(candidates)),
+                min_count=min(_PICK_TARGET, len(candidates)),
                 candidates=listed,
             )
         )
