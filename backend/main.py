@@ -70,8 +70,5 @@ def read_root():
 
 # 라우터 등록
 app.include_router(timeline_router)
-<<<<<<< HEAD
 app.include_router(calendar_router)
-=======
 app.include_router(heatmap_router)
->>>>>>> f40daca3888a40bb2757d936b7763fa0078f6d32

@@ -48,7 +48,7 @@ export function weekOfMonth(d: Date, monthAnchor: Date): number {
 export function announceLabel(d: Date): string {
   const base = format(d, "a h시", { locale: ko })
   const min = d.getMinutes()
-  return min === 0 ? `${base} 발표 예정` : `${base} ${min}분 발표 예정`
+  return min === 0 ? `${base} ` : `${base} ${min}분 `
 }
 
 export const segBtn = (active: boolean) =>

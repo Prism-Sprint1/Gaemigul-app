@@ -273,8 +273,111 @@ def _download_master(name: str) -> str:
     # KIS 공식 종목정보파일, 인증 없이 제공. ZIP 파일을 디스크에 풀지 않고 지정 파일만 읽는다.
     response = _HTTP.get(f"https://new.real.download.dws.co.kr/common/master/{name}.mst.zip")
     response.raise_for_status()
-<<<<<<< HEAD
-    return response.json()
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        info = archive.getinfo(f"{name}.mst")
+        if info.file_size > 20_000_000:
+            raise ValueError("종목정보파일 크기가 예상 범위를 초과했습니다.")
+        return archive.read(info).decode("cp949")
+
+
+def _read_master_cache(name: str):
+    path = _MASTER_CACHE_PATH / f"{name}.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if data["date"] == datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat():
+            return data["items"]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return None
+
+
+def _write_master_cache(name: str, items) -> None:
+    _MASTER_CACHE_PATH.mkdir(parents=True, exist_ok=True)
+    path = _MASTER_CACHE_PATH / f"{name}.json"
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(
+            {"date": datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat(), "items": items},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
+def get_sector_master() -> dict[str, str]:
+    # idxcode.mst: 시장구분1자리 + 업종코드4자리 + 업종명. 최신 명칭을 매일 읽어온다.
+    # 공식 형식: stocks_info/업종코드정보.h 및 sector_code.py (명칭은 코드 뒤에서 읽음).
+    cached = _read_master_cache("sectors")
+    if cached is not None:
+        return cached
+    items = {}
+    for row in _download_master("idxcode").splitlines():
+        code, name = row[1:5], row[5:].strip()
+        if len(code) == 4 and code.isdigit() and name:
+            items[code] = name
+    if not items:
+        raise ValueError("KIS 업종정보파일에 업종이 없습니다.")
+    _write_master_cache("sectors", items)
+    return items
+
+
+def _parse_stock_master(contents: str, market: str) -> list[dict]:
+    # KIS 공식 stocks_info/종목마스터정보(코스피).h, (코스닥).h의 고정폭 형식.
+    # 공식 Python 예제의 꼬리228/222자는 줄바꿈을 포함한다. splitlines 후227/221자.
+    # 공통 앞쪽: 그룹[0:2], 업종 대/중/소[3:7],[7:11],[11:15].
+    # ST=주권, FS=외국주권만 포함. 우선주, SPAC, ETF/ETN, DR 등 별도 상품은 제외.
+    # 상장주수 원본은 천주, 시가총액 원본은 억원 -> 각각 주/원으로 정규화.
+    _validate_market(market)
+    kospi = market == "kospi"
+    tail_length = 227 if kospi else 221
+    spac_offset, preferred_offset = (29, 158) if kospi else (24, 153)
+    shares_offset, cap_offset = (113, 212) if kospi else (108, 206)
+    reference_offset, suspended_offset = (41, 60) if kospi else (36, 55)
+    items = []
+    for row in contents.splitlines():
+        if len(row) < tail_length + 22:
+            continue
+        head, fields = row[:-tail_length], row[-tail_length:]
+        code = head[:9].strip()
+        if fields[:2] not in ("ST", "FS") or fields[preferred_offset] != "0" or fields[spac_offset] == "Y":
+            continue
+        if len(code) != 6 or not code.isascii() or not code.isalnum():
+            continue
+        sector_codes = [
+            fields[offset : offset + 4]
+            for offset in (3, 7, 11)
+            if fields[offset : offset + 4].isdigit() and fields[offset : offset + 4] != "0000"
+        ]
+
+        def number(start: int, width: int) -> int:
+            return int(fields[start : start + width].strip() or "0")
+
+        items.append(
+            {
+                "code": code,
+                "name": head[21:].strip(),
+                "sector_code": sector_codes[-1] if sector_codes else "unclassified",
+                "sector_codes": sector_codes,
+                "market_cap": number(cap_offset, 9) * 100_000_000,
+                "listed_shares": number(shares_offset, 15) * 1000,
+                "reference_price": number(reference_offset, 9),
+                "suspended": fields[suspended_offset] == "Y",
+            }
+        )
+    if not items:
+        raise ValueError(f"KIS {market} 종목정보파일에서 보통주를 읽지 못했습니다.")
+    return items
+
+
+def get_stock_master(market: str) -> list[dict]:
+    _validate_market(market)
+    cached = _read_master_cache(market)
+    if cached is not None:
+        return cached
+    items = _parse_stock_master(_download_master(f"{market}_code"), market)
+    _write_master_cache(market, items)
+    return items
 
 
 # calendar 일정
@@ -541,95 +644,4 @@ def get_price(market_div_code: str, iscd: str) -> dict:
     response.raise_for_status()
     body = response.json()
     return body.get("output1") or {}
-=======
-    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-        info = archive.getinfo(f"{name}.mst")
-        if info.file_size > 20_000_000:
-            raise ValueError("종목정보파일 크기가 예상 범위를 초과했습니다.")
-        return archive.read(info).decode("cp949")
 
-
-def _read_master_cache(name: str):
-    path = _MASTER_CACHE_PATH / f"{name}.json"
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if data["date"] == datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat():
-            return data["items"]
-    except (OSError, ValueError, KeyError, TypeError):
-        pass
-    return None
-
-
-def _write_master_cache(name: str, items) -> None:
-    _MASTER_CACHE_PATH.mkdir(parents=True, exist_ok=True)
-    path = _MASTER_CACHE_PATH / f"{name}.json"
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps({"date": datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat(), "items": items}, ensure_ascii=False), encoding="utf-8")
-    temporary.replace(path)
-
-
-def get_sector_master() -> dict[str, str]:
-    # idxcode.mst: 시장구분1자리 + 업종코드4자리 + 업종명. 최신 명칭을 매일 읽어온다.
-    # 공식 형식: stocks_info/업종코드정보.h 및 sector_code.py (명칭은 코드 뒤에서 읽음).
-    cached = _read_master_cache("sectors")
-    if cached is not None:
-        return cached
-    items = {}
-    for row in _download_master("idxcode").splitlines():
-        code, name = row[1:5], row[5:].strip()
-        if len(code) == 4 and code.isdigit() and name:
-            items[code] = name
-    if not items:
-        raise ValueError("KIS 업종정보파일에 업종이 없습니다.")
-    _write_master_cache("sectors", items)
-    return items
-
-
-def _parse_stock_master(contents: str, market: str) -> list[dict]:
-    # KIS 공식 stocks_info/종목마스터정보(코스피).h, (코스닥).h의 고정폭 형식.
-    # 공식 Python 예제의 꼬리228/222자는 줄바꿈을 포함한다. splitlines 후227/221자.
-    # 공통 앞쪽: 그룹[0:2], 업종 대/중/소[3:7],[7:11],[11:15].
-    # ST=주권, FS=외국주권만 포함. 우선주, SPAC, ETF/ETN, DR 등 별도 상품은 제외.
-    # 상장주수 원본은 천주, 시가총액 원본은 억원 -> 각각 주/원으로 정규화.
-    _validate_market(market)
-    kospi = market == "kospi"
-    tail_length = 227 if kospi else 221
-    spac_offset, preferred_offset = (29, 158) if kospi else (24, 153)
-    shares_offset, cap_offset = (113, 212) if kospi else (108, 206)
-    reference_offset, suspended_offset = (41, 60) if kospi else (36, 55)
-    items = []
-    for row in contents.splitlines():
-        if len(row) < tail_length + 22:
-            continue
-        head, fields = row[:-tail_length], row[-tail_length:]
-        code = head[:9].strip()
-        if fields[:2] not in ("ST", "FS") or fields[preferred_offset] != "0" or fields[spac_offset] == "Y":
-            continue
-        if len(code) != 6 or not code.isascii() or not code.isalnum():
-            continue
-        sector_codes = [fields[offset:offset + 4] for offset in (3, 7, 11) if fields[offset:offset + 4].isdigit() and fields[offset:offset + 4] != "0000"]
-        def number(start: int, width: int) -> int:
-            return int(fields[start:start + width].strip() or "0")
-        items.append({
-            "code": code, "name": head[21:].strip(),
-            "sector_code": sector_codes[-1] if sector_codes else "unclassified",
-            "sector_codes": sector_codes,
-            "market_cap": number(cap_offset, 9) * 100_000_000,
-            "listed_shares": number(shares_offset, 15) * 1000,
-            "reference_price": number(reference_offset, 9),
-            "suspended": fields[suspended_offset] == "Y",
-        })
-    if not items:
-        raise ValueError(f"KIS {market} 종목정보파일에서 보통주를 읽지 못했습니다.")
-    return items
-
-
-def get_stock_master(market: str) -> list[dict]:
-    _validate_market(market)
-    cached = _read_master_cache(market)
-    if cached is not None:
-        return cached
-    items = _parse_stock_master(_download_master(f"{market}_code"), market)
-    _write_master_cache(market, items)
-    return items
->>>>>>> f40daca3888a40bb2757d936b7763fa0078f6d32

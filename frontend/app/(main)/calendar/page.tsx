@@ -11,7 +11,15 @@ import {
 } from "date-fns"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { PageTitle } from "@/components/common"
-import { AiSummaryCard } from "@/components/calendar/ai-summary-card"
+import { WeekPlan } from "@/components/calendar/Weekplan"
+import { BeginnerLessonDialog } from "@/components/calendar/beginner-lesson-dialog"
+import { BeginnerLessonTeaser } from "@/components/calendar/beginner-lesson-teaser"
+import {
+  BeginnerLessonTeaserSkeleton,
+  MonthGridSkeleton,
+  WeekListSkeleton,
+  WeekPlanSkeleton,
+} from "@/components/calendar/calendar-skeletons"
 import { FilterBar } from "@/components/calendar/filter-bar"
 import { MiniCalendar } from "@/components/calendar/mini-calendar"
 import { MonthGrid } from "@/components/calendar/month-grid"
@@ -23,6 +31,7 @@ import {
   type RegionFilter,
   type ViewMode,
 } from "@/lib/calendar"
+import { pickWeeklyLesson, weeklyKeywordTags } from "./beginner-lessons"
 import {
   CATEGORY_GROUPS,
   CATS,
@@ -50,11 +59,15 @@ export default function CalendarPage() {
     group: DayGroup
     itemId: string
   } | null>(null)
+  const [beginnerLessonOpen, setBeginnerLessonOpen] = useState(false)
   // 현재 달 그리드에 걸치는 이전/다음 달 여분 날짜까지 포함한 전체(비필터) 일정
   const [allNews, setAllNews] = useState<NewsItem[]>([])
+  // 새로고침·월 이동 등으로 재조회하는 동안 각 영역에 스켈레톤을 보여주기 위한 상태
+  const [loading, setLoading] = useState(true)
 
   // 월간 그리드는 앞뒤 달의 여분 날짜도 보여주므로 이전/현재/다음 달을 함께 조회
   const fetchNews = useCallback(async (anchor: Date) => {
+    setLoading(true)
     try {
       const months = [addMonths(anchor, -1), anchor, addMonths(anchor, 1)]
       const results = await Promise.all(
@@ -67,6 +80,8 @@ export default function CalendarPage() {
       setAllNews(dedupeNewsItems(items))
     } catch (error) {
       console.error("[getCalendarEvents] 실패", error)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
@@ -146,6 +161,13 @@ export default function CalendarPage() {
       .sort((a, b) => a.publishedAt.getTime() - b.publishedAt.getTime())
   }, [allNews, weekStartMs])
 
+  // 주린이 교육 카드용 — 이번 주 실제 일정 중 우선순위가 가장 높은 주제 하나만 고른다
+  const weeklyLesson = useMemo(() => pickWeeklyLesson(weekNews), [weekNews])
+  const weeklyLessonTags = useMemo(
+    () => weeklyKeywordTags(weekNews),
+    [weekNews]
+  )
+
   return (
     <div className="flex min-h-svh justify-center bg-background p-3 sm:p-4 lg:p-6">
       <div className="flex w-full flex-col gap-3">
@@ -177,19 +199,29 @@ export default function CalendarPage() {
 
             {/* 앱(모바일): 커다란 월간 캘린더 없이 주별 일정만 표시 */}
             <div className="lg:hidden">
-              <WeekList
-                month={month}
-                selectedDate={selectedDate}
-                news={filteredNews}
-                allNews={allNews}
-                holidays={filteredHolidays}
-                onOpenItem={openItem}
-              />
+              {loading ? (
+                <WeekListSkeleton />
+              ) : (
+                <WeekList
+                  month={month}
+                  selectedDate={selectedDate}
+                  news={filteredNews}
+                  allNews={allNews}
+                  holidays={filteredHolidays}
+                  onOpenItem={openItem}
+                />
+              )}
             </div>
 
             {/* 데스크톱: 주별/월별 전환 가능 */}
             <div className="hidden lg:block">
-              {viewMode === "month" ? (
+              {loading ? (
+                viewMode === "month" ? (
+                  <MonthGridSkeleton />
+                ) : (
+                  <WeekListSkeleton />
+                )
+              ) : viewMode === "month" ? (
                 <MonthGrid
                   month={month}
                   today={today}
@@ -228,12 +260,30 @@ export default function CalendarPage() {
                 setSelectedDate(today)
               }}
             />
-            <AiSummaryCard items={weekNews} onOpenItem={openWeekSummaryItem} />
+            {loading ? (
+              <BeginnerLessonTeaserSkeleton />
+            ) : (
+              <BeginnerLessonTeaser
+                data={weeklyLesson}
+                tags={weeklyLessonTags}
+                onOpen={() => setBeginnerLessonOpen(true)}
+              />
+            )}
+            {loading ? (
+              <WeekPlanSkeleton />
+            ) : (
+              <WeekPlan items={weekNews} onOpenItem={openWeekSummaryItem} />
+            )}
           </aside>
         </div>
       </div>
 
       <DayDetailDialog popup={popup} onClose={() => setPopup(null)} />
+      <BeginnerLessonDialog
+        open={beginnerLessonOpen}
+        data={weeklyLesson}
+        onClose={() => setBeginnerLessonOpen(false)}
+      />
     </div>
   )
 }

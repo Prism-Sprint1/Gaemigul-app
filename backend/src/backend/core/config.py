@@ -20,9 +20,6 @@ class Settings(BaseSettings):
     kis_app_secret: str
     kis_base_url: str = "https://openapi.koreainvestment.com:9443"
 
-<<<<<<< HEAD
-#  Supabase Postgres 연결 문자열 (SQLAlchemy용, asyncpg 드라이버 사용) - 전체 공용
-=======
     # 히트맵 수집 설정. 시세 조회만 사용하며 기존 KIS 계정/토큰을 함께 쓴다.
     heatmap_enabled: bool = True
     # 지표 바와 히트맵을 합한 프로세스 내 호출 속도. 계정의 실제 한도에 맞춰 낮출 수 있다.
@@ -32,7 +29,6 @@ class Settings(BaseSettings):
     heatmap_session_overrides: dict[str, dict[str, str]] = Field(default_factory=dict)
 
     # Supabase Postgres 연결 문자열 (SQLAlchemy용, asyncpg 드라이버 사용) - 전체 공용
->>>>>>> f40daca3888a40bb2757d936b7763fa0078f6d32
     database_url: str | None = None
 
     # FRED(미국 연준 경제 데이터) API - calendar 도메인에서 사용
