@@ -4,6 +4,7 @@
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 
 # 새 API 키를 추가하려면:
@@ -14,12 +15,24 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # 한국투자증권(KIS) 오픈API - timeline 도메인(지표 바)에서 사용
+    # 한국투자증권(KIS) 오픈API - timeline(지표 바), heatmap(단물 지도) 공용
     kis_app_key: str
     kis_app_secret: str
     kis_base_url: str = "https://openapi.koreainvestment.com:9443"
 
+<<<<<<< HEAD
 #  Supabase Postgres 연결 문자열 (SQLAlchemy용, asyncpg 드라이버 사용) - 전체 공용
+=======
+    # 히트맵 수집 설정. 시세 조회만 사용하며 기존 KIS 계정/토큰을 함께 쓴다.
+    heatmap_enabled: bool = True
+    # 지표 바와 히트맵을 합한 프로세스 내 호출 속도. 계정의 실제 한도에 맞춰 낮출 수 있다.
+    heatmap_requests_per_second: float = Field(default=5.0, gt=0, le=20)
+    # 수능일 등 특별 거래시간은 KRX 공지에 맞춰 날짜별로 지정한다(한국 시간).
+    # 예: {"2026-01-02": {"open": "10:00", "close": "15:30"}}
+    heatmap_session_overrides: dict[str, dict[str, str]] = Field(default_factory=dict)
+
+    # Supabase Postgres 연결 문자열 (SQLAlchemy용, asyncpg 드라이버 사용) - 전체 공용
+>>>>>>> f40daca3888a40bb2757d936b7763fa0078f6d32
     database_url: str | None = None
 
     # FRED(미국 연준 경제 데이터) API - calendar 도메인에서 사용
