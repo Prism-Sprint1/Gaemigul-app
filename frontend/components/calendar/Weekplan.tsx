@@ -11,25 +11,27 @@ export function WeekPlan({
   items: NewsItem[]
   onOpenItem: (item: NewsItem) => void
 }) {
+  const isEmpty = items.length === 0
+
   return (
     <div className="rounded-xl border bg-primary/5 p-3 sm:p-4">
       <div className="mb-2 flex items-center justify-start gap-1.5 truncate text-left text-xs font-semibold whitespace-nowrap text-primary">
-        <span className="shrink-0">✨</span>
-        이번 주엔 이런 일정이 있어요
+        <span className="shrink-0">{isEmpty ? "🍃" : "✨"}</span>
+        {isEmpty ? "이번 주는 예정된 일정이 없어요" : "이번 주엔 이런 일정이 있어요"}
       </div>
-      {items.length === 0 ? (
+      {isEmpty ? (
         <p className="text-[11px] text-muted-foreground">
-          이번 주에는 예정된 일정이 없습니다.
+          다음 주에 다시 확인해보세요.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2.5">
+        <ul className="flex flex-col gap-2">
           {items.map((n) => (
             <li key={n.id}>
               {/* 요약이 길면 카드 안에서 다 안 보이므로, 클릭하면 상세 팝업으로 전체 내용을 볼 수 있게 한다 */}
               <button
                 type="button"
                 onClick={() => onOpenItem(n)}
-                className="flex w-full cursor-pointer flex-col gap-0.5 rounded-md text-left transition-colors hover:bg-primary/10"
+                className="flex w-full cursor-pointer flex-col gap-0.5 rounded-lg border bg-card p-2 text-left transition-colors hover:bg-muted/40"
               >
                 <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
                   <span

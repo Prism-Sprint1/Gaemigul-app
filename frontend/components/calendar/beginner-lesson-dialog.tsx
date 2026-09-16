@@ -3,7 +3,7 @@
 import { Dialog } from "@base-ui/react/dialog"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale/ko"
-import { X } from "lucide-react"
+import { Check, X } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Separator } from "@/components/ui"
@@ -74,7 +74,7 @@ function LessonBody({ lesson, matchedEvent }: LessonData) {
   return (
     <>
       <div className="flex items-center justify-between border-b p-4">
-        <Dialog.Title className="text-base font-bold">
+        <Dialog.Title className="text-lg font-bold leading-snug">
           {lesson.hookTitle}
         </Dialog.Title>
         <Dialog.Close
@@ -85,7 +85,7 @@ function LessonBody({ lesson, matchedEvent }: LessonData) {
         </Dialog.Close>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 text-xs">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 text-sm">
         <Section index={1} title={SECTION_TITLES.overview}>
           <p className="font-semibold text-foreground">
             {lesson.overview.term}
@@ -125,7 +125,7 @@ function LessonBody({ lesson, matchedEvent }: LessonData) {
           <ChainList chain={lesson.calendarLinkChain} />
         </Section>
 
-        <Section index={6} title={SECTION_TITLES.quiz} last>
+        <Section index="❓" title={SECTION_TITLES.quiz} highlight last>
           <p className="mb-2 leading-relaxed text-foreground">
             {lesson.quiz.question}
           </p>
@@ -141,17 +141,20 @@ function LessonBody({ lesson, matchedEvent }: LessonData) {
                   disabled={status === "correct"}
                   onClick={() => selectOption(opt.id)}
                   className={cn(
-                    "block w-full cursor-pointer px-3 py-2 text-left transition-colors",
+                    "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left transition-colors",
                     isSelected &&
                       status === "idle" &&
-                      "bg-muted/60 font-medium",
+                      "bg-amber-100 font-semibold text-amber-900 ring-1 ring-inset ring-amber-400 dark:bg-amber-400/15 dark:text-amber-200",
                     isWrongPick && "bg-red-500/15 font-medium text-red-700",
                     isCorrectPick &&
                       "bg-emerald-500/15 font-medium text-emerald-700",
                     status === "correct" && "cursor-default"
                   )}
                 >
-                  {opt.label}
+                  <span>{opt.label}</span>
+                  {isSelected && status === "idle" && (
+                    <Check className="size-4 shrink-0" />
+                  )}
                 </button>
               )
             })}
@@ -162,7 +165,7 @@ function LessonBody({ lesson, matchedEvent }: LessonData) {
               type="button"
               disabled={!selectedId}
               onClick={checkAnswer}
-              className="mt-3 w-full cursor-pointer rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="mt-3 w-full cursor-pointer rounded-md bg-amber-500 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
             >
               정답 확인
             </button>
@@ -204,20 +207,33 @@ function Section({
   index,
   title,
   children,
+  highlight,
   last,
 }: {
-  index: number
+  index: number | string
   title: string
   children: ReactNode
+  highlight?: boolean
   last?: boolean
 }) {
   return (
-    <section className="py-3 first:pt-0">
-      <div className="mb-1.5 flex items-baseline gap-2">
-        <span className="text-[10px] font-semibold text-muted-foreground tabular-nums">
-          {String(index).padStart(2, "0")}
-        </span>
-        <h3 className="text-[11px] font-bold text-foreground">{title}</h3>
+    <section
+      className={cn(
+        "first:pt-0",
+        highlight
+          ? "mt-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 dark:border-amber-400/40 dark:bg-amber-400/10"
+          : "py-3"
+      )}
+    >
+      <div className="mb-2 flex items-center gap-2">
+        {typeof index === "number" ? (
+          <span className="text-sm font-bold text-[#ff2a2a] tabular-nums">
+            {String(index).padStart(2, "0")}
+          </span>
+        ) : (
+          <span className="text-base">{index}</span>
+        )}
+        <h3 className="text-base font-bold text-foreground">{title}</h3>
       </div>
       {children}
       {!last && <Separator className="mt-3" />}

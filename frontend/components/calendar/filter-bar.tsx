@@ -1,7 +1,8 @@
 "use client"
 
-import { format } from "date-fns"
+import { addMonths, format, subMonths } from "date-fns"
 import { ko } from "date-fns/locale/ko"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   CAT,
@@ -11,6 +12,7 @@ import {
 } from "@/app/(main)/calendar/news-data"
 import {
   groupSegBtn,
+  navBtn,
   segBtn,
   type GroupFilter,
   type RegionFilter,
@@ -29,6 +31,7 @@ export function FilterBar({
   onToggleCategory,
   onSelectAllCategories,
   month,
+  onMonthChange,
 }: {
   groupFilter: GroupFilter
   onSelectGroup: (g: GroupFilter) => void
@@ -43,6 +46,7 @@ export function FilterBar({
   onSelectAllCategories: () => void
   /** 데스크톱에서 탭/토글과 같은 줄 가운데에 표시할 현재 월(주별·월별 뷰 공통) */
   month: Date
+  onMonthChange: (d: Date) => void
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -67,8 +71,26 @@ export function FilterBar({
           ))}
         </div>
 
-        <div className="hidden text-center text-2xl font-bold tabular-nums lg:col-start-2 lg:block">
-          {format(month, "yyyy년 M월", { locale: ko })}
+        <div className="hidden items-center justify-center gap-2 lg:col-start-2 lg:flex">
+          <button
+            type="button"
+            onClick={() => onMonthChange(subMonths(month, 1))}
+            aria-label="이전 달"
+            className={navBtn}
+          >
+            <ChevronLeft className="size-5" />
+          </button>
+          <span className="w-40 text-center text-2xl font-bold tabular-nums">
+            {format(month, "yyyy년 M월", { locale: ko })}
+          </span>
+          <button
+            type="button"
+            onClick={() => onMonthChange(addMonths(month, 1))}
+            aria-label="다음 달"
+            className={navBtn}
+          >
+            <ChevronRight className="size-5" />
+          </button>
         </div>
 
         {/* 국내/해외, 뷰 전환(주별/월별) — 앱(모바일)에서는 둘 다 숨김 */}

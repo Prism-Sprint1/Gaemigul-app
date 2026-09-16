@@ -60,10 +60,10 @@ function formatUsdFromMillions(value: number): string {
   return formatUsdFromBillions(value / 1000)
 }
 
-/** 원 단위 금액을 억/조 원으로 변환. 1억 미만은 그대로 둔다(현재 배당·공모가는 전부 이 구간) */
-function formatWon(raw: string, value: number): string {
+/** 원 단위 금액을 억/조 원으로 변환. 1억 미만은 천 단위 콤마만 넣어서 보여준다(현재 배당·공모가는 전부 이 구간) */
+function formatWon(value: number): string {
   const abs = Math.abs(value)
-  if (abs < 100_000_000) return raw
+  if (abs < 100_000_000) return `${roundedLocaleString(value, 0)}원`
 
   const sign = value < 0 ? "-" : ""
   const eok = 100_000_000
@@ -102,7 +102,7 @@ export function formatEconomicValue(raw: string | null | undefined): string {
     case "백만달러":
       return formatUsdFromMillions(value)
     case "원":
-      return formatWon(raw, value)
+      return formatWon(value)
     default:
       // %, 포인트, 조원 등 이미 읽기 쉬운 단위이거나 모르는 단위는 그대로 둔다
       return raw

@@ -243,12 +243,15 @@ export default function CalendarPage() {
                 onToggleCategory={toggleSubCategory}
                 onSelectAllCategories={selectAllCategories}
                 month={month}
+                onMonthChange={setMonth}
               />
             </div>
 
             {unavailableYear !== null ? (
               <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground">
-                이전 데이터를 불러올 수 없습니다.
+                {unavailableYear < currentYear
+                  ? "이전 연도의 데이터는 제공하지 않습니다."
+                  : "아직 제공되지 않는 일정입니다."}
               </div>
             ) : loadError && allNews.length === 0 ? (
               <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground">
