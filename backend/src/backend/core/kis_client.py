@@ -802,3 +802,124 @@ def get_stock_master(market: str) -> list[dict]:
     items = _parse_stock_master(_download_master(f"{market}_code"), market)
     _write_master_cache(market, items)
     return items
+# 국내선물옵션 - 46번 사전조사에서 실제 라이브 호출로 확인한 API들을 client 함수로 승격.
+# 인증은 기존 get_access_token()을 그대로 재사용한다(새 인증 코드 없음).
+
+_FUTOPT_OPTION_LIST_ENDPOINT = "/uapi/domestic-futureoption/v1/quotations/display-board-option-list"
+_FUTOPT_OPTION_LIST_TR_ID = "FHPIO056104C0"
+
+
+# 국내옵션전광판_옵션월물리스트[국내선물-020] - 만기 "년월"만 준다(mtrt_yymm_code/mtrt_yymm).
+# 정확한 만기일은 없다 - get_price()로 종목별 futs_last_tr_date를 따로 조회해야 한다.
+def get_option_month_list(fid_cond_scr_div_code: str = "509") -> list[dict]:
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.kis_base_url}{_FUTOPT_OPTION_LIST_ENDPOINT}",
+        headers={
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {get_access_token()}",
+            "appkey": settings.kis_app_key,
+            "appsecret": settings.kis_app_secret,
+            "tr_id": _FUTOPT_OPTION_LIST_TR_ID,
+            "custtype": "P",
+        },
+        params={
+            "FID_COND_SCR_DIV_CODE": fid_cond_scr_div_code,
+            "FID_COND_MRKT_DIV_CODE": "",
+            "FID_COND_MRKT_CLS_CODE": "",
+        },
+    )
+    response.raise_for_status()
+    body = response.json()
+    return body.get("output") or []
+
+
+_FUTOPT_FUTURES_BOARD_ENDPOINT = "/uapi/domestic-futureoption/v1/quotations/display-board-futures"
+_FUTOPT_FUTURES_BOARD_TR_ID = "FHPIF05030200"
+
+
+# 국내옵션전광판_선물[국내선물-023]. market_cls_code=""(빈 값)이면 정규 KOSPI200선물
+# (분기월 3·6·9·12월만 존재), "MKI"면 미니 KOSPI200선물(월물 전체 존재) - 46번 사전조사에서
+# 실제 호출로 확인. 만기일 필드는 없다 - get_price()로 따로 조회해야 한다.
+def get_futures_board(market_cls_code: str = "") -> list[dict]:
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.kis_base_url}{_FUTOPT_FUTURES_BOARD_ENDPOINT}",
+        headers={
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {get_access_token()}",
+            "appkey": settings.kis_app_key,
+            "appsecret": settings.kis_app_secret,
+            "tr_id": _FUTOPT_FUTURES_BOARD_TR_ID,
+            "custtype": "P",
+        },
+        params={
+            "FID_COND_MRKT_DIV_CODE": "F",
+            "FID_COND_SCR_DIV_CODE": "20503",
+            "FID_COND_MRKT_CLS_CODE": market_cls_code,
+        },
+    )
+    response.raise_for_status()
+    body = response.json()
+    return body.get("output") or []
+
+
+_FUTOPT_CALLPUT_BOARD_ENDPOINT = "/uapi/domestic-futureoption/v1/quotations/display-board-callput"
+_FUTOPT_CALLPUT_BOARD_TR_ID = "FHPIF05030100"
+
+
+# 국내옵션전광판_콜풋[국내선물-022]. 특정 만기월(mtrt_yymm, 예: "202610")의 콜/풋 옵션
+# 종목코드(optn_shrn_iscd)를 찾을 때 쓴다 - 옵션월물리스트만으로는 종목코드를 못 얻는다.
+# 정규 선물이 없는 만기월(분기월이 아닌 달)의 만기일을 구하려면 이 종목코드로 get_price()를
+# 호출해야 한다. output1에는 100건까지만 온다(KIS 공식 제약).
+def get_option_callput_board(mtrt_yymm: str) -> list[dict]:
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.kis_base_url}{_FUTOPT_CALLPUT_BOARD_ENDPOINT}",
+        headers={
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {get_access_token()}",
+            "appkey": settings.kis_app_key,
+            "appsecret": settings.kis_app_secret,
+            "tr_id": _FUTOPT_CALLPUT_BOARD_TR_ID,
+            "custtype": "P",
+        },
+        params={
+            "FID_COND_MRKT_DIV_CODE": "O",
+            "FID_COND_SCR_DIV_CODE": "20503",
+            "FID_MRKT_CLS_CODE": "CO",
+            "FID_MTRT_CNT": mtrt_yymm,
+            "FID_MRKT_CLS_CODE1": "PO",
+            "FID_COND_MRKT_CLS_CODE": "",
+        },
+    )
+    response.raise_for_status()
+    body = response.json()
+    return body.get("output1") or []
+
+
+_FUTOPT_PRICE_ENDPOINT = "/uapi/domestic-futureoption/v1/quotations/inquire-price"
+_FUTOPT_PRICE_TR_ID = "FHMIF10000000"
+
+
+# 선물옵션 시세[v1_국내선물-006]. market_div_code: "F"=선물, "O"=옵션. iscd는 display-board-*
+# 응답의 종목코드(futs_shrn_iscd/optn_shrn_iscd)를 그대로 넣는다.
+# 응답의 futs_last_tr_date(YYYYMMDD)가 실제 최종거래일=만기일이다 - 46번 사전조사에서
+# "해당 결제월의 두 번째 목요일"이라는 공식 규칙과 실제 값이 정확히 일치하는 것을 확인했다.
+def get_price(market_div_code: str, iscd: str) -> dict:
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.kis_base_url}{_FUTOPT_PRICE_ENDPOINT}",
+        headers={
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {get_access_token()}",
+            "appkey": settings.kis_app_key,
+            "appsecret": settings.kis_app_secret,
+            "tr_id": _FUTOPT_PRICE_TR_ID,
+            "custtype": "P",
+        },
+        params={"FID_COND_MRKT_DIV_CODE": market_div_code, "FID_INPUT_ISCD": iscd},
+    )
+    response.raise_for_status()
+    body = response.json()
+    return body.get("output1") or {}

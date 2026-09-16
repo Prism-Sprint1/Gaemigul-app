@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_service_key: str | None = None
 
+    # 한국은행 ECOS(경제통계시스템) Open API - calendar 도메인에서 한국 기준금리 조사용(테스트 단계)
+    # 인증키가 없으면 "sample"로도 호출 가능하지만 sample은 조회건수가 최대 10건으로 제한된다
+    # (ecos.bok.or.kr에서 발급받은 정식 키가 있으면 .env에 넣을 것)
+    ecos_api_key: str | None = None
+
 
 # 설정을 한 번만 읽어 재사용한다 (.env를 바꾸면 서버를 재시작해야 반영된다)
 @lru_cache

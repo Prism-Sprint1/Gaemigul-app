@@ -1615,3 +1615,1654 @@ end_date)` 신규. 기존 `_upsert_event()`(id 충돌 시 UPDATE)를 그대로 �
 - `_dart_quarter_period()`의 "1/4/7/10월에만 1차 공시" 가정이 12월 결산이 아닌 회사에도
   성립하는지 확인 필요(확장 시)
 - `news-data.ts`에는 아직 반영 안 함
+
+## 39. `back/dev` 통합 — calendar 도메인을 팀 공용 dev 브랜치에 병합
+
+지금까지 `back/feat/calendar` 브랜치 위에서만 진행하던 FRED/KIS/FOMC/DART 작업을, 팀이 같이
+쓰는 `back/dev` 브랜치로 병합해서 push했다. `back/dev`에는 그동안 다른 팀원이 만든
+timeline(지표 바·슬롯 수집·보고서)·briefing 도메인이 이미 들어있었고, **calendar 도메인
+자체가 `back/dev`에는 아직 한 번도 합쳐진 적이 없었다** - 그래서 이번 병합은 단순 업데이트가
+아니라 calendar 도메인 전체(backend+frontend)를 `back/dev`에 처음 들여오는 작업이었다.
+
+### 절차
+
+1. 병합 전 `back/feat/calendar`에 남아있던 미커밋 프런트 변경(`calendar-view.tsx`,
+   `news-data.ts`)을 `git stash push -u`로 대피
+2. `git checkout -b back/dev origin/back/dev`로 로컬에 최신 `back/dev` 생성
+3. `git merge back/feat/calendar`로 병합 시도 - 4개 파일 충돌
+4. 각 충돌을 "한쪽만 채택"이 아니라 **양쪽이 각자 추가한 내용을 전부 살리는 방식**으로 해결
+   (아래 상세)
+5. 병합 커밋 생성 - 스모크 테스트로 실제로 서버가 뜨는지 확인 (아래 상세)
+6. `origin/back/dev`에 push (`392944f..96c2341`)
+7. `back/feat/calendar`로 복귀, 1번에서 대피한 변경사항 `git stash pop`으로 복원
+
+### 충돌 해결 내용
+
+- **`backend/src/backend/core/config.py`**: `back/dev` 쪽이 그새 `naver_api_key_id`/
+  `naver_api_key`/`gemini_api_key`/`cloudflare_account_id`/`cloudflare_api_token`/
+  `supabase_url`/`supabase_service_key`를 추가했고, `kis_app_key`/`kis_app_secret`도
+  필수(`str`)에서 선택(`str | None = None`)으로 바뀌어 있었다. 여기에 `back/feat/calendar`의
+  `fred_api_key`/`dart_api_key`를 추가하는 방식으로 합쳤다 - 두 브랜치가 서로 다른 필드를
+  추가한 것이라 실제 내용 충돌은 없었고, 텍스트 위치만 겹친 것이었다
+- **`backend/.env.example`**: 위와 같은 이유로 같은 방식으로 병합(`NAVER_*`/`GEMINI_API_KEY`
+  뒤에 `DART_API_KEY` 추가)
+- **`backend/main.py`**: `back/dev` 쪽이 로그 설정(`setup_logging`)·스케줄러를
+  `BackgroundScheduler`에서 `AsyncIOScheduler` + 슬롯 수집 8개로 크게 확장해뒀었다. import문만
+  충돌났고(`calendar_router` import 위치), 실제 `app.include_router(calendar_router)` 호출부는
+  이미 자동 병합되어 있었다 - import문에 `calendar_router`를 추가하는 것으로 해결
+- **`backend/src/backend/core/kis_client.py`**: 가장 큰 충돌. `back/dev` 쪽이 그새
+  업종지수·등락률/거래량 순위·국내휴장일·예상체결순위·투자자매매동향·지수/종목 기간별 시세·
+  코스피 마스터파일까지 10개 함수를 새로 추가했고, `back/feat/calendar` 쪽은 이번 세션에서
+  만든 배당/합병분할/IPO/유상증자/무상증자 5개 KSD 함수를 추가했다 - 서로 다른 함수를 파일
+  끝에 이어붙인 것뿐이라 두 블록을 순서대로 이어 붙이는 것으로 해결(내용 손실 없음)
+
+### 병합 후 추가로 발견해서 고친 문제
+
+병합 자체는 충돌 없이 끝났지만, `back/dev`의 `core/database.py`가 그새
+`async_session()`(컨텍스트매니저 함수)을 없애고 `get_session_factory()`(세션메이커를 반환,
+호출부에서 `get_session_factory()() as session`으로 열어 써야 함) 구조로 바뀌어 있었다.
+`services/calendar.py`는 이 변경 이전 구조를 그대로 쓰고 있어서, 병합 직후
+`python -c "import main"`으로 실제 import를 시도해보고서야 `ImportError: cannot import name
+'async_session'`를 발견했다. `services/calendar.py`의 `async_session()` 호출 9곳을 전부
+`get_session_factory()()`로 바꾸고 import문도 수정해서 해결 - 병합 자체는 텍스트 충돌이
+없었지만 이런 "충돌 없이 조용히 깨지는" 문제가 있을 수 있다는 걸 보여주는 사례라 남겨둔다.
+
+### 검증
+
+- 4개 충돌 파일 + 후속 수정 파일 전부 `ast.parse()`로 문법 확인
+- `uv run python -c "import main"` - 에러 없이 성공(1차 시도는 위 문제로 실패, 수정 후 재확인)
+- `uv run uvicorn main:app`으로 실제 기동 - 스케줄러 작업 9개(`indicator_bar` +
+  `slot_0730~2000`) 정상 등록, "Application startup complete" 확인
+- `GET /calendar/events?year=2026&month=9` - 13건 정상 응답(macro 카테고리, FRED+FOMC 섞여
+  있음)
+- `GET /timeline/indicators` - 200 정상 응답(calendar 도메인 추가가 기존 timeline 도메인에
+  영향 없음을 확인)
+- `GET /` - 정상 응답
+
+### 결과
+
+- `back/dev`가 `392944f` → `96c2341`(병합 커밋)로 갱신, origin에 push 완료
+- `back/feat/calendar`의 FRED(58)/KIS(85)/FOMC(17)/DART(7) = 167건 calendar 데이터와 관련
+  코드 전체가 `back/dev`에 처음으로 합류
+- `back/feat/calendar` 브랜치 자체는 그대로 유지(삭제하지 않음), 로컬 미커밋 프런트 변경사항도
+  stash pop으로 복원해서 작업 전 상태 그대로 돌아옴
+
+### 남은 것
+
+- `services/calendar.py`의 KIS 함수들(배당/IPO 등)은 여전히 `get_settings()` +
+  수동 `httpx.get()` 방식이고, `back/dev`가 새로 도입한 `_checked_settings()`/`_headers()`/
+  `_get_with_retry()` 공용 헬퍼 스타일로는 통일하지 않았다 - 지금은 정상 동작하지만, 다음에
+  `kis_client.py`를 다시 손볼 일이 있으면 일관성 있게 리팩터링할지 검토
+- `back/dev`에는 이제 `frontend/app/(main)/calendar/` 쪽 UI도 함께 들어갔지만, 이번 세션에서
+  작업한 FOMC/DART 실데이터는 아직 `news-data.ts`에 반영되지 않은 상태로 병합됨(반영은 별도
+  작업 필요)
+
+## 40. DART 실적 이벤트를 SK하이닉스·현대차로 확장
+
+38번 항목에서 삼성전자 1개 기업으로 구현한 DART 실적 이벤트 로직을 SK하이닉스·현대차까지
+확장했다. `get_preliminary_earnings()`/`get_key_accounts()`/`ingest_preliminary_earnings_from_dart()`
+는 처음부터 corp_code/stock_code/corp_name을 인자로 받는 일반 함수였어서(38번 항목에서 이미
+그렇게 설계함), 삼성전자 전용 코드를 복제할 필요는 없었다. 대신 새 기업으로 실제 라이브 데이터를
+확인하는 과정에서 **키워드 매칭 버그를 하나 발견해서 고쳤다.**
+
+### corp_code 확인 (추측 없이 실제 조회)
+
+`get_corp_codes()` + `find_corp_by_stock_code()`로 조회해서 확인:
+
+| 기업 | corp_code | stock_code |
+|---|---|---|
+| 삼성전자 | 00126380 | 005930 |
+| SK하이닉스 | 00164779 | 000660 |
+| 현대차(DART 등록명: 현대자동차) | 00164742 | 005380 |
+
+### 발견한 문제: `_PRELIMINARY_EARNINGS_KEYWORD`가 현대차의 월간 판매실적까지 잘못 잡음
+
+SK하이닉스는 삼성전자와 똑같이 "연결재무제표기준영업(잠정)실적(공정공시)"만 분기당 1건씩(2년간
+7건) 나와서 문제가 없었다. 그런데 **현대차는 이 분기 공시와 별개로 매달 "영업(잠정)실적(공정공시)"
+(접두사 "연결재무제표기준" 없음, 월간 판매실적으로 추정)를 따로 공시하고 있었다** - 기존 키워드
+`"영업(잠정)실적"`은 두 report_nm 모두에 포함된 부분문자열이라, 현대차만 조회하면 분기 실적
+7건이 아니라 21개월치 월간 공시까지 섞여서 **28건**이 걸리는 문제를 실제 라이브 호출로
+발견했다. 키워드를 `"연결재무제표기준영업(잠정)실적"`(접두사까지 포함)으로 좁혀서 해결 -
+수정 후 현대차도 정확히 분기당 1건씩 7건만 잡히는 것을 재확인했고, 삼성전자·SK하이닉스는
+이 변경으로 결과가 달라지지 않는 것도 재확인했다(`core/dart_client.py`).
+
+### 분기 판단 로직(`_dart_quarter_period`) 재검증
+
+3개 기업의 1차 잠정실적 rcept_dt를 전부 확인한 결과, 셋 다 예외 없이 1/4/7/10월에만 공시가
+나왔다 - 38번 항목에서 삼성전자로만 확인했던 "1/4/7/10월 가정"이 SK하이닉스·현대차에도
+그대로 성립하는 것을 확인했다(셋 다 12월 결산이라 성립하는 것으로 보이며, 결산월이 다른
+회사로 더 확장할 때는 재검증 필요 - 원래 남겨둔 다음 단계 항목 그대로 유효).
+
+### 기업별 발표 주기 차이
+
+SK하이닉스·현대차는 삼성전자와 달리 **분기당 1건만** 공시한다(삼성전자처럼 1차 가이던스 +
+2차 상세로 나뉘지 않음). 기존 `get_preliminary_earnings()`의 날짜 클러스터링 로직(45일 간격
+기준으로 그룹을 나누고 그룹의 첫 날짜를 채택)은 그룹에 1건만 있어도 그대로 동작해서 별도
+분기 처리가 필요 없었다.
+
+### 구현
+
+- **수정**: `core/dart_client.py` - `_PRELIMINARY_EARNINGS_KEYWORD` 좁힘, 관련 주석 갱신,
+  모듈 상단 주석에서 "삼성전자 테스트 단계" 표현을 "조회 전용, 저장은 services가 담당"으로 정리
+- **수정**: `scripts/test_dart_earnings.py` - 삼성전자 상수 3개를 `COMPANIES` 리스트(기업당
+  corp_code/corp_name/stock_code)로 교체하고 전체 로직을 기업별 반복으로 변경. 미리보기
+  단계에서 `calendar_service._dart_quarter_period()`를 재사용해 분기 라벨과 계정 수치까지
+  같이 출력하도록 보강(저장 전 검증 강화)
+- `services/calendar.py`는 변경 없음 - 애초에 기업 중립적으로 설계되어 있었다
+
+### 테스트 결과
+
+- 미리보기(DB 저장 없음)에서 3개 기업 각 7건씩 확인 - report_nm/발표일/분기라벨/매출액/영업이익/
+  당기순이익까지 전부 실제 값으로 출력해서 확인
+- 저장 실행: 삼성전자 7 + SK하이닉스 7 + 현대차 7 = **21건 upsert**
+- 재실행(중복 방지 확인): 동일하게 21건 - 삼성전자 7건은 이미 있던 id라 upsert로 덮어쓰기만
+  되고 새 행이 생기지 않았고, SK하이닉스·현대차 14건이 신규로 추가됨
+- Supabase 전체: 167 → **181건**(+14, 신규 2개 기업분만 순증)
+- 각 기업 실제 DART 수치(조원, CFS 기준) 일부:
+
+  | 기업 | 2025 Q1 매출 | 2025 Q1 영업이익 | 2025 Q1 당기순이익 |
+  |---|---|---|---|
+  | 삼성전자 | 79.1 | 6.7 | 8.2 |
+  | SK하이닉스 | 17.6 | 7.4 | 8.1 |
+  | 현대차 | 44.4 | 3.6 | 3.4 |
+
+- `GET /calendar/events`: 2026-01/04월, 2025-10월 각각 조회해서 세 기업의
+  `dart-earnings-{stock_code}-*` 이벤트가 해당 월에 정확히 1건씩(총 3건) 포함되는 것 확인,
+  `actual` 값도 위 표와 일치
+- 기존 데이터 영향 없음: 9월 조회 시 FOMC 2건·FRED 5건 그대로, CPI/PPI/FOMC 등 이번 확장과
+  무관한 데이터는 전혀 변경되지 않음
+
+### 발견된 문제점
+
+- 위에서 설명한 현대차 키워드 오탐(월간 판매실적 vs 분기 잠정실적) - 수정 완료
+- 그 외 새로 발생한 문제 없음(id 스킴이 `dart-earnings-{stock_code}-{rcept_dt}`라 기업 간
+  ID 충돌 가능성 자체가 없었음)
+
+### 다음 단계 — NVIDIA/Apple 연결을 위해 필요한 작업
+
+- DART는 한국 기업 전자공시 시스템이라 미국 기업(NVIDIA/Apple)에는 애초에 적용 불가 - 미국
+  기업은 SEC EDGAR(10-Q/10-K, 8-K 실적 발표) 등 별도 데이터 소스 조사 필요
+- 미국 기업의 "실적 발표일"은 정기보고서 접수일이 아니라 실적 발표(어닝콜) 날짜를 어떻게
+  구할지부터 확인 필요(EDGAR는 재무제표 원본은 주지만 "발표 일정"을 별도로 안 줄 수 있음 -
+  DART의 "1차 잠정실적 vs 정기보고서" 문제와 비슷한 구조가 있을 수 있어 미리 조사 필요)
+- 한국 기업을 더 늘릴 경우 12월 결산이 아닌 회사(일부 금융지주 등)가 있는지 확인하고
+  `_dart_quarter_period()`의 1/4/7/10월 가정이 깨지는지 재검증 필요
+- `news-data.ts`에는 아직 반영 안 함
+
+## 41. 프런트 `/calendar` 실데이터 재반영 — DART 실적 발표 21건 포함 181건
+
+40번 항목에서 확장한 SK하이닉스·현대차 실적 이벤트를 포함해 Supabase 전체 181건을
+`frontend/app/(main)/calendar/news-data.ts`에 다시 반영하고, 실제 화면에서 확인했다.
+19번·29번·35번 항목과 같은 방식(구조/타입/컴포넌트는 그대로, `NEWS` 배열 내용만 교체)이다.
+
+- Supabase에서 181건을 export → TypeScript 리터럴로 변환 → 기존 파일의 헤더(타입/유틸/CAT 등)
+  ·푸터(MARKET_HOLIDAYS 등)는 그대로 두고 `NEWS` 배열만 교체
+- 교체 전 파일 상태 점검 중 사소한 문제 발견: 이전 회차(35번 항목)에서 저장된 파일의 배열
+  마지막 항목과 닫는 대괄호가 한 줄에 붙어 있었다(`...} },]`) - 문법상 문제는 없지만(트레일링
+  콤마 허용) 다음에 또 이 패턴으로 파싱 스크립트를 짜면 헷갈릴 수 있어 이번 재작성 때 정상적인
+  줄바꿈으로 정리됨
+- `npx tsc --noEmit`으로 타입 에러 없음 확인
+- 백엔드(8080)/프런트(3000) 재기동 후 Playwright로 실제 `/calendar` 화면 확인. 오늘(2026-09-15)
+  기준 기본 화면은 9월이라 실적 이벤트가 안 보여서, "이전 달" 버튼을 5회 클릭해 2026년 4월로
+  이동한 뒤 캡처 - 4/7 "삼성전자 실적 발표", 4/23 "SK하이닉스 실적 발표"·"현대차 실적 발표"
+  카드가 정상적으로 함께 표시되는 것 확인(같은 화면에 FOMC 4/9·4/30, 배당·공모주 데이터도
+  그대로 섞여서 잘 보임)
+- 테스트 후 두 서버 모두 종료
+
+### Supabase 최종 상태
+
+전체 181건 (FRED 58 + KIS 85 + FOMC 17 + DART 21), 프런트 `news-data.ts`와 동기화 완료.
+
+## 42. 발표 시각이 지난 SCHEDULED 이벤트 정리(재시딩으로 상태 최신화)
+
+"발표 후 시간이 지나면 발표 완료로 해달라"는 요청으로 SCHEDULED 상태를 점검했다. 코드를
+새로 만들 필요는 없었다 - `_ipo_event_from_kis`/`_dividend_event_from_kis`의
+`status="SCHEDULED" if published_at >= today_kst else "RELEASED"` 로직과 `ingest_fomc_year`의
+`_fomc_status()`(발표 시각 경과 여부로 판단)가 이미 "시간이 지나면 RELEASED로 바뀌는" 로직을
+갖고 있었다. 문제는 이 `today_kst`/"지금 시각"이 **시딩 스크립트를 실행한 시점에 한 번만
+계산되고 DB에 그대로 저장**된다는 점 - 그 뒤로 실제 날짜가 지나도 스크립트를 다시 실행하기
+전까지는 DB에 저장된 status가 갱신되지 않는다(정적 스냅샷이라 자동으로 안 바뀜).
+
+### 확인한 사례
+
+`kis-ipo-0010S0-20260914`(와이즈플래닛컴퍼니, 공모가 12000원 이미 확정)가 청약일 2026-09-14가
+지난 오늘(2026-09-15)까지도 `status="SCHEDULED"`로 남아있던 것을 발견 - 마지막으로 시딩한
+시점(9/14 이전)의 `today_kst` 기준으로는 아직 SCHEDULED가 맞았지만, 그 뒤로 재시딩을 안 해서
+그대로 굳어있었다.
+
+### 조치
+
+기존 시딩 스크립트를 그대로 재실행해서 "지금" 기준으로 상태를 다시 계산시켰다(로직 변경 없음,
+데이터만 최신화):
+- `scripts/seed_kis_dividends.py`, `scripts/seed_kis_corporate_actions.py`(IPO)
+- `scripts/seed_2026_calendar.py`(FRED - 그사이 새로 발표된 실측값이 있으면 같이 반영)
+- `scripts/seed_fomc_2026.py`(FOMC - 시각 기준 재계산, 9/16 회의는 아직 발표 전이라 그대로
+  SCHEDULED 유지)
+
+### 결과
+
+- `kis-ipo-0010S0-20260914` → `RELEASED`로 정상 전환 확인
+- `kis-ipo-0035S0-20260915`(오늘 날짜)는 날짜 단위 비교라 오늘 하루는 그대로 `SCHEDULED`
+  유지(설계상 정상 - KIS 이벤트는 정확한 시각이 없어 날짜 단위로만 판단, 내일부터 RELEASED로
+  바뀜)
+- 전체 SCHEDULED 26건 → 25건(위 1건만 전환, 나머지는 실제로 아직 발표 전이라 그대로 맞음)
+
+### 남은 것
+
+- 이 "재시딩해야 최신화된다"는 구조 자체가 근본적인 한계다 - 시딩을 안 하면 지난 이벤트가
+  계속 SCHEDULED로 보일 수 있다. 30번 항목에서부터 계속 미뤄온 "APScheduler로 자동 수집
+  전환" 결정이 이 문제의 근본 해결책이 될 수 있다(정기적으로 자동 재실행되면 이런 수동 정리가
+  필요 없어짐) - 아직 결정 안 됨
+
+## 43. "이번주 AI 요약" 기능 — 프런트 시안 정리 (구현 전 문서화 단계)
+
+사용자가 DART(실적)·FOMC(금리) 확장 작업은 잠시 보류하고, 프런트 캘린더 화면의 더미
+"이번주 AI 요약" 카드(`frontend/app/(main)/calendar/calendar-view.tsx`의 `AiSummaryCard()`
+— 지금은 하드코딩된 고정 문구 "경제성장률 발표를 포함한 주요 경제지표 9개가 이번 주에
+발표돼요"만 보여주는 정적 컴포넌트)를 실제 데이터 기반으로 만드는 작업을 먼저 처리해달라고
+요청했다. 프런트 팀이 전달한 시안과 제안된 백엔드 설계를 코드 작성 전에 먼저 문서로
+정리한다 - **이번 항목은 설계만 기록하고 아직 구현하지 않았다.**
+
+### 프런트 시안 (전달받은 화면 캡처)
+
+카드를 클릭하면 열리는 팝업/모달 형태로, 다음 구성을 갖는다:
+
+- 상단: "✦ 이번주 AI 요약" 배지 + 닫기(X) 버튼
+- **헤드라인**: 굵은 한 줄 요약 (예: "FOMC 회의 결과 발표 등 주요 경제지표 5개가 이번 주에
+  발표돼요")
+- **"✓ 이번주 주요 소식이에요"** 섹션: 그 주 캘린더 이벤트를 근거로 한 설명 문단 (예: 소매판매
+  발표의 의미, FOMC 회의 결과의 의미, 애플·마이크로소프트 실적 발표 언급)
+- **"✓ 이런 소식도 있어요"** 섹션: 캘린더 이벤트에는 없는 시장 전반 코멘터리 (예: 중동 정세
+  불안에 따른 유가 변동성, AI 투자 확대 트렌드) - **이 부분이 아래 "팀 판단 필요" 항목의
+  근거다**
+- **"주요 경제지표" 표**: 날짜/일정/발표(국기+제목)/예측/이전 컬럼으로, 그 주 캘린더 이벤트
+  목록을 요일별로 그룹핑해서 보여줌(오른쪽 끝 컬럼에는 "오후 9시 30분 발표 예정"처럼 아직
+  안 지난 이벤트의 예정 시각이 표시됨 - 화면 예시는 전부 미래 시점 이벤트라 실측값 없이
+  "발표 예정"만 있음)
+
+### 제안받은 새 테이블: `calendar_weekly_summaries`
+
+기존 `calendar_events`와 같은 방식(KST 기준 관리, id로 upsert)을 그대로 따르는 설계.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `id` | text (PK) | 예: `"ai-summary-2026-09-14"` (그 주 월요일 날짜) |
+| `week_start` | text | 그 주 월요일(KST, `YYYY-MM-DD`) |
+| `week_end` | text | 그 주 토요일(앱이 월~토 6일 주 기준) |
+| `headline` | text | 맨 위 굵은 한 줄 요약 |
+| `highlights` | text | "이번주 주요 소식이에요" 문단 |
+| `additional_notes` | text (nullable) | "이런 소식도 있어요" 문단 |
+| `event_ids` | jsonb/text[] | 이 요약이 참고한 `calendar_events.id` 목록 |
+| `generated_at` | timestamp | 생성 시각 |
+| `model` | text | 어떤 LLM으로 생성했는지(감사/디버깅용) |
+
+`event_ids`로 실제 이벤트를 참조만 하고, "주요 경제지표" 표는 프런트가 이미 갖고 있는
+`GET /calendar/events` 데이터와 조인해서 그리는 방식 - 이벤트 내용을 이 테이블에 중복
+저장하지 않는다. 이 프로젝트가 지금까지 지켜온 "한 사실은 한 곳에만 저장"(`calendar_events`
+컬럼 구조를 그대로 유지하고 새 컬럼을 함부로 늘리지 않는다는 원칙)과 정합적인 설계다.
+
+### 제안받은 새 엔드포인트
+
+```
+GET /calendar/weekly-summary?week_start=2026-09-14
+```
+
+응답 예시:
+
+```json
+{
+  "weekStart": "2026-09-14",
+  "weekEnd": "2026-09-19",
+  "headline": "...",
+  "highlights": "...",
+  "additionalNotes": "...",
+  "eventIds": ["fred-CPIAUCSL-2026-08-01", "fomc-2026-09-16-FOMC_STATEMENT"],
+  "generatedAt": "2026-09-15T09:00:00+09:00"
+}
+```
+
+### 제안받은 생성 트리거: 요청 시 즉석 생성이 아니라 스케줄러로 미리 생성
+
+`main.py`(현재 back/dev 쪽 버전 기준)에 이미 `BackgroundScheduler`/`AsyncIOScheduler` +
+`CronTrigger`로 지표 바를 주기적으로 갱신하는 `market_indicator_service.refresh_all` 패턴이
+있으므로, 같은 방식으로 **매주 월요일 아침에 한 번만** 그 주 `calendar_events`를 모아 LLM을
+호출해 `calendar_weekly_summaries`에 upsert하는 방식을 제안받았다. 이러면:
+
+- 사용자 요청 시점에는 LLM 호출 없이 DB만 읽어서 응답 - 빠르고 실패 지점이 적음
+- LLM 호출 비용이 주 1회로 고정됨(요청마다 호출하는 것보다 훨씬 저렴)
+
+### 팀 판단이 필요한 정책 결정 (기술 문제가 아니라 방향 결정)
+
+시안의 "이런 소식도 있어요" 섹션(중동 정세 불안·유가 변동성, AI 투자 확대 트렌드 등)은
+**우리 `calendar_events` DB에 없는 내용**이다 - LLM이 자기 일반 지식으로 덧붙이는 부분이라는
+뜻이다. 이 프로젝트의 CLAUDE.md(2번 항목, "가장 중요한 개발 원칙")와 지금까지의 모든 구현
+결정(forecast/importance는 근거 없으면 무조건 null, actual/previous는 실제 API 응답값만
+사용, FOMC 회의 결과도 실제 확인된 값만 채움 등)은 **"근거 없는 값은 임의로 만들지 않는다"**
+는 원칙을 강하게 지켜왔다. 이 원칙을 "이번주 AI 요약"에도 그대로 적용한다면:
+
+- **선택지 A**: 요약을 `calendar_events`에 실제로 존재하는 이벤트만 근거로 작성(LLM이
+  이벤트 목록을 자연어 문장으로 풀어쓰는 역할만 함) - "이런 소식도 있어요" 같은 DB 밖
+  일반 지식 섹션은 만들지 않거나, 만들더라도 근거 이벤트가 있는 경우만 채움
+- **선택지 B**: 시안 그대로 LLM의 일반 지식(지정학 이슈, 트렌드 등)까지 섞어서 더 풍부한
+  요약을 제공 - 단, 이 경우 지금까지의 "임의 생성 금지" 원칙에서 벗어나는 예외를 만드는
+  것이므로 명시적으로 합의하고, UI에도 "이 내용은 AI가 추정한 시장 일반 정보이며
+  calendar_events 근거가 없습니다" 같은 구분 표시가 필요할 수 있음
+
+이건 스키마 문제가 아니라 팀 판단이 필요한 부분이라 구현 전에 미리 짚어둔다.
+
+### 정책 결정 확정: A 기본 + 선택적 B(명시적 구분 표시)
+
+사용자가 확정한 방향은 다음과 같다:
+
+- **기본은 A**: "이번주 주요 소식이에요"는 그 주 `calendar_events`에 실제로 있는 이벤트만
+  근거로 LLM이 자연어 문장으로 풀어쓴다. 여기 등장하는 내용은 전부 `event_ids`로 추적
+  가능해야 한다 - 이 프로젝트의 "근거 없는 값은 임의 생성 금지" 원칙을 그대로 지킨다.
+- **"이런 소식도 있어요"(B에 해당하는 일반 지식 섹션)는 완전히 배제하지 않되, 반드시
+  명시적으로 구분 표시한다** - 안내 문구는 **"AI가 참고로 덧붙인 시장 이야기예요"**로
+  확정(사용자 확정, 2026-09-15). "근거 없음" 같은 딱딱한 표현 대신, 이 프로젝트의 다른
+  카피 톤("~예요/돼요")에 맞춘 문구다. 이 문구를 DB 근거 기반 내용(A)과 LLM 일반 지식(B)이
+  화면에서 섞여 보이지 않도록 `additional_notes` 옆에 항상 같이 표시한다.
+- 정리하면: 데이터 구조상 `highlights`(DB 근거, A) 필드와 `additional_notes`(LLM 일반 지식,
+  구분 표시 필요, B) 필드를 이미 분리해서 설계해뒀던 것이 이 결정과 정확히 맞아떨어진다 -
+  프런트에서 `additional_notes`를 렌더링할 때 반드시 "AI가 참고로 덧붙인 시장 이야기예요"
+  문구를 같이 표시해야 한다는 조건이 추가된 것으로 이해하면 된다.
+
+### 현재 상태
+
+- 아직 아무 코드도 작성하지 않음(테이블 생성·엔드포인트·스케줄러 전부 미구현) - 정책
+  결정까지만 확정된 단계
+- 이 항목 문서화 전에 진행 중이던 DART(실적)·FOMC(금리) 확장 작업은 사용자 지시로 보류 -
+  "이후 좀 더 보강" 예정
+- 다음 단계: 구현 착수(테이블 생성 → 엔드포인트 → 스케줄러 → LLM 프롬프트 설계, `highlights`
+  는 이벤트 목록만 근거로 쓰도록 강하게 제약하고 `additional_notes`는 구분 표시 조건을
+  프런트와 맞춰야 함). GEMINI_API_KEY는 현재 `back/feat/calendar` 브랜치의 `config.py`/
+  `.env`에 없음(back/dev 쪽에서 다른 도메인이 이미 등록해둠) - 구현 시작 시 이 브랜치에도
+  추가 필요
+
+### `calendar_weekly_summaries` 테이블 생성 완료
+
+설계한 스키마 그대로 Supabase에 실제로 생성했다(마이그레이션 도구 없이, 기존 `calendar_events`
+때와 같은 방식 - `core/database.py`의 세션으로 raw SQL 실행).
+
+```sql
+CREATE TABLE calendar_weekly_summaries (
+    id                text PRIMARY KEY,
+    week_start        text NOT NULL,
+    week_end          text NOT NULL,
+    headline          text NOT NULL,
+    highlights        text NOT NULL,
+    additional_notes  text,
+    event_ids         jsonb NOT NULL DEFAULT '[]'::jsonb,
+    generated_at      timestamptz NOT NULL,
+    model             text NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_calendar_weekly_summaries_week_start
+    ON calendar_weekly_summaries (week_start);
+```
+
+- `event_ids`는 리스트 저장이 필요해서 `calendar_events`에는 없던 `jsonb` 타입을 처음 도입함
+  (Python에서 `list[str]`을 그대로 넣고 뺄 수 있음). 기본값 `'[]'::jsonb`로 빈 리스트 허용.
+- `week_start`에 유니크 인덱스 - 주당 요약이 1건만 존재하도록 DB 레벨에서 보장하고,
+  `GET /calendar/weekly-summary?week_start=...` 조회에도 그대로 씀.
+- `generated_at`은 `calendar_events`의 다른 날짜 컬럼들과 달리 `text`가 아니라
+  `timestamptz`로 만들었다 - 이 컬럼은 화면에 표시되는 "발표일"이 아니라 순수 감사/디버깅용
+  메타데이터라서, `calendar_events`가 `publishedAt`을 `text`로 고정한 이유(사전순 정렬=날짜순
+  정렬)가 여기엔 적용되지 않는다고 판단함.
+- `additional_notes`만 nullable - 그 주에 LLM이 덧붙일 일반 시장 코멘트가 없으면 비워둘 수
+  있다(43번 항목에서 확정한 "AI가 참고로 덧붙인 시장 이야기예요" 문구는 이 필드가 실제로
+  값이 있을 때만 프런트에서 같이 표시).
+- 테이블 생성만 완료된 상태 - 이 테이블에 데이터를 채우는 엔드포인트/스케줄러/LLM 호출
+  로직은 아직 구현하지 않았다.
+
+## 44. "이번주 AI 요약" 자세히 보기 팝업 — 프런트 UI 선구현 (테이블만 실데이터)
+
+사용자가 "'이번주 AI 요약'의 자세히 보기를 클릭하면 페이지를 만들어서 시안대로 보여줘"라고
+요청했다. 백엔드 LLM 요약 생성(엔드포인트/스케줄러)은 아직 없어서, 헤드라인/"이번주 주요
+소식이에요" 문구는 준비 중 안내로 두고, **"주요 경제지표" 표만 실제 `calendar_events`
+데이터로 채우는 방식**으로 진행하기로 사용자와 확정했다(43번 항목의 A/B 정책 결정과는 별개로,
+"지금 당장 뭘 보여줄 수 있는가"에 대한 실용적 절충).
+
+이 항목은 이례적으로 프런트 코드를 직접 수정한다 - 그동안 세션 내내 지켜온 "프런트 디자인
+수정 금지" 원칙은 DART/FOMC 단계별 작업 지시에 한정된 제약이었고, 이번엔 사용자가 명시적으로
+프런트 UI 작업을 요청했다.
+
+### 구현
+
+- **신규**: `frontend/app/(main)/calendar/weekly-summary-panel.tsx` - `WeeklySummaryDialog`
+  컴포넌트. 기존 `news-panel.tsx`의 `DayDetailDialog`와 똑같은 `@base-ui/react/dialog` 패턴
+  (Root/Portal/Backdrop/Popup/Title/Close)을 그대로 따라서 새 팝업 스타일을 처음부터 다시
+  만들지 않았다.
+  - `useThisWeekEconomicEvents(today)`: "이번 주"를 월요일~토요일(43번 항목의
+    `week_start`/`week_end` 정의와 동일)로 계산하고, `NEWS`에서 `region === "미국"`이면서
+    `category`가 `"macro"`/`"rate"`인 항목만 그 기간으로 필터링. **KIS 배당/IPO도 category가
+    `"macro"`라서 카테고리만으로는 걸러지지 않는다** - `region === "미국"` 조건을 추가해야
+    시안처럼 FRED/FOMC(전부 미국발)만 남는 것을 실제 데이터로 확인하고 반영했다.
+  - 프런트 `NewsItem` 타입에는 `status`/`actual` 필드가 아예 없다(29번 항목에서부터 알려진
+    한계 - 백엔드 `CalendarEvent`에는 있지만 프런트 타입엔 반영 안 됨). 그래서 "이미
+    발표됐는지"는 `n.status`가 아니라 **`publishedAt`을 현재 시각과 직접 비교**해서 판단하도록
+    구현 - 아직 안 지난 이벤트는 `"오후 9시 30분 발표 예정"` 형태로, 지난 이벤트는
+    `detail.previous` 값(없으면 `"-"`)을 보여준다.
+  - "예측" 컬럼은 시안에 있지만 이 프로젝트는 forecast를 절대 임의 생성하지 않는 원칙이라
+    실제로도 항상 `null`이다 - `detail?.forecast ?? "-"`로 항상 `-`가 나오는 게 정상이다
+    (거짓 값이 아니라 진짜 데이터가 없다는 뜻).
+- **수정**: `calendar-view.tsx`
+  - `RegionBadge`를 로컬 함수에서 `export`로 변경(새 파일에서 재사용)
+  - `AiSummaryCard`가 `today` prop을 받도록 변경, "자세히 보기"를 `<span>`에서 클릭 가능한
+    `<button>`으로 바꾸고 `useState`로 팝업 열림 상태 관리, `<WeeklySummaryDialog>` 렌더링
+    추가
+  - 카드에 미리 보이는 더미 문구("...9개가 이번 주에 발표돼요")는 이번 요청 범위 밖이라
+    손대지 않음(요청은 "자세히 보기 클릭 시" 페이지에 한정됨) - 클릭 전 카드와 클릭 후
+    팝업의 문구가 서로 다르다는 점은 알아둘 필요가 있음(카드는 여전히 더미, 팝업은 표만 실데이터)
+
+### 테스트
+
+- `npx tsc --noEmit` 통과
+- 백엔드(8080)/프런트(3000) 기동 후 Playwright로 "자세히 보기" 클릭 → 실제 팝업 캡처.
+  2026-09-15(오늘) 기준 이번 주(9/14~9/19)에 해당하는 FOMC 이벤트 2건(`미국 경제전망(SEP)
+  공개`, `미국 FOMC 금리결정`, 둘 다 9/17 발표 예정)이 표에 정확히 표시되는 것 확인 -
+  헤드라인도 하드코딩이 아니라 `events.length`(=2)로 실시간 계산된 값
+- 테스트 후 두 서버 모두 종료
+
+### 남은 것
+
+- 카드 자체의 더미 문구("9개가 이번 주에 발표돼요")는 그대로 남아있음 - 나중에 카드도
+  `events.length` 기반으로 바꿀지, 아니면 백엔드 요약 API가 준비될 때까지 그대로 둘지 결정
+  필요
+- 43번 항목의 실제 백엔드 구현(테이블은 이미 생성됨, 엔드포인트·스케줄러·LLM 호출은 미착수)
+  이 완료되면 이 팝업의 헤드라인/"이번주 주요 소식이에요"/"이런 소식도 있어요" 부분을
+  `GET /calendar/weekly-summary` 응답으로 교체해야 함
+
+## 45. "이런 소식도 있어요" 정책 재검토 — `timeline_news` 실데이터로 근거 확보 (A/B 문제 해결)
+
+43번 항목에서 "이런 소식도 있어요"(중동 정세, AI 투자 확대 등 DB 밖 일반 시장 코멘트)를
+LLM 일반 지식(B)으로 채울지, 아예 안 만들지(A)를 팀이 판단해야 한다고 남겨뒀었다. 사용자가
+제3의 방법을 제안했다 - **timeline 도메인의 `timeline_news` 테이블(네이버 뉴스 검색 결과를
+실제로 수집해둔 테이블)에 있는 진짜 기사들을 근거로 이 섹션을 채우면 어떤가**라는 것.
+
+### 실제로 확인한 내용
+
+- `timeline_news`/`timeline_slot` 테이블 둘 다 Supabase에 이미 존재하고, 실제 데이터가
+  쌓여 있는 것을 라이브 쿼리로 확인했다: `timeline_slot` 15행, `timeline_news` 83건 -
+  오늘(2026-09-15) 17:30 슬롯 뉴스까지 실제로 들어와 있음(코스피 마감시황, 원달러 환율,
+  두산퓨얼셀 특징주 등 실제 네이버 뉴스 기사, 각각 진짜 기사 URL 포함)
+- 이 데이터는 `back/feat/calendar` 브랜치 코드가 아니라 timeline 도메인의 다른 프로세스가
+  (Naver 뉴스 검색 API로) 이미 채워둔 것 - 이 브랜치엔 `models/timeline.py`의 `TimelineNews`
+  ORM 클래스 정의만 있고 실제 수집 서비스 코드(`news_service.py`)는 없지만, Supabase는
+  전체 팀이 공유하는 하나의 DB라서 테이블과 데이터 자체는 그대로 조회 가능
+- `TimelineNews` 컬럼: `id`, `timeline_slot_id`(FK), `title`, `summary`, `url`.
+  `TimelineSlot`을 조인하면 `trade_date`/`time_slot`까지 얻을 수 있어 "이번 주" 범위로
+  필터링 가능
+
+### 정책 재정의
+
+"이런 소식도 있어요"는 LLM의 사전 지식(B)이 아니라 **그 주 `timeline_news`에 실제로 수집된
+기사들을 LLM이 요약**하는 방식으로 채운다. 이러면:
+
+- 43번 항목의 원래 딜레마(A: 밋밋하지만 안전 / B: 풍부하지만 검증 불가)가 사라진다 - 근거는
+  실제 기사(`timeline_news.id`+`url`)로 100% 추적 가능하면서도, `calendar_events`에는 없는
+  시장 전반 분위기(정세·업종 동향 등)까지 자연스럽게 담을 수 있다
+- "AI가 참고로 덧붙인 시장 이야기예요"(42→43번 항목에서 확정한 문구)라는 안내 표시는 여전히
+  유지한다 - `calendar_events`(일정) 근거가 아니라 `timeline_news`(기사) 근거라는 점은
+  다르다는 걸 사용자에게 알려주는 게 맞다고 판단(문구 자체는 "일정 근거는 없다"는 취지라
+  그대로 써도 정합적)
+
+### 스키마 변경
+
+`calendar_weekly_summaries`에 `news_ids` 컬럼을 추가했다(생성 직후라 아직 데이터가 없어서
+컬럼 추가에 위험 부담 없음):
+
+```sql
+ALTER TABLE calendar_weekly_summaries
+ADD COLUMN news_ids jsonb NOT NULL DEFAULT '[]'::jsonb;
+```
+
+`event_ids`(계산 근거: `calendar_events.id` 목록)와 대칭되는 구조로, `news_ids`는
+`additional_notes`를 만들 때 참고한 `timeline_news.id` 목록을 담는다. 최종 컬럼 구성:
+
+| 컬럼 | 근거 데이터 |
+|---|---|
+| `highlights` | `event_ids` → `calendar_events` |
+| `additional_notes` | `news_ids` → `timeline_news` |
+
+### 다음 단계
+
+- LLM 프롬프트 설계 시 `additional_notes`는 "그 주 `timeline_news` 기사 목록만 참고해서
+  요약하고, 목록에 없는 사실은 언급하지 말 것"이라는 제약을 명시적으로 넣어야 한다(A안에서
+  `highlights`에 적용하려던 것과 같은 원칙을 뉴스 소스에도 동일하게 적용)
+- `timeline_news`를 그 주 범위로 조회하는 쿼리(및 트레이드데이트 기준 "이번 주" 정의를
+  `calendar_weekly_summaries`의 `week_start`/`week_end`와 맞추는 로직) 구현 필요
+- 이 브랜치엔 news 수집 서비스 코드가 없으므로, `timeline_news`를 읽기만 하고 쓰지는
+  않는다(calendar 도메인은 이 테이블의 소비자일 뿐 생산자가 아님) - 도메인 경계를 지키는
+  선에서 조회 전용으로 접근
+
+### 프런트 팝업에 "이런 소식도 있어요" 섹션 누락 수정
+
+사용자가 실제 화면에서 팝업을 열어보고 "소식이 없는데?"라고 지적했다 - 44번 항목에서
+`WeeklySummaryDialog`를 만들 때 "이번주 주요 소식이에요" 섹션만 넣고 "이런 소식도 있어요"
+섹션 자체를 아예 빠뜨렸었다(당시엔 이 섹션의 데이터 소스 정책이 아직 안 정해진 상태였다).
+45번 항목에서 `timeline_news` 기반으로 정책을 확정했으니, 같은 방식(준비 중 안내)으로
+자리를 마련해뒀다:
+
+```
+✓ 이런 소식도 있어요
+AI가 참고로 덧붙인 시장 이야기예요. 이 부분도 아직 준비 중이에요.
+```
+
+`weekly-summary-panel.tsx`에 섹션 추가, Playwright로 실제 팝업에 두 섹션("이번주 주요
+소식이에요" / "이런 소식도 있어요")이 나란히 표시되는 것 확인.
+
+### "이런 소식도 있어요" 실제 뉴스 기반 미리보기 테스트
+
+사용자가 "뉴스를 정리해서 텍스트로 보여달라"고 요청해서, `timeline_news`에서 이번 주
+(2026-09-14~15, 실제로 쌓인 만큼) 기사 83건을 전부 조회해서 직접 읽고 요약 문단을 만들었다
+(LLM 자동 파이프라인이 아직 없어서 이번엔 직접 종합함). 주요 흐름: 사우디 송유관 드론
+공격발 국제유가 급등 → 미국 10년물 국채금리 5% 근접 → FOMC 앞둔 긴축 경계감 → 미국
+빅테크의 "AI 개발 속도조절론"에 따른 반도체 대형주(삼성전자·SK하이닉스) 급락 → 코스피
+6600선 후퇴 → 한국거래소 애프터마켓(오후 4~8시) 신규 개장.
+
+이 요약을 "우선 테스팅으로 보여달라"는 요청에 따라 `weekly-summary-panel.tsx`의 "이런
+소식도 있어요" 자리에 **테스트용으로 하드코딩**해서 넣고 Playwright로 실제 팝업에 표시되는
+것까지 확인했다 - "(테스트 미리보기 — timeline_news 실제 기사 기반)"이라고 명시해서, 아직
+자동 생성이 아니라 수동 검증용 샘플이라는 걸 구분해뒀다.
+
+이건 어디까지나 프리뷰다 - 실제 서비스에서는 이 문단을 `calendar_weekly_summaries.
+additional_notes`에 저장하고 `news_ids`에 근거 기사 id(예: [6, 49, 54, 47, 51, 52, 16, 41,
+43, 13, 21, 68, 78, 10, 33, 83, 24, 39, 63, 70, 74, 76])를 채우는 자동 파이프라인(LLM
+프롬프트로 "이 기사 목록만 근거로 요약하라"는 제약을 건 뒤 생성)으로 대체해야 한다.
+
+### 범위를 "이번 주"에서 "오늘"로 좁힌 재요약
+
+사용자가 "오늘 기사 기반으로 보여달라"고 요청해서, 위 요약을 이번 주 전체(83건) 대신
+**오늘(2026-09-15) 슬롯의 기사 38건만**으로 다시 종합했다. 오늘자 흐름: 사우디 송유관
+드론 공격발 유가 급등(105달러대) → 美 10년물 국채금리 5% 근접 → 코스피 0.85%↓(6627.26
+마감)·코스닥은 오히려 0.70%↑(812.41 마감) → 원달러 1359.4원 마감 → **코스닥 바이오
+기업 다수를 겨냥한 주가조작 합동대응단 압수수색**(오늘 유독 반복적으로 보도된 이슈,
+관련 기사만 6건) → HD현대중공업 노조 파업 하락 / 두산퓨얼셀 美 수주 강세 / 이차전지주
+강세(中배터리 견제 기대) 등 개별 특징주.
+
+`weekly-summary-panel.tsx`의 테스트 미리보기 문구를 이 오늘자 요약으로 교체하고 Playwright로
+재확인 - "(테스트 미리보기 — 오늘 timeline_news 실제 기사 기반)"으로 문구도 갱신해서
+범위가 이번 주 전체가 아니라 오늘 하루라는 걸 명시했다.
+
+## 46. 한국 기준금리(ECOS) + KOSPI200 선물·옵션 만기(KIS) 사전조사
+
+30번 항목에서부터 남아있던 두 공백(한국 기준금리, 국내 선물/옵션 만기)을 실제 API로
+조사했다. **이번 단계는 조사까지만 - `calendar_events` 저장·Next.js 수정 없음.**
+
+### A. 한국 기준금리 (ECOS)
+
+- **기존 코드 없음** 확인(`core/`, `domain/calendar/`, `scripts/`에 ECOS 관련 코드 전무) -
+  새로 만드는 게 맞았음
+- 통계표코드 `722Y001`(한국은행 기준금리 및 여수신금리), 통계항목코드 `0101000`(한국은행
+  기준금리) - 웹 검색 + 실제 라이브 호출로 확인
+- URL: `https://ecos.bok.or.kr/api/StatisticSearch/{키}/json/kr/{시작}/{종료}/722Y001/M/{시작월}/{종료월}/0101000`
+- **인증키 없이도 `"sample"` 키로 실제 데이터 호출이 된다**는 걸 발견(단, 최대 10건 제한) -
+  처음엔 이걸로 검증했고, 이후 사용자가 정식 `ECOS_API_KEY`를 발급받아 `.env`에 등록해서
+  제한 없이 재검증함(`config.py`에 `ecos_api_key` 필드 추가, `.env.example`에도 추가)
+- **버그 발견 및 수정**: 사용자가 `.env`에 키를 붙여넣을 때 `ECOS_API_KEY=` 없이 값만
+  단독 줄로 들어가 있어서 앱이 못 읽는 상태였다 - `ECOS_API_KEY=<값>` 형태로 직접 수정
+- **핵심 발견**: ECOS는 "그 달의 금리 레벨"만 주는 통계 DB라서, 금리가 안 바뀌는 달에도
+  매달 같은 값이 반복해서 나온다(예: 3.5, 3.5, 3.5, ...) - "몇 월에 결정됐는지"조차 값이
+  바뀌는 지점을 직접 찾아야 하고, 그 "달"도 정확한 "결정일"은 아니다(ECOS는 일 단위로 조회해도
+  같은 값이 그 달 내내 반복될 뿐, 결정일 자체를 표시해주지 않음)
+- 값이 바뀐 지점(2024~2026): 2024-10(3.5→3.25) / 2024-11(3.25→3.0) / 2025-02(3.0→2.75) /
+  2025-05(2.75→2.5) / **2026-07(2.5→2.75) / 2026-08(2.75→3.0)**
+- **정확한 결정일**은 한국은행 공식 홈페이지(`bok.or.kr/portal/singl/baseRate/list.do`, 기준금리
+  추이 목록)에서만 확인 가능 - FOMC의 federalreserve.gov와 정확히 같은 구도(가격/통계 API는
+  "언제 바뀌었는지"를 정확히 안 주고, 기관 공식 홈페이지가 "결정일" 자체를 준다). 확인한 결정일:
+  2024-10-11(3.25%), 2024-11-28(3.00%), 2025-02-25(2.75%), 2025-05-29(2.50%),
+  **2026-07-16(2.75%), 2026-08-27(3.00%)** - ECOS 변경 지점과 전부 정확히 일치, 교차 검증 완료
+- **미래 금통위 일정**: ECOS는 제공 안 함. 한국은행 공식 홈페이지
+  (`bok.or.kr/portal/singl/crncyPolicyDrcMtg/listYear.do?menuNo=200755&mtgSe=A`)가 FOMC의
+  federalreserve.gov 캘린더와 같은 역할 - 2026년 전체 일정(1/15, 2/26, 4/10, 5/28, 7/16,
+  8/27, 10/22, 11/26, 총 8회)이 이미 공개되어 있는 것을 확인. FOMC처럼 "1차 결과 발표만
+  대표 이벤트로 채택"할지, 아니면 BOK는 별도 잠정치 발표가 없어서 결정 당일 하나로 끝인지는
+  다음 구현 단계에서 확정 필요(현재까지 조사로는 BOK 결정은 회의 당일 바로 공식 발표되고
+  Fed처럼 1차/2차 잠정치 개념이 없어 보임 - DART처럼 재확인 필요)
+
+### B. 국내 선물/옵션 만기 (KIS)
+
+- KIS 공식 GitHub(`koreainvestment/open-trading-api`)에서 4개 API의 정확한 URI/TR_ID/파라미터
+  확인 후, 기존 `kis_client.get_access_token()`을 그대로 재사용해 실제 라이브 호출로 검증
+- **국내옵션전광판_옵션월물리스트**(`FHPIO056104C0`): 응답 필드가 `mtrt_yymm_code`/
+  `mtrt_yymm` 2개뿐 - 만기 "년월"만 주고 정확한 날짜는 없음
+- **국내옵션전광판_선물**(`FHPIF05030200`, `display-board-futures`): 가격·미결제약정 등
+  20개 필드, 만기일 필드 없음. 대신 `FID_COND_MRKT_CLS_CODE`로 상품이 갈리는 것을 실제
+  호출로 발견 - `""`(빈 값)은 **정규 KOSPI200선물**(종목코드 `A01XXX`, `F 202612`처럼
+  분기월 3·6·9·12월만 존재), `"MKI"`는 **미니 KOSPI200선물**(종목코드 `A05XXX`,
+  `미니F 202610`처럼 월물 전체 존재) - 문서에 명시된 값이 아니라 여러 후보를 실제로 호출해
+  결과 이름으로 구분해낸 것
+- **국내옵션전광판_콜풋**(`FHPIF05030100`, `display-board-callput`): 행사가·그릭스 등 40여
+  필드, 이것도 만기일 필드 없음. `optn_shrn_iscd`(예: `B01610C41` - B0=옵션, 1610=만기월,
+  C=콜, 41=행사가지수)로 종목 식별
+- **선물옵션 시세**(`FHMIF10000000`, `inquire-price`)에서 드디어 `futs_last_tr_date`(선물
+  최종 거래 일자) 필드를 발견 - 이게 실제 만기일이다. 정규/미니 선물, 옵션 전부에 이 필드가
+  있는 것을 실제 호출로 확인(예: `A01612`→`20261210`, `A05610`→`20261008`,
+  `B01610C41`(콜옵션)→`20261008`)
+- 이 `futs_last_tr_date` 값들을 한국투자증권 공식 매매 안내 페이지가 명시한 "해당 결제월의
+  두 번째 목요일" 규칙과 대조한 결과 **전부 정확히 일치**(2026년 12개월 전체를 직접 계산해서
+  교차검증: 1/8, 2/12, 3/12, 4/9, 5/14, 6/11, 7/9, 8/13, 9/10, 10/8, 11/12, 12/10) - 이 규칙은
+  임의 추정이 아니라 증권사 공식 안내 페이지에서 확인한 공개된 사실
+- **"국내선물 영업일조회"라는 이름의 별도 API는 KIS 공식 예제에 존재하지 않는다** - 기존
+  `kis_client.get_holiday_calendar()`(chk-holiday)는 시장 개장/휴장 여부(`opnd_yn`)만 주는
+  일반 캘린더라서 만기일 데이터로 쓰지 않기로 확인(추측 방지 원칙 그대로 적용)
+- **동시만기 판단**: 정규 선물이 분기월(3·6·9·12)에만 존재하므로, 옵션도 같은 달에 만기가
+  겹치는 이 4개월만 "선물·옵션 동시만기"로, 나머지 8개월(1·2·4·5·7·8·10·11)은 "옵션 만기"만
+  발생 - 실제 두 상품의 월물 목록을 비교해서 도출한 결론이지 추측이 아님
+
+### 구현
+
+- **수정**: `core/config.py` - `ecos_api_key: str | None = None` 추가
+- **수정**: `.env.example` - `ECOS_API_KEY=` 추가
+- **수정**: `.env` - 사용자가 형식 오류로 붙여넣은 키를 `ECOS_API_KEY=` 형태로 수정
+- **신규**: `scripts/test_rate_api.py` - ECOS 조회 + 변경월 자동 감지 + 공식 결정일 대조표 출력
+- **신규**: `scripts/test_kis_expiry.py` - 옵션월물리스트/정규선물/미니선물/옵션 각각 실제
+  조회 후 `futs_last_tr_date`까지 확인하는 스크립트. 둘 다 DB 저장 없이 조회·출력만 한다
+
+### 다음 단계
+
+- BOK 기준금리 결정이 FOMC처럼 "1차/2차 발표" 구조가 있는지, 아니면 회의 당일 한 번에
+  확정 발표되는지 확인 필요(DART 삼성전자처럼 실제 라이브 데이터로 재확인)
+- `ecos_client.py`, `kis_client.py`에 선물/옵션 함수 승격, `services/calendar.py`에
+  `ingest_bok_rate_decisions()`/`ingest_kospi200_expiry()` 구현
+- 기준금리 이벤트는 FOMC와 동일하게 이미 확정된 과거 결정만 이벤트로 만들고, 아직 결정
+  안 된 미래 금통위는 만들지 않는 방향이 이 프로젝트 원칙과 일치
+- 선물·옵션 만기 이벤트는 콜/풋 수백 개를 각각 만들지 않고 "월 단위 요약 이벤트" 하나로
+  처리하는 기존 계획(PART 3 설계) 그대로 진행
+
+## 47. 한국 기준금리(ECOS) + KOSPI200 선물·옵션 만기(KIS) 실제 구현 및 저장
+
+46번 사전조사를 바탕으로 실제 `calendar_events` 연결까지 완료했다. `calendar_events` 스키마
+변경 없음, Next.js 미수정, 기존 FRED/FOMC/DART 코드 무수정.
+
+### 사용자가 실제 ECOS_API_KEY 발급 및 등록
+
+작업 도중 사용자가 ECOS 정식 인증키를 발급받아 `.env`에 붙여넣었는데, `ECOS_API_KEY=` 없이
+값만 단독 줄로 들어가 있어서 앱이 못 읽는 상태였다 - `ECOS_API_KEY=<값>` 형태로 직접 수정해서
+해결. 이후 `sample` 키(최대 10건 제한)가 아니라 정식 키로 32개월 전체를 한 번에 재조회해서
+기존 조사 결과와 100% 일치하는 것도 재확인했다.
+
+### 구현
+
+- **신규**: `core/ecos_client.py` - `EcosApiError`, `get_base_rate_series(start, end)`.
+  fred_client.py/dart_client.py와 같은 구조(에러/정상 응답 구분, `.env`의 `ecos_api_key`
+  사용, 키 하드코딩 없음)
+- **수정**: `core/config.py` - `ecos_api_key: str | None = None` 추가(46번 항목에서 이미 완료)
+- **수정**: `core/kis_client.py` - 46번 사전조사 때 검증한 4개 API를 함수로 승격:
+  `get_option_month_list()`, `get_futures_board(market_cls_code)`,
+  `get_option_callput_board(mtrt_yymm)`(옵션 종목코드 확보용, task 요청 3종 외 추가 필요해서
+  포함), `get_price(market_div_code, iscd)`. TR_ID/URI는 전부 사전조사에서 실제 확인한 값
+  그대로 사용, 새 인증 코드 없이 기존 `get_access_token()` 재사용
+- **수정**: `services/calendar.py`:
+  - `_BOK_RATE_DECISION_DATES`(정적 표, fed_client.py의 FOMC 일정과 같은 성격) - ECOS가
+    "그 달 값"만 주고 정확한 결정일은 안 줘서, 한국은행 공식 홈페이지에서 확인한 결정일을
+    월(YYYYMM) 단위로 매핑해뒀다. 매핑에 없는 변경월은 임의 날짜를 만들지 않고 건너뛴다
+  - `_bok_rate_event()`, `ingest_bok_rate_decisions(start, end)` - ECOS 월별 시계열에서
+    값이 바뀐 지점만 찾아 정적 표와 대조 후 이벤트 생성. ECOS 자체가 실제 발표된 값만 주기
+    때문에, 아직 결정 안 된 미래 회의는 애초에 데이터가 없어 자동으로 이벤트가 안 만들어짐
+    (FOMC의 "미래 회의는 안 만든다" 요구사항과 결과적으로 동일한 효과)
+  - `_kospi200_expiry_event()`, `ingest_kospi200_expiry()` - 정규 선물 전광판(분기월만)에서
+    분기월의 `futs_last_tr_date`를 먼저 확보해두고, 옵션월물리스트를 순회하면서 분기월이면
+    그 값을 그대로 재사용(옵션도 같은 날 만기라는 걸 이미 확인했으므로 별도 옵션 시세 조회
+    안 함 - API 호출 절감), 분기월이 아니면 콜풋 전광판에서 종목코드 하나를 뽑아
+    `get_price("O", ...)`로 직접 조회. 콜/풋 개별 행은 저장하지 않고 월물당 대표 이벤트
+    1건만 생성
+  - status는 기존 KIS 이벤트(`_ipo_event_from_kis` 등)와 같은 날짜 문자열 비교 규칙
+    (`"SCHEDULED" if expiry_date >= today_kst else "RELEASED"`)을 그대로 재사용 - task가
+    "기존 공통 규칙이 있으면 그걸 우선하라"고 한 부분에 해당
+- **수정**: `scripts/test_rate_api.py` - 조회만 하던 걸 `ingest_bok_rate_decisions()` 실행
+  + 재실행 중복 방지 확인까지 포함하도록 확장
+- **수정**: `scripts/test_kis_expiry.py` - 직접 만들었던 임시 `_call()` 헬퍼를 지우고
+  승격된 `kis_client` 함수를 그대로 사용하도록 재작성, `ingest_kospi200_expiry()` 실행
+  + 재실행 중복 방지 확인까지 포함
+
+### 테스트 결과
+
+**ECOS**: `get_base_rate_series("202401","202609")` 32개월 조회, 6건 upsert, 재실행해도
+6건 그대로(중복 없음). 저장된 6건 전부 요청한 결정일과 정확히 일치:
+
+| 날짜 | previous | actual |
+|---|---|---|
+| 2024-10-11 | 3.5 | 3.25 |
+| 2024-11-28 | 3.25 | 3 |
+| 2025-02-25 | 3 | 2.75 |
+| 2025-05-29 | 2.75 | 2.5 |
+| 2026-07-16 | 2.5 | 2.75 |
+| 2026-08-27 | 2.75 | 3 |
+
+**KIS**: 옵션월물리스트 11개월 확보, 정규 선물 전광판 7개(분기월) 확보, 11건 upsert(콜/풋
+확장 후 재실행해도 11건 그대로). 저장된 이벤트:
+
+| publishedAt | title | status |
+|---|---|---|
+| 2026-10-08 | KOSPI200 옵션 만기 | SCHEDULED |
+| 2026-11-12 | KOSPI200 옵션 만기 | SCHEDULED |
+| 2026-12-10 | 선물·옵션 동시만기 | SCHEDULED |
+| 2027-01-14 | KOSPI200 옵션 만기 | SCHEDULED |
+| 2027-02-11 | KOSPI200 옵션 만기 | SCHEDULED |
+| 2027-03-11 | 선물·옵션 동시만기 | SCHEDULED |
+| 2027-06-10 | 선물·옵션 동시만기 | SCHEDULED |
+| 2027-09-09 | 선물·옵션 동시만기 | SCHEDULED |
+| 2027-12-09 | 선물·옵션 동시만기 | SCHEDULED |
+| 2028-06-08 | 선물·옵션 동시만기 | SCHEDULED |
+| 2028-12-14 | 선물·옵션 동시만기 | SCHEDULED |
+
+**API**: `GET /calendar/events`로 2026-08(rate), 2026-10/12(optionExpiry) 각각 조회해서
+정상 노출 확인. 2026-09 조회 시 macro 13건 그대로, earnings/dividend 등 기존 카테고리
+영향 없음 확인.
+
+**전체 DB**: 181 → **198건**(rate +6, optionExpiry +11). 기존 dividend 42 / earnings 21 /
+macro 118 전부 그대로.
+
+### 다음 단계
+
+- BOK 결과가 FOMC처럼 1차/2차 잠정치 구조가 있는지는 이번 구현 범위에서 확인 안 함(현재까지
+  조사로는 없어 보이지만 미확정)
+- 미니 KOSPI200 선물, 콜/풋 개별 이벤트는 이번에도 의도적으로 제외(task 지시)
+- `news-data.ts`에는 아직 반영 안 함(frontend 수정 금지 범위)
+
+## 48. previous/forecast/actual에 단위 붙이기
+
+사용자가 `calendar_events`의 `previous`/`forecast`/`actual` 문자열에 단위를 붙여달라고
+요청했다. 처음엔 46~47번 항목(ECOS/KIS)에만 국한할지, 전체(FRED/KIS/DART 포함)로 할지
+물었고 "전체", "없는 것(=값 자체가 없는 null)은 제외"로 확정됐다 - 바로 직전 47번 작업에서
+"기존 FRED/FOMC/DART 코드 수정 금지"라고 했던 범위를 이번 요청으로 명시적으로 풀어준 것으로
+이해하고 진행했다.
+
+### 단위 확인 (추측 없이 실제 확인)
+
+FRED 6개 지표는 series 메타데이터(`/fred/series` 엔드포인트)를 실제로 호출해서 공식
+`units`/`units_short` 값을 확인한 뒤 한국어로 옮겼다:
+
+| 지표 | FRED 공식 단위 | 붙인 단위 |
+|---|---|---|
+| CPI(CPIAUCSL) | Index 1982-1984=100 | 포인트 |
+| PPI(PPIACO) | Index 1982=100 | 포인트 |
+| GDP | Billions of Dollars | 십억 달러 |
+| PAYEMS | Thousands of Persons | 천 명 |
+| UNRATE | Percent | % |
+| PCE(PCEPI) | Index 2017=100 | 포인트 |
+
+그 외는 이미 알고 있는 실제 단위를 그대로 사용: KIS 배당/IPO(원), DART 실적(조원, 이미
+`_format_trillion_won`으로 조원 단위 숫자를 만들고 있었으니 접미사만 추가), ECOS 기준금리(%).
+FOMC/KIS 만기 이벤트는 previous/forecast/actual이 원래 항상 `null`이라 해당 없음("없는 것은
+제외" 조건에 따라 손대지 않음).
+
+### 구현
+
+- **수정**: `services/calendar.py`
+  - `_UNITS`(지표별 단위 표) + `_with_unit(value, indicator)` 추가, FRED 두 ingest 함수
+    (`_ingest_from_fred`, `ingest_year_from_fred`)의 `previous`/`actual` 생성부에 적용
+    (status 판정에 쓰는 원래 `actual` 변수는 단위 없는 상태로 유지 - `_with_unit`은
+    `CalendarEvent` 생성 시점에만 적용해서 `None` 판정 로직에 영향 없음)
+  - `_dividend_event_from_kis`: `actual=f"{per_sto_divi_amt}원" if per_sto_divi_amt else None`
+  - `_ipo_event_from_kis`: `actual=f"{fix_subscr_pri}원" if fix_subscr_pri else None`
+  - `_dart_earnings_event`: `actual=f"{revenue}조원" if revenue is not None else None`
+  - `_bok_rate_event`: `previous`/`actual`에 `%` 접미사
+- 기존 DB에 이미 들어있던 값들을 갱신하기 위해 관련 시딩 스크립트를 전부 재실행(코드 수정
+  없음, upsert라 제자리에서 덮어씀): `seed_2026_calendar.py`, `seed_kis_dividends.py`,
+  `seed_kis_corporate_actions.py`, `test_dart_earnings.py`, `test_rate_api.py`
+
+### 결과 확인 (실제 DB 조회)
+
+- FRED: `326.031포인트`→`326.588포인트`(CPI), `31422.526십억 달러`(GDP),
+  `158432천 명`(PAYEMS), `4.4%`(UNRATE), `128.576포인트`(PCE)
+- KIS: `880원`(배당), `2000원`(IPO 공모가)
+- DART: `300.9조원`(삼성전자 매출액)
+- BOK: `3.5%` → `3.25%`
+- 전체 건수 198 → **200건**(재시딩 중 KIS IPO가 실제로 2건 늘어난 것 - 단위 작업과 무관한
+  자연 증가, 기존 데이터 유실 없음 확인)
+
+## 49. 프런트 `/calendar` 실데이터 재반영 — rate/optionExpiry 200건 포함 + 만기 요약문 오타 수정
+
+사용자가 새로 추가된 `rate`(한국은행 기준금리)·`optionExpiry`(KOSPI200 선물·옵션 만기)
+카테고리가 실제 화면에서 잘 보이는지 확인해달라고 요청했다. `news-data.ts`는 47번 항목
+이후 한 번도 재동기화되지 않아 이 두 카테고리가 0건이었다 - Supabase 전체 200건으로
+다시 채웠다(19번·29번·35번·41번·44번 항목과 같은 방식).
+
+### 재반영 전 발견해서 고친 사소한 버그
+
+`services/calendar.py`의 KOSPI200 만기 요약 문구에서 여러 줄 문자열을 이어 붙일 때 공백을
+빠뜨린 곳이 2군데 있었다("만기를" + "앞두고" → "만기를앞두고", "장중" + "(특히" →
+"장중(특히") - 화면에 표시하기 전에 발견해서 `_KOSPI200_CONCURRENT_EXPIRY_SUMMARY`/
+`_KOSPI200_OPTION_EXPIRY_SUMMARY`를 수정하고 `test_kis_expiry.py`를 재실행해서 기존 11건의
+DB 텍스트도 정정했다(upsert라 건수 변화 없음).
+
+### 결과
+
+- `npx tsc --noEmit` 통과
+- Playwright로 실제 `/calendar` 화면(월별 보기) 확인: 2026년 8월 27일에 "한국은행 기준금리
+  결정" 카드, 2026년 12월 10일에 "선물·옵션 동시만기" 카드가 정상 표시되는 것 확인
+- 테스트 후 두 서버 모두 종료
+
+### Supabase 최종 상태
+
+전체 200건(FRED 58 + KIS 배당·IPO 87 + FOMC 17 + DART 21 + BOK rate 6 + KOSPI200 만기 11),
+프런트 `news-data.ts`와 동기화 완료.
+
+## 50. `NewsItem`에 `actual` 필드 추가 — 주별 표의 "발표"/"현재" 컬럼 로직 수정
+
+사용자가 `calendar-view.tsx`의 "주별" 표(WeekList/DayRows)를 보고, 발표일이 이미 지난
+항목도 "발표" 컬럼에 계속 "OO시 발표 예정"이 뜨고 "현재" 컬럼은 (라벨과 안 맞게) `forecast`
+값을 보여주고 있던 걸 지적했다. 이 "현재" 컬럼이 실제로는 `actual`(실제 발표값)을 보여줘야
+하는데, `NewsItem` 타입에 애초에 `actual` 필드가 없었다 - 29번 항목 때부터 계속 "알려진
+한계"로만 남겨뒀던 문제를 이번에 실제로 해결했다.
+
+### 구현
+
+- **수정**: `news-data.ts` - `NewsItem["detail"]`에 `actual?: string` 필드 추가, `NEWS`
+  배열도 Supabase `actual` 컬럼까지 포함해서 재생성(153건이 실제 `actual` 값을 가짐)
+- **수정**: `calendar-view.tsx`의 `DayRows`:
+  - "발표" 컬럼: `n.publishedAt.getTime() < Date.now()`(이미 지난 항목)이면 `"-"`,
+    아니면 기존처럼 `announceLabel(n.publishedAt)`("OO시 발표 예정")
+  - "현재" 컬럼: `n.detail?.forecast` 대신 `n.detail?.actual ?? "-"`로 교체(라벨과 실제
+    내용이 맞도록 수정) - "이전" 컬럼(`previous`)은 그대로 유지
+
+### 테스트
+
+- `npx tsc --noEmit` 통과
+- Playwright로 "주별" 탭 클릭 후 2026년 9월 3주차 확인: 9/15(이미 지난 빅웨이브로보틱스
+  IPO)는 발표란 `"-"`·현재란 `"18000원"`, 9/17(아직 안 지난 FOMC/SEP)은 발표란에 예정 시각·
+  현재란 `"-"`, 9/30(PCE)도 발표 예정 시각과 이전값(`131.659포인트`)만 정상 표시되는 것 확인
+- 테스트 후 두 서버 모두 종료
+
+### 참고
+
+- 9/16 IPO(덕산넵코어스 등)는 청약일이 아직 안 지났는데도 현재란에 공모가가 이미 표시됨 -
+  버그가 아니라 실제 데이터 특성이다(KIS 공모주 데이터는 청약일 전에 공모가가 이미 확정되는
+  경우가 많아서 `actual`이 미리 채워져 있음)
+- `forecast` 필드 자체는 지우지 않았다 - `news-panel.tsx`의 일정 상세 팝업에서는 여전히
+  "예상치"로 표시하고 있어 그대로 둠
+
+### 주별 표 문구 다듬기
+
+사용자 요청으로 "발표" 컬럼명을 "발표시간"으로 바꾸고, `announceLabel()`이 만들던
+"오후 9시 30분 발표 예정" 문구에서 "발표 예정" 부분을 빼서 "오후 9시 30분"만 남기도록
+`calendar-view.tsx`를 수정했다. Playwright로 실제 화면(9월 3주차)에서 헤더/시각 표기가
+정상 반영되는 것 확인.
+
+## 51. `front/dev` pull — 병합하지 않고 조사만 함(고위험 판단)
+
+사용자가 `front/dev`를 pull해달라고 요청했다. 39번 항목의 `back/dev` pull+merge+push와
+같은 흐름을 기대하고 시작했지만, 실제로 받아보니 그때와 달리 **병합하면 안 되는 수준으로
+갈라져 있다는 걸 확인해서 병합은 하지 않고 조사만 하고 멈췄다.**
+
+### 절차
+
+1. `back/feat/calendar`의 미커밋 프런트 작업(`calendar-view.tsx`/`news-data.ts` 수정,
+   `weekly-summary-panel.tsx` 신규)을 `git stash push -u`로 대피
+2. `git checkout -b front/dev origin/front/dev`로 로컬에 받음(병합 없이 체크아웃만)
+3. `git diff HEAD origin/front/dev --stat`로 전체 차이 확인 - 86개 파일, +4195/-7400
+4. 위험 신호를 발견하고 병합 시도 없이 바로 `back/feat/calendar`로 복귀, 1번에서 대피한
+   변경사항 `git stash pop`으로 복원
+
+### 발견한 위험 신호 — `front/dev`는 이 브랜치의 calendar 백엔드 작업을 전혀 모른다
+
+- `backend/src/backend/domain/calendar/services/calendar.py`가 diff에서 "1078줄 삭제"로
+  나온다 - `front/dev` 쪽 이 파일이 지금 이 브랜치(FRED+KIS+FOMC+DART+ECOS+KOSPI200,
+  2000줄 이상)보다 1078줄 적은, 훨씬 이전 버전이라는 뜻
+- `front/dev`의 `core/config.py`를 직접 열어보니 `fred_api_key`/`dart_api_key`/
+  `ecos_api_key` 자체가 없다 - 대신 `heatmap_enabled`/`heatmap_requests_per_second` 등
+  히트맵 도메인 전용 필드가 있다. `core/kis_client.py`도 히트맵용으로 완전히 다시 짜여 있다
+  (`get_sector_prices`/`get_stock_quotes` 등, 이 브랜치의 KSD/선물옵션 함수는 없음)
+- 즉 `front/dev`는 처음에 `front/feat/calendar`가 이 브랜치에 합쳐진 시점(세션 초반) 이후로
+  **이 브랜치의 calendar 백엔드 작업을 한 번도 받아간 적이 없고**, 그 사이 자기들끼리
+  heatmap 도메인을 새로 만들며 `core/` 공용 파일들을 독자적으로 발전시켰다
+
+### 발견한 위험 신호 — 프런트 calendar UI가 컴포넌트 단위로 전면 리팩터링됨
+
+- `frontend/app/(main)/calendar/calendar-view.tsx`가 diff에서 "851줄 삭제"로 나온다 -
+  `front/dev`에서는 이 파일 자체가 없어지고, 대신 `frontend/components/calendar/`
+  아래 `ai-summary-card.tsx`/`category-bar.tsx`/`event-row.tsx`/`filter-bar.tsx`/
+  `mini-calendar.tsx`/`month-grid.tsx`/`region-badge.tsx`/`week-list.tsx` 8개 파일과
+  `frontend/lib/calendar.ts`(공용 유틸)로 쪼개져 있다 - 이번 세션 내내 이 브랜치에서
+  `calendar-view.tsx` 하나에 직접 해온 수정(44번 "이번주 AI 요약" 팝업 연결, 50번 `actual`
+  필드 배선, 방금 한 "발표시간" 라벨 수정 등)이 전부 이 리팩터링과 충돌한다
+- `front/dev`의 `news-data.ts`는 여전히 더미 상태다(`/* TODO: API 연동 시 NEWS 배열만
+  교체 */`, 실제 항목 0건) - 19번 항목 이후 이 브랜치에서 계속해온 Supabase 실데이터 동기화
+  작업도 전혀 반영되어 있지 않다
+- `frontend/app/calendar-api-test/page.tsx`(원본 데이터 확인용 테스트 페이지)도 diff에서
+  "96줄 삭제"로 나온다 - `front/dev`에는 이 페이지 자체가 없다
+
+### 판단
+
+지금 이대로 `front/dev`를 `back/feat/calendar`에 병합하면: (1) 몇 시간 동안 만든 calendar
+백엔드 코드(ECOS/KIS 선물옵션/BOK/DART 등)가 훨씬 오래된 버전과 3-way 병합되면서 대규모
+충돌이 나거나 최악의 경우 조용히 손실될 위험이 있고, (2) 프런트 `calendar-view.tsx`에 대한
+이번 세션의 모든 수정이 이미 없어진 파일에 대한 수정이 되어버려서 병합 자체가 불가능하다
+(컴포넌트 분할 리팩터링과 직접 충돌). 39번 항목의 `back/dev` 병합 때와 상황이 근본적으로
+다르다고 판단해서, **병합·push는 하지 않고 로컬에 `front/dev` 브랜치만 받아둔 채 조사
+결과만 문서화**하기로 했다.
+
+### 다음 단계 (팀 논의 필요)
+
+- `front/dev`가 이 브랜치의 calendar 백엔드 작업(FRED/KIS/FOMC/DART/ECOS/KOSPI200)을
+  받아가려면, 단순 `git merge`가 아니라 `front/dev`의 컴포넌트 분할 구조에 맞춰 이 브랜치의
+  변경사항을 다시 이식하는 작업이 필요해 보인다
+- 반대로 이 브랜치가 `front/dev`의 heatmap 관련 `core/` 변경(`kis_client.py`의 재시도/속도
+  제한 로직 등)을 받으려 해도 같은 문제가 있다
+- 로컬에 `front/dev` 브랜치는 만들어뒀으니(삭제 안 함), 실제 병합은 팀과 방향을 정한 뒤
+  진행하는 게 안전하다고 판단
+
+## 52. `front/dev`의 컴포넌트 분할 구조로 프런트 calendar 재정리(51번의 "다음 단계" 실행)
+
+사용자가 "front/dev의 frontend부분이 최종입니다. 다시 정리"라고 지시했다. 51번에서 병합을
+보류했던 이유(구조 자체가 다름)는 그대로 두고, `git merge` 대신 **51번 "다음 단계"에 적어둔
+대로 `front/dev`의 컴포넌트 구조를 새 기준으로 삼아 이 브랜치의 실데이터·기능을 그 구조
+위에 다시 이식**하는 방식으로 진행했다. 백엔드(`services/calendar.py` 등)는 이번 작업
+대상이 아니라서 손대지 않았다.
+
+### 방법 — `git show front/dev:<path>`로만 읽고, 체크아웃/병합은 하지 않음
+
+`back/feat/calendar` 작업 트리를 건드리지 않기 위해 `front/dev`의 8개 신규 파일
+(`frontend/app/(main)/calendar/page.tsx`, `frontend/lib/calendar.ts`,
+`frontend/components/calendar/{ai-summary-card,category-bar,event-row,filter-bar,
+mini-calendar,month-grid,region-badge,week-list}.tsx`)을 전부 `git show`로만 읽어서
+내용을 확인한 뒤, 이 브랜치에 새로 `Write`했다(체크아웃도 병합도 하지 않았다).
+
+### 그대로 가져온 파일(내용 동일, front/dev 원본 그대로 채택)
+
+`region-badge.tsx`, `category-bar.tsx`, `event-row.tsx`, `month-grid.tsx`,
+`filter-bar.tsx` — 이 브랜치의 기존 `calendar-view.tsx` 안에 있던 동명 컴포넌트와
+로직이 사실상 같아서 그대로 파일만 분리했다. `mini-calendar.tsx`도 front/dev 쪽이
+"오늘" 버튼(`onToday`)이 추가된 더 발전된 버전이라 그대로 채택했다(이 브랜치에는
+없던 기능).
+
+### 이 브랜치의 세션 작업을 이식한 파일
+
+- **`week-list.tsx`**: front/dev 원본은 `발표` 컬럼에 `announceLabel`을 항상 표시하고
+  `현재` 컬럼에 `detail?.forecast`를 표시하는 옛날 버전이었다. 50번 항목에서 고친
+  "발표시간" 헤더명 + "발표일이 지나면 발표시간 칸은 `-`, 현재 칸은 `detail?.actual`"
+  로직을 그대로 옮겨왔다.
+- **`ai-summary-card.tsx`**: front/dev 원본은 클릭 동작이 없는 정적 더미 카드
+  (6개 카테고리 예시를 나열만 함, "자세히 보기" 버튼 없음)였다. 44번 항목에서 만든
+  "자세히 보기" 클릭 → `WeeklySummaryDialog` 팝업 여닫기 동작으로 교체했다(이 세션에
+  만든 실제 기능이라 front/dev의 더미로 되돌리지 않았다).
+- **`lib/calendar.ts`**: front/dev 원본의 `announceLabel`은 아직 "...발표 예정" 접미사가
+  붙어 있었다. 50번 항목에서 사용자가 명시적으로 요청해 뗀 접미사이므로 뗀 버전으로
+  옮겼다. 나머지 유틸(`getMonthGridWeeks`/`weekOfMonth`/`toggleCategory`/`segBtn`류)은
+  front/dev 원본 그대로다.
+- **`page.tsx`**: front/dev 원본을 그대로 쓰되, `<AiSummaryCard />` 호출에 `today={today}`
+  prop을 추가했다(위에서 바꾼 `ai-summary-card.tsx`가 팝업에 넘길 기준 날짜로 필요).
+- **`weekly-summary-panel.tsx`**: 기존 `import { RegionBadge } from "./calendar-view"`를
+  `import { RegionBadge } from "@/components/calendar/region-badge"`로만 수정했다(로직은
+  변경 없음, `calendar-view.tsx` 삭제에 따른 경로 수정).
+
+### 그대로 유지한 파일
+
+- **`news-data.ts`**: front/dev 쪽은 여전히 더미(`NEWS` 0건)라서 이식 대상이 아니다.
+  이 브랜치의 200건 실데이터 + `detail.actual` 필드를 그대로 유지했고, 파일 상단 주석만
+  "컴포넌트 구조는 front/dev 기준으로 재구성했다"는 취지로 갱신했다.
+- **`news-panel.tsx`**: 두 브랜치가 `diff` 결과 완전히 동일해서 손대지 않았다.
+
+### 삭제한 파일
+
+`frontend/app/(main)/calendar/calendar-view.tsx` — `page.tsx` +
+`components/calendar/*` + `lib/calendar.ts`로 전부 대체되어 이 파일을 참조하는 곳이
+없음을 `grep -rl "calendar-view"`로 확인한 뒤 삭제했다.
+
+### 검증
+
+- `npx tsc --noEmit` 통과(에러 0건)
+- `npm run dev`로 서버를 띄우고 `/calendar`를 Playwright로 스크린샷 — 새 구조에서 필터
+  바(sticky)/미니 달력("오늘" 버튼 포함)/주별 표(발표시간·현재·이전 컬럼에 실데이터,
+  발표일 지난 항목은 발표시간 칸이 `-`)가 정상 렌더링됨을 확인
+- "자세히 보기" 버튼을 클릭해 `WeeklySummaryDialog`가 새 `region-badge.tsx`(다른 파일로
+  이동한 컴포넌트)를 정상적으로 import해서 국기 배지까지 포함해 그대로 뜨는 것을 확인
+
+### 이번 작업 대상이 아니었던 것 (그대로 남겨둠)
+
+- 백엔드(`services/calendar.py`, `core/kis_client.py`, `core/config.py`)는 51번에서
+  확인한 `front/dev`와의 구조적 차이(heatmap 도메인 전용 필드/함수)가 이번 작업으로
+  해소되지 않았다 — 이번 지시("frontend부분이 최종")는 프런트 UI 구조에 한정된 지시라고
+  판단해서 백엔드 쪽은 손대지 않았다. 팀 차원의 `core/` 재조정은 여전히 별도 논의가
+  필요하다(51번 "다음 단계" 참고).
+- "이번주 AI 요약" 팝업의 "이번주 주요 소식이에요"/"이런 소식도 있어요" 두 섹션은 여전히
+  43~45번 항목에서 만든 수동 테스트 문구 그대로다 — 이번 작업은 컴포넌트 구조 이전만
+  다뤘고, 실제 LLM/엔드포인트 자동화는 그대로 다음 단계로 남아 있다.
+
+## 53. 주별(WeekList) "현재" 값에 라벨 추가 — 배당/공모가/실적은 단위(원)만으로는 의미가 안 드러남
+
+사용자가 "캘린더에서 주별을 볼 때 현재의 previous에서 단위가 뭐에 대한 단위인지 알 수가
+없어서 라벨(예를 들어 공모가, 주 를 넣어주고)을 넣어달라"고 요청했다. 48번 항목에서 붙인
+단위(원/조원/%)는 숫자의 단위일 뿐 그 숫자가 "무엇"인지는 말해주지 않는다는 지적이다 —
+예를 들어 IPO의 "14600원"은 공모가인지 다른 값인지 제목을 따로 안 읽으면 알 수 없다.
+
+### 왜 previous가 아니라 actual(현재) 컬럼만 문제였는가
+
+배당(dividend)·공모주(IPO, category="macro")·DART 실적(earnings) 세 가지 모두
+`services/calendar.py`에서 `previous=None`으로 고정 저장한다(각 항목 원본 API가 "직전
+값"을 안 주기 때문 - 임의 생성 금지 원칙). 즉 이전 컬럼은 이 세 유형에서 항상 "-"만
+나오고, 라벨이 필요한 값은 전부 "현재"(actual) 컬럼에만 나타난다. FRED 경제지표/BOK
+기준금리는 previous에도 실제 값이 있지만 제목에 이미 맥락(CPI/PPI/기준금리 등)이 있고
+단위도 이미 붙어 있어 추가 라벨이 필요 없다고 판단해서 건드리지 않았다.
+
+### 구현 — 백엔드는 손대지 않고 프런트에서만 라벨을 매핑
+
+DB에 라벨 컬럼을 새로 추가하는 대신, 이미 저장된 `category`/`title` 문자열로 프런트에서
+결정적으로(추측 없이) 라벨을 매핑했다. `frontend/app/(main)/calendar/news-data.ts`에
+`actualLabelOf(n: NewsItem)` 함수를 추가:
+
+```ts
+export function actualLabelOf(n: NewsItem): string | null {
+  if (n.category === "dividend") return "주당"
+  if (n.category === "earnings" && n.title.endsWith("실적 발표")) return "매출액"
+  if (n.category === "macro" && n.title.endsWith("공모주 청약")) return "공모가"
+  return null
+}
+```
+
+- "주당" — 배당은 `_dividend_event_from_kis`에서 `actual = per_sto_divi_amt`(주당배당금액)를
+  그대로 담는다. `category === "dividend"`인 이벤트는 배당 관련 이벤트뿐이라 카테고리만으로
+  안전하게 판별된다.
+- "매출액" — DART 실적(`_dart_earnings_event`)의 `actual`은 매출액(revenue)이다. earnings
+  카테고리 중 제목이 "실적 발표"로 끝나는 것만 매칭해서, 혹시 이 카테고리에 다른 성격의
+  이벤트가 추가돼도 잘못 라벨링되지 않게 했다.
+- "공모가" — IPO(`_ipo_event_from_kis`)는 category가 "macro"라서(51번/합병·분할과 같은
+  분류 기준, 14번 항목 참고) 카테고리만으로는 다른 macro 이벤트(FRED/FOMC/합병분할/유상
+  증자/무상증자)와 구분이 안 된다. 대신 IPO 이벤트 제목이 항상 `"{종목명} 공모주 청약"`
+  형태로 고정돼 있어서(`_ipo_event_from_kis`의 `title = f"{isin_name} 공모주 청약"`)
+  제목이 "공모주 청약"으로 끝나는지로 판별했다.
+- 유상증자/무상증자/합병·분할(전부 category="macro")의 `actual`은 비율(`fix_rate`/
+  `merge_rate`)인데 현재 %도 안 붙어 있고 라벨도 없다 - 이번 요청 범위(배당/공모가 예시)
+  밖이라고 판단해 건드리지 않았고, 필요하면 후속 작업으로 남겨둔다.
+
+`frontend/components/calendar/week-list.tsx`의 `DayRows`에서 "현재" 컬럼 렌더링을
+`actualLabelOf(n)`이 있으면 `"{라벨} {값}"`(예: `주당 880원`, `공모가 8300원`)으로,
+없으면 기존처럼 값만 표시하도록 수정했다.
+
+### 검증
+
+- `npx tsc --noEmit` 통과
+- `npm run dev` + Playwright로 `/calendar` 주별 뷰 확인: 9월 3주차의 "덕산넵코어스
+  공모주 청약"/"글로벌테크놀로지 공모주 청약"이 각각 "공모가 14600원"/"공모가 10000원"으로
+  표시됨을 확인. 미니 달력을 2월로 이동해 "신한금융지주회사 배당기준일(결산)"이
+  "주당 880원", "케이뱅크 공모주 청약"이 "공모가 8300원"으로 표시되는 것도 확인
+- FRED 지표(CPI 등)와 BOK 기준금리는 라벨 없이 기존 그대로(단위만 붙은 값) 표시됨을
+  같은 스크린샷에서 함께 확인 — 의도한 대로 라벨 대상에서 제외됨
+
+## 54. `actual_label`을 프런트 전용 로직에서 `calendar_events` 실제 컬럼으로 승격
+
+사용자가 "위의 내용을 백엔드에 컬럼을 추가하는데 model에 라벨을 추가하고 calendar_events에
+컬럼에 라벨을 넣어줘"라고 요청했다. 53번에서 프런트(`news-data.ts`의 `actualLabelOf()`)가
+`category`/`title` 문자열을 보고 추측하던 라벨을, DB 컬럼으로 만들어 백엔드가 이벤트를 만드는
+시점에 직접 채워 넣는 방식으로 승격했다.
+
+### 왜 프런트의 추측보다 백엔드가 직접 채우는 게 더 정확한가
+
+프런트의 `actualLabelOf()`는 `category === "macro"`인 이벤트가 FRED/FOMC/IPO/합병분할/
+유상증자/무상증자까지 전부 섞여 있어서 `title.endsWith("공모주 청약")` 같은 문자열 패턴으로
+IPO를 추측해야 했다. 반면 `_ipo_event_from_kis`/`_dividend_event_from_kis`/
+`_dart_earnings_event` 각 함수는 자기가 지금 만드는 이벤트가 정확히 무엇인지 이미 알고
+있으므로, 패턴 매칭 없이 리터럴 문자열을 그대로 넣을 수 있다 - 추측이 사실로 바뀐 것.
+
+### 변경한 파일
+
+- **`schemas/calendar.py`**: `CalendarEvent`에 `actual_label: Optional[str] = None` 필드
+  추가(라우터가 `response_model=list[CalendarEvent]`라 자동으로 응답에 포함됨).
+- **`models/calendar.py`**: 미사용 ORM 클래스에도 동일하게 `actual_label` 컬럼 추가(1번
+  항목에서 정한 "실제 쓰이진 않지만 스키마는 항상 동기화" 원칙 유지).
+- **`services/calendar.py`**:
+  - `_dividend_event_from_kis`: `actual_label="주당" if per_sto_divi_amt else None`
+  - `_dart_earnings_event`: `actual_label="매출액" if revenue is not None else None`
+  - `_ipo_event_from_kis`: `actual_label="공모가" if fix_subscr_pri else None`
+  - `_upsert_event`의 INSERT/UPDATE SQL, `get_events_by_month`의 SELECT SQL에
+    `actual_label` 컬럼 추가(누락하면 값이 저장/조회되지 않으므로 둘 다 필수)
+  - 나머지 이벤트 생성 함수(FRED/FOMC/BOK/KOSPI200 만기/합병분할/유상증자/무상증자)는
+    건드리지 않았다 - `actual_label`은 pydantic 기본값 `None`이 그대로 저장된다
+
+### DB 마이그레이션 — `scripts/add_actual_label_column.py` (1회성)
+
+마이그레이션 도구 없이 `calendar_weekly_summaries` 테이블을 만들 때와 같은 방식으로,
+`core/database.py`의 세션을 통해 raw SQL을 직접 실행하는 스크립트를 새로 만들어 실행했다:
+
+1. `ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS actual_label text`
+2. 이미 저장돼 있던 기존 행들을 category/title 조건으로 백필(원본 API를 다시 호출하지
+   않음 - 라벨은 category/title만으로 결정적으로 정해지므로 SQL UPDATE로 충분):
+   - `category='dividend' AND actual IS NOT NULL` → `'주당'`
+   - `category='earnings' AND title LIKE '%실적 발표' AND actual IS NOT NULL` → `'매출액'`
+   - `category='macro' AND title LIKE '%공모주 청약' AND actual IS NOT NULL` → `'공모가'`
+
+실행 결과: 배당 40건, DART 실적 21건, 공모주(IPO) 45건 백필됨. 앞으로 들어오는 신규 행은
+각 ingest 함수가 생성 시점에 바로 채우므로 이 백필은 다시 실행할 필요가 없다(멱등이라
+재실행해도 안전 - `actual_label IS NULL` 조건 때문에 이미 채워진 행은 건드리지 않음).
+
+### 검증
+
+- `uv run python scripts/add_actual_label_column.py` 실행 → 컬럼 추가 + 위 백필 건수 출력
+  확인
+- `get_events_by_month(session, 2026, 2)`를 직접 호출해 응답 객체에 `actual_label`이
+  실제로 채워져 나오는지 확인("케이뱅크 공모주 청약" → `공모가`, "신한금융지주회사
+  배당기준일(결산)" → `주당` 등, 53번에서 화면으로 확인했던 값과 동일)
+
+### 프런트는 아직 그대로 - 다음 단계
+
+이번 요청은 백엔드(모델 + 컬럼)로 범위가 한정되어 있어서 프런트는 건드리지 않았다.
+`frontend/app/(main)/calendar/news-data.ts`의 `actualLabelOf()`(53번)는 지금도 그대로
+남아 있고 동일한 값을 계산해내므로 화면은 지금 당장 깨지지 않는다. 다만 이제 진짜 출처는
+DB 컬럼이 됐으니, 다음에 `news-data.ts`를 실데이터로 재동기화할 때는 `NewsItem.detail`에
+`actualLabel?: string` 필드를 추가해서 DB 값을 그대로 실어 오고, `week-list.tsx`가
+`actualLabelOf(n)` 대신 `n.detail?.actualLabel`을 쓰도록 바꿔서 프런트의 추측 로직을
+완전히 제거하는 정리가 필요하다(사용자가 요청하면 진행).
+
+## 55. `forecast` 컬럼 삭제 + `actual_label`을 title 기반 로직으로 정리
+
+사용자가 "calendar_events에서 forecast 컬럼은 삭제하고 actual_label에 title내용을
+기반으로 (예를 들어 공모가, 주 등) 라벨을 넣어줘"라고 요청했다. 두 가지를 처리했다:
+(1) 실제로 한 번도 값이 들어간 적 없는 `forecast` 컬럼을 스키마/모델/DB에서 전부 삭제,
+(2) 54번에서 하드코딩 리터럴로 채웠던 `actual_label`을 title 문자열을 직접 읽고 판단하는
+공용 함수로 바꿔서, 사용자가 말한 "title 내용을 기반으로"라는 방식에 맞췄다.
+
+### forecast 컬럼 삭제 — 근거
+
+CLAUDE.md 27번 항목("forecast는 FRED가 시장 컨센서스를 제공하지 않으므로 임의로 채우지
+않는다")대로 이 프로젝트의 `forecast`는 처음부터 지금까지 모든 이벤트에서 `None`만
+저장됐다(FRED/KIS/DART/ECOS 어느 소스도 예상치를 안 준다). 실제로 쓰인 적이 없는 컬럼이라
+삭제해도 데이터 손실이 없다는 걸 먼저 `grep -rn "forecast=" services/calendar.py`로
+확인한 뒤 진행했다(4곳 모두 `forecast=None` 리터럴이었고, FRED 이벤트 두 곳은 애초에
+forecast를 넘기지도 않았다 - pydantic 기본값 None에 의존).
+
+- `schemas/calendar.py`: `forecast: Optional[str] = None` 필드 제거, 상단에 "삭제된
+  컬럼" 주석 추가(CLAUDE.md의 `source_url` 삭제 기록과 같은 방식)
+- `models/calendar.py`: 동일하게 ORM 컬럼 제거
+- `services/calendar.py`: `_fomc_event`/`_dart_earnings_event`/`_bok_rate_event`/
+  `_kospi200_expiry_event`의 `forecast=None,` 4곳 제거, `_upsert_event`의 INSERT/
+  ON CONFLICT SQL과 `get_events_by_month`의 SELECT SQL에서 `forecast` 컬럼 제거,
+  관련 주석 2곳도 정리
+- **`scripts/drop_forecast_column.py`**(신규, 1회성): `ALTER TABLE calendar_events
+  DROP COLUMN IF EXISTS forecast` 실행 - 마이그레이션 도구 없이 기존 방식대로
+  `core/database.py` 세션으로 raw SQL 직접 실행
+
+### `actual_label`을 title 기반 공용 함수로 전환
+
+54번에서는 세 함수(`_dividend_event_from_kis`/`_dart_earnings_event`/
+`_ipo_event_from_kis`)에 각각 `"주당"`/`"매출액"`/`"공모가"` 리터럴을 하드코딩했다.
+이번 요청("title내용을 기반으로")에 맞춰 하나의 공용 함수로 통합했다:
+
+```python
+def _actual_label_from_title(title: str) -> str | None:
+    if "배당기준일" in title:
+        return "주당"
+    if title.endswith("공모주 청약"):
+        return "공모가"
+    if title.endswith("실적 발표"):
+        return "매출액"
+    return None
+```
+
+세 함수 모두 이미 title을 저 형식대로 직접 만들고 있으므로(`_dividend_event_from_kis`의
+`title = f"{isin_name} 배당기준일{kind_label}"`, `_ipo_event_from_kis`의
+`title = f"{isin_name} 공모주 청약"`, `_dart_earnings_event`의
+`f"{corp_name} 실적 발표"`) 이 매칭은 title 값을 실제로 아는 것이지 추측이 아니다.
+각 함수의 `actual_label=` 인자를 리터럴 대신 `_actual_label_from_title(title)` 호출로
+바꿨다. category만으로는 IPO를 다른 macro 이벤트(FRED/FOMC/합병분할/유무상증자)와
+구분할 수 없어서 원래도 title을 참고해야 했던 IPO/실적 케이스는 결과가 그대로고,
+`category == "dividend"`만 보고 판단했던 배당 케이스도 이제 title 내용(`"배당기준일"`
+포함 여부)으로 판단하도록 통일했다 - 실제 출력값은 이전과 동일하다.
+
+### 왜 유상증자/무상증자/합병·분할은 그대로 뒀는가
+
+이 셋(전부 category="macro")의 `actual`은 비율(`fix_rate`/`merge_rate`)인데 지금도
+단위(%)가 안 붙어 있고 라벨도 없다. 53번에서도 "이번 요청 범위 밖"이라고 명시했고, 이번
+요청도 "공모가, 주"라는 동일한 예시만 들었을 뿐 이 세 유형을 언급하지 않아서 그대로 뒀다.
+필요하면 후속 작업으로 진행 가능(유상증자/무상증자는 title이 각각 "...유상증자"/
+"...무상증자"로 고정돼 있어 요약 텍스트에 이미 쓰는 "신주배정비율"이라는 표현을 그대로
+라벨로 쓸 수 있을 것으로 보이지만, 합병/분할은 `merge_type`이 다양해서 title만으로 안전하게
+판별되는지 추가 확인이 필요하다).
+
+### 검증
+
+- `uv run python scripts/drop_forecast_column.py` 실행 → 컬럼 삭제 완료
+- `get_events_by_month(session, 2026, 2)`를 직접 호출해 `actual_label` 값이 54번 때와
+  동일하게(`공모가`/`주당`) 나오는 것을 확인 - 하드코딩 리터럴을 title 기반 함수로
+  바꿔도 출력이 달라지지 않았음을 검증
+- FastAPI 서버(`uvicorn main:app`)를 띄우고 `GET /calendar/events?year=2026&month=2`를
+  직접 호출 - 응답 JSON에 `forecast` 키가 더 이상 없고, `actual_label`은 정상적으로
+  채워져 나오는 것을 확인
+
+### 프런트는 이번에도 범위 밖
+
+54번과 마찬가지로 이번 요청도 "calendar_events" 백엔드 컬럼/모델로 한정되어 있어서
+프런트(`news-data.ts`의 `actualLabelOf()`, `NewsItem.detail.forecast` 타입 등)는
+건드리지 않았다. 프런트의 `detail.forecast` 타입 필드 자체는 DB 컬럼과 무관하게 여전히
+존재하고(`news-panel.tsx`의 상세 팝업 "예상치" 표시에 사용), 실데이터로 동기화된 항목은
+원래도 항상 `forecast: undefined`였으므로 이번 백엔드 변경으로 화면에 나타나는 차이는
+없다.
+
+## 56. 화면 표시용 단위 변환 — "159075천 명"/"32486.066십억 달러"를 사람이 읽는 단위로
+
+사용자가 상세한 스펙 문서를 주면서 요청했다: FRED/ECOS 값이 "159075천명"/"32486.066십억
+달러"처럼 API 원본 단위 그대로 화면에 노출되어 초보 사용자가 이해하기 어려우니, **DB/API는
+전혀 건드리지 않고 화면에 표시하는 순간에만** 사람이 읽기 쉬운 한국어 단위(만/억/조)로
+변환하는 공통 포맷터를 만들어달라는 요청이었다. 요청에 명시된 "가장 중요한 원칙"(DB 스키마·
+원본값·`previous`/`forecast`/`actual` 저장값 불변, Gemini 미사용, 순수 코드로 변환,
+디자인/레이아웃 불변, 기존 API 응답 구조 불변, 기존 수집 로직 불변)을 그대로 지켰다.
+
+### 왜 프런트 전용 처리인가
+
+`previous`/`actual`은 `services/calendar.py`에서 이미 문자열에 단위를 붙여
+(`"159075천 명"`, `"32486.066십억 달러"`) `calendar_events`에 저장한다(48번 항목).
+사용자가 "API 원본 값도 변경하지 마세요"/"DB 스키마는 절대 변경하지 마세요"라고 명시했으므로
+백엔드는 전혀 건드리지 않고, 이미 프런트에 동기화돼 있는 이 문자열을 렌더링 시점에만
+다시 포맷하는 방식으로 구현했다 - 저장된 값과 화면에 보이는 값이 다르지만, 저장된 값
+자체는 그대로다.
+
+### 새로 만든 공통 포맷터 — `frontend/lib/format-economic-value.ts`
+
+```ts
+export function formatEconomicValue(raw: string | null | undefined): string
+```
+
+내부적으로 `raw` 문자열을 정규식(`/^(-?\d+(?:\.\d+)?)\s*(.*)$/`)으로 "숫자 부분"과
+"단위 부분"으로 나눈 뒤, 단위(공백 제거 후 비교)에 따라 분기한다:
+
+- **"천명"/"천 명"** → `numeric * 1000`을 조/억/만 단위로 쪼개서 "약 1억 5,908만 명"
+  형태로 표시(`formatKoreanCount` - 만 단위로 반올림 후 조/억/만을 순서대로 채워나감,
+  1000단위 콤마는 `toLocaleString("ko-KR")`)
+- **"십억달러"** → 1,000십억 이상이면 `/1000`해서 "약 32.49조 달러"(소수 둘째 자리),
+  미만이면 `*10`해서 "약 856억 달러"(정수 또는 소수 첫째 자리)
+- **"백만달러"** → 10,000백만 이상 조, 100백만 이상 억, 그 미만은 백만 그대로(현재
+  실데이터엔 없지만 스펙에 명시돼 있어 같은 원리로 확장해둠)
+- **"원"** → 1억 미만이면 원본 그대로(현재 배당·IPO 금액은 전부 여기 해당), 1억
+  이상이면 억/조 원으로 변환(향후 큰 금액의 원화 데이터가 들어올 경우를 대비)
+- **그 외(%, 포인트, 조원, 알 수 없는 단위, 단위 없음, 숫자로 안 읽히는 값)** →
+  원본 문자열을 그대로 반환 - 임의로 다른 단위를 만들지 않는다
+- **`raw`가 없으면(null/undefined/빈 문자열)** → `"-"`
+
+### 적용한 화면 (기존 컴포넌트 재사용, 새 컴포넌트/레이아웃 추가 없음)
+
+- `components/calendar/week-list.tsx`: 주별 표의 "현재"/"이전" 컬럼 - 값을
+  `formatEconomicValue()`로 감쌌고, 마우스 오버 시 정확한 원본 문자열을 볼 수 있도록
+  `title={n.detail?.actual}`/`title={n.detail?.previous}`를 `<td>`에 추가했다(레이아웃에
+  영향 없는 네이티브 브라우저 툴팁이라 "7. 기존 캘린더 디자인/레이아웃 유지" 원칙을
+  깨지 않는다 - 사용자가 요청한 "정확한 원본 값은 상세 영역이나 tooltip에서 확인"을
+  이 방식으로 충족)
+- `app/(main)/calendar/news-panel.tsx`: 날짜 클릭 시 뜨는 상세 팝업의 "이전치" 값
+- `app/(main)/calendar/weekly-summary-panel.tsx`: "이번주 AI 요약"의 "주요 경제지표"
+  표에서 발표일이 지난 이벤트의 값(53번에서 previous 대신 사용하기로 한 로직은 이 파일이
+  아니라 week-list.tsx만 해당돼서 그대로 두고, 표시값만 포맷팅 적용)
+- 배당/공모주/실적 라벨(54·55번의 `actualLabelOf`/`actual_label`)과 조합될 때도
+  `"{라벨} {포맷된 값}"` 순서를 유지해서 "매출액 79.0조원"처럼 계속 자연스럽게 보이게 했다
+  (조원은 변환 대상이 아니라서 그대로 통과)
+
+### 손대지 않은 것 (요청의 "절대 원칙" 그대로 준수)
+
+- `calendar_events` 테이블/컬럼, FRED/ECOS/KIS/DART 수집 로직, `_upsert_event`/
+  `get_events_by_month`의 SQL, `services/calendar.py`의 `_with_unit`/`_UNITS` — 전부
+  무변경
+- `GET /calendar/events` 응답 구조 - `actual`/`previous` 문자열은 지금까지와 동일하게
+  내려온다(변환은 프런트에서만 일어남)
+- 캘린더 레이아웃/디자인 - 기존 표/카드 구조 그대로, 툴팁만 추가
+- `%`, `포인트`, `조원`, 소액 `원` 값 - 기존 표시 그대로 유지(케이스 6·7 테스트로 확인)
+- Gemini/LLM 미사용 - 순수 정규식 파싱 + 산술 연산으로만 구현
+
+### 테스트
+
+`npx tsx`로 스펙 9번 항목의 7개 테스트 케이스를 전부 직접 실행해서 확인했다:
+
+| 입력 | 기대값 | 결과 |
+| --- | --- | --- |
+| `"159075천명"` | 약 1억 5,908만 명 | ✅ 일치 |
+| `"159075천 명"` | 약 1억 5,908만 명 | ✅ 일치 |
+| `"32486.066십억 달러"` | 약 32.49조 달러 | ✅ 일치 |
+| `"1523.5십억 달러"` | 약 1.52조 달러 | ✅ 일치 |
+| `"85.6십억 달러"` | 약 856억 달러 | ✅ 일치 |
+| `"3.5%"` | 3.5% | ✅ 일치(변경 없음) |
+| `null` | 기존 표시 유지 | ✅ `"-"` |
+
+추가로 실데이터 경계 케이스도 확인: `"79.0조원"`/`"880원"`/`"326.588포인트"`/`"2.50%"`
+전부 원본 그대로 통과함을 확인. `npx tsc --noEmit` 통과, `npm run dev` + Playwright로
+`/calendar`의 2026년 2월(고용지표 "약 1억 5,859만 명"/"약 1억 5,843만 명", 실업률
+"4.3%"/"4.4%" 그대로, CPI "326.588포인트" 그대로)과 2026년 7월(GDP "약 32.49조
+달러"/"약 31.87조 달러")을 직접 렌더링해서 화면에서도 동일하게 확인했다.
+
+### 추가로 단위 처리가 필요할 수 있는 데이터
+
+- 유상증자/무상증자/합병·분할(전부 category="macro")의 비율 값(`fix_rate`/
+  `merge_rate`)은 여전히 단위(%) 없이 저장돼 있다 - 53·55번에서도 범위 밖으로 남겨둔
+  부분과 동일하다. 화면 포맷터 자체는 필요하면 쉽게 케이스를 추가할 수 있는 구조다.
+- 지금은 `calendar_events`의 값만 대상으로 했다 - `market_indicator_service`가 다루는
+  실시간 지수/등락률(코스피·코스닥·환율 등, 사이드바 티커)은 이번 요청의 "주가, 등락률...
+  은 제외" 원칙에 따라 건드리지 않았다.
+
+## 57. PAYEMS "천 명" 축약값을 실제 인원 수로 DB에 직접 저장 - 56번과 달리 이번엔 DB를 바꿈
+
+사용자가 "calendar_events 테이블의 previous 값이 안 변했는데?"라고 물어서(56번 작업은
+DB를 안 건드리고 화면 표시만 바꾸는 것이었으므로 DB 자체가 그대로인 게 맞다고 설명했다),
+이어서 "데이터테이블에서 previous와 actual 컬럼에서 천 명이라고 되어 있는 것을 1000명의
+수로 표현해줘(158861천 명→158861000 명)"라고 요청했다. "컬럼"이라는 표현과 "158861천
+명→158861000 명"이라는 구체적 예시가 DB 저장값 자체를 가리키고 있어서, 56번과 달리 이번엔
+DB에 실제로 반영해야 하는 요청인지 애매했다. AskUserQuestion으로 "화면 표시만 바꿀지 DB
+값 자체를 바꿀지" 확인했고, 사용자가 "이런 수치(천 명)는 읽기도 보기도 힘드니 수정하는
+게 옳다"고 답해서 DB 저장값을 실제로 바꾸는 쪽으로 진행했다.
+
+### 왜 이건 "값을 임의로 바꾸는 것"이 아닌가
+
+앞선 여러 작업(48·55·56번)에서 반복해온 원칙은 "실제 값을 추정·변경·생성하지 않는다"이다.
+이번 변경은 그 원칙을 어기지 않는다 - "158861천 명"은 애초에 "158,861,000명"이라는 같은
+값을 "천 명" 단위로 축약 표기한 것뿐이고, 1000을 곱해서 실제 인원 수로 풀어 쓰는 것은
+정보의 손실이나 추정 없이 완전히 동일한 값을 다른 배수로 다시 쓰는 것이다(158861 × 1000 =
+158861000, 수학적으로 항상 성립).
+
+### 변경한 파일
+
+- **`services/calendar.py`**:
+  - `_UNITS` 딕셔너리에서 `"PAYEMS": "천 명"` 제거(주석도 갱신)
+  - `_expand_payems_thousands(value: str) -> str` 신규 - `round(float(value) * 1000)`으로
+    실제 인원 수 문자열을 만든다
+  - `_with_unit`에 PAYEMS 전용 분기 추가: `f"{_expand_payems_thousands(value)} 명"`
+    (다른 지표는 기존처럼 `_UNITS` 딕셔너리 조회 그대로)
+  - `_ingest_from_fred`/`ingest_year_from_fred` 두 곳 다 `_with_unit`을 그대로 호출하므로
+    별도 수정 없이 이 변경이 자동으로 적용된다
+- **`scripts/expand_payems_thousands.py`**(신규, 1회성 백필): `id LIKE 'fred-PAYEMS-%'`인
+  행만 대상으로 `previous`/`actual`이 `"숫자천 명"` 패턴이면 `"{숫자*1000} 명"`으로
+  UPDATE. 이미 변환된 값은 정규식이 매치되지 않아 건드리지 않으므로 재실행해도 안전(멱등)
+- **`frontend/lib/format-economic-value.ts`**: `formatEconomicValue`가 단위 `"명"`(이미
+  실제 인원 수로 풀린 값)을 인식해서 `formatKoreanCount(numeric)`을 그대로 적용하도록
+  케이스 추가(기존 `"천명"` 케이스는 혹시 남아있을 옛 데이터를 위해 `numeric * 1000`
+  버전 그대로 유지 - 하위 호환)
+- `frontend/app/(main)/calendar/news-data.ts`: 19곳의 `"XXXXXX천 명"`을
+  `sed -E 's/([0-9]+)천 명/\1000 명/g'`로 `"XXXXXX000 명"`으로 일괄 치환(200개 행 수
+  불변, 다른 값은 건드리지 않음을 `grep`으로 확인)
+
+### 검증
+
+- `uv run python scripts/expand_payems_thousands.py` 실행 → "11건 변경, 0건 스킵" 확인
+- DB를 직접 조회해서 `fred-PAYEMS-2026-01-01` ~ `-11-01` 11개 행 전부
+  `previous`/`actual`이 `"158432000 명"` 형태로 바뀐 것을 확인
+- FastAPI 서버를 띄우고 `GET /calendar/events?year=2026&month=2` 직접 호출 →
+  `"previous": "158432000 명", "actual": "158592000 명"`로 API 응답에서도 확인
+- `npx tsc --noEmit` 통과, `npm run dev` + Playwright로 `/calendar` 화면 확인 -
+  "약 1억 5,859만 명"/"약 1억 5,843만 명"으로 56번 때와 동일하게 정상 표시(값 자체가
+  바뀐 게 아니라 저장 형식만 바뀌었으므로 화면 결과는 그대로임을 재확인)
+
+### 56번과의 관계
+
+56번에서 만든 화면 포맷터(`formatEconomicValue`)는 "DB는 그대로 두고 화면에서만 변환"
+원칙으로 만들었는데, 이번에 DB 저장 형식 자체가 바뀌면서 포맷터도 그에 맞춰 최소한만
+수정했다(새 단위 `"명"` 케이스 추가). 다른 지표(CPI/PPI/PCE/GDP/UNRATE)의 저장 형식과
+포맷터 동작은 이번 변경과 무관하게 그대로다.
+
+### 후속 수정 - "158861000 명" → "158861000명"(숫자와 "명" 사이 공백 제거)
+
+바로 다음 요청으로 사용자가 공백을 빼달라고 했다. 값은 그대로 두고 표기만 고치는
+것이라 간단히 처리했다:
+
+- `services/calendar.py`: `_with_unit`의 PAYEMS 분기를 `f"{...} 명"` → `f"{...}명"`으로
+  수정(공백 제거)
+- **`scripts/fix_payems_space.py`**(신규, 1회성): `id LIKE 'fred-PAYEMS-%'`인 행의
+  `previous`/`actual`에서 `REPLACE(컬럼, ' 명', '명')`만 적용 - 11건 갱신
+- `news-data.ts`: `sed -E 's/([0-9]) 명"/\1명"/g'`로 19곳의 `" 명"`을 `"명"`으로 일괄
+  치환(패턴을 "숫자 + 공백 + 명 + 닫는 따옴표"로 좁혀서 summary 본문 텍스트 등 다른
+  곳의 "명"은 건드리지 않도록 함 - 치환 전후로 개수를 대조해 확인)
+- 정규식 파서(`RAW_PATTERN`)가 숫자와 단위 사이 공백을 `\s*`로 이미 허용하고 있어서
+  `formatEconomicValue`는 공백 유무와 무관하게 동일하게 동작 - 프런트 포맷터 코드는
+  수정할 필요가 없었다
+
+검증: DB 직접 조회로 `"158432000명"` 형태 확인, `tsc --noEmit` 통과, Playwright로
+화면의 `title` 툴팁(원본값)이 `"158592000명"`(공백 없음)으로 나오고 표시값("약 1억
+5,859만 명")은 그대로임을 확인.
+
+## 58. `front/feat/calendar` pull 시도 - 브랜치 자체에 미해결 병합 충돌이 커밋돼 있어 보류
+
+사용자가 "backend를 push 하고 front/feat/calendar pull해줘"라고 요청했다. backend push는
+평소대로 진행했고(`2105e4e`, 57번 PAYEMS 변경 포함), `front/feat/calendar` pull은 51번의
+`front/dev` 조사와 같은 방식으로 - 실제 merge 전에 먼저 안전하게 검증하다가 진짜 문제를
+발견해서 중단했다.
+
+### 검증 방법 - 격리된 git worktree에서 시험 merge (본 작업 트리는 전혀 건드리지 않음)
+
+`git diff --stat`만으로는 실제 merge 시 충돌이 나는지 알 수 없어서(front/dev 때처럼
+"파일이 삭제/치환된 것처럼" 보여도 실제로는 git이 3-way merge로 깔끔하게 합칠 수 있는
+경우가 있다), `/tmp/merge-test-worktree`에 `git worktree add --detach`로 현재
+`back/feat/calendar` HEAD를 복제한 뒤 그 안에서만 `git merge --no-commit --no-ff
+origin/front/feat/calendar`를 실행해서 실제 결과를 확인했다. 이 방식이면 진짜 merge
+결과를 볼 수 있으면서도 현재 작업 트리(커밋 안 된 프런트 변경사항 포함)는 전혀 위험에
+노출되지 않는다.
+
+### 발견 - git 자체는 충돌 없이 merge에 성공했지만, `front/feat/calendar`의 커밋된 코드에
+이미 풀리지 않은 병합 마커가 들어있었다
+
+`git merge`는 "Automatic merge went well"이라고 보고했다(진짜 3-way 충돌은 없었다는
+뜻). 하지만 merge 결과물을 열어보니 다음 3개 파일에 `<<<<<<< HEAD` / `=======` /
+`>>>>>>> f40daca3...` 형태의 **git 충돌 마커 문자열이 코드 안에 그대로 박혀 있었다**:
+
+- `backend/main.py`
+- `backend/src/backend/core/config.py`
+- `backend/src/backend/core/kis_client.py`
+
+`git show origin/front/feat/calendar:backend/src/backend/core/config.py`로 직접
+확인한 결과, 이 마커는 내 merge 때문에 생긴 게 아니라 **`front/feat/calendar` 브랜치에
+이미 이 상태로 커밋되어 있었다**. 커밋 이력을 추적해보니 `f40daca`("feat:heatmap 구현",
+`front/dev`)를 `front/feat/calendar`에 합친 커밋(`1a362b3`, "Merge branch 'front/dev'
+... into front/feat/calendar")에서 누군가 충돌을 해결하지 않고 그대로 커밋한 것으로
+보인다. 즉 지금 GitHub의 `front/feat/calendar` 브랜치는 **이 3개 파일이 Python
+문법 오류 상태**라 그대로 pull하면 백엔드 서버 자체가 뜨지 않는다.
+
+### 그 외 확인한 내용(참고용 - 실제 병합은 아직 안 함)
+
+- `models/calendar.py`/`schemas/calendar.py`/`services/calendar.py`(이번 세션에서
+  많이 수정한 파일들)는 실제로는 충돌 없이 깔끔하게 merge됐다 - `actual_label` 필드도
+  그대로 살아있었다
+- `core/kis_client.py`는 (충돌 마커 구간만 빼면) 이 브랜치의 KSD 배당/IPO/선물옵션
+  함수와 front 쪽 heatmap 함수(`get_sector_prices`/`get_stock_quotes` 등)가 함께
+  들어있어서, 두 기능이 텍스트 레벨에서는 공존 가능한 것으로 보인다
+- 프런트 `calendar` 쪽은 이미 52번에서 이 브랜치가 `front/dev`를 기준으로 재구성한
+  상태라 `front/feat/calendar`의 최신 구조(`page.tsx`+`components/calendar/*`)와도
+  큰 틀에서 호환되는 것으로 보인다(단, 실제 최종 병합 시 재검증 필요)
+
+### 판단 및 다음 단계
+
+3개 파일의 문법 오류는 내가 임의로 고쳐서 병합할 수도 있는 단순한 내용으로 보였지만
+(양쪽 내용을 그대로 합치면 될 걸로 보임), `core/` 공용 파일과 다른 팀 브랜치를 고치는
+일이라 사용자에게 먼저 확인했다. 사용자가 "지금은 pull 보류, front팀에게 먼저 알림"을
+선택해서, **실제 pull/merge는 진행하지 않았고** 시험용 worktree(`/tmp/merge-test-worktree`)는
+`git worktree remove --force`로 정리했다. `back/feat/calendar`의 작업 트리와 커밋
+이력은 이번 조사로 전혀 변경되지 않았다.
+
+다음 단계: front팀이 `front/feat/calendar`의 저 3개 파일 충돌 마커를 해결해서 다시
+푸시하면, 그때 이 worktree 시험 merge 절차를 다시 실행해서 진짜로 깨끗하게 합쳐지는지
+재확인한 뒤 진행한다.
+
+## 59. front팀에게 전달할 내용 — `front/feat/calendar`에서 고쳐야 하는 것들
+
+사용자가 "저쪽(front)에서 수정해야하는 내용을 문서로 적어줘"라고 요청했다. 58번 이후
+`front/feat/calendar`를 실제로 merge해보면서 새로 발견한 것까지 포함해 front팀에
+전달할 체크리스트를 정리한다.
+
+### 1. (58번 재확인) 3개 파일에 git 병합 충돌 마커가 해결 안 된 채 커밋되어 있음
+
+`front/dev`(heatmap, 커밋 `f40daca`)를 `front/feat/calendar`에 합친 커밋(`1a362b3`)에서
+충돌을 안 지우고 그대로 커밋했다. 2025-09-16 오늘 다시 fetch해서 재확인했는데도 아직
+그대로다(고쳐지지 않음). 영향받는 파일과 해결 방법:
+
+- **`backend/main.py`**: `app.include_router(calendar_router)`와
+  `app.include_router(heatmap_router)` 둘 다 남기면 됨(마커 3줄만 삭제).
+- **`backend/src/backend/core/config.py`**: heatmap 설정 필드(`heatmap_enabled`,
+  `heatmap_requests_per_second`, `heatmap_session_overrides`)와 `database_url`
+  둘 다 남기면 됨 - 서로 무관한 필드라 순서 상관없음.
+- **`backend/src/backend/core/kis_client.py`**: 충돌 구간(276~635줄)이 커서 두 그룹의
+  함수가 통째로 걸렸다. `_download_master` 함수는 front/dev쪽(zip 압축 해제 로직 -
+  함수 위 주석과 실제로 일치하는 완성된 구현)을 채택하고, 그 아래 두 그룹의 함수
+  (calendar 도메인의 `get_dividend_schedule`/`get_ipo_schedule`/`get_merger_split_schedule`/
+  `get_option_month_list`/`get_futures_board`/`get_price` 등과, heatmap 도메인의
+  `_read_master_cache`/`get_sector_master`/`_parse_stock_master`/`get_stock_master`
+  등)는 전부 삭제 없이 유지하면 됨 - 서로 다른 도메인이 쓰는 별개 함수라 겹치지 않는다.
+
+마커를 다 지운 뒤 `uv run python -c "import backend.main"`으로 문법 오류 없이 import되는지
+확인하고 다시 push해달라고 전달할 것.
+
+### 2. (신규) `frontend/lib/api/calendar.ts`의 `CalendarEventDto`가 지금 백엔드 스키마와 안 맞음
+
+`front/feat/calendar`의 프런트는 이미 정적 `NEWS` 배열을 없애고 `GET /calendar/events`를
+실시간으로 호출하는 방식으로 발전해 있다(`getCalendarEvents()` + `toNewsItem()`) - 이
+자체는 이 세션이 지금까지 해온 "DB export → news-data.ts 수동 동기화" 방식보다 훨씬
+올바른 구조다. 문제는 이 DTO 타입이 만들어진 시점(2e0de23 근처)의 백엔드 스키마를
+기준으로 하고 있어서, 그 이후 이 브랜치(`back/feat/calendar`)에서 백엔드 스키마가
+두 번 바뀐 걸 반영하지 못하고 있다:
+
+```ts
+// frontend/lib/api/calendar.ts (front/feat/calendar, 현재)
+export interface CalendarEventDto {
+  ...
+  previous: string | null
+  forecast: string | null   // ← 55번에서 calendar_events 컬럼 자체를 삭제함. 백엔드가
+                             //   이 필드를 더 이상 응답에 내려주지 않는다.
+  actual: string | null
+  status: string
+  // actual_label이 없음 ← 54번에서 추가한 필드. "주당"/"공모가"/"매출액" 라벨이
+  //                        여기 없어서 화면에 반영이 안 된다.
+}
+```
+
+`toNewsItem()`(`frontend/app/(main)/calendar/news-data.ts`)도 `dto.forecast`를 그대로
+읽어서 `detail.forecast`에 매핑하고 있는데, 이제 항상 `undefined`만 오니 죽은 코드다.
+front팀에 전달할 수정 내용:
+
+1. `CalendarEventDto`에서 `forecast: string | null` 필드 삭제
+2. `CalendarEventDto`에 `actual_label: string | null` 필드 추가
+3. `NewsItem["detail"]`에 `actualLabel?: string` 추가, `toNewsItem()`에서
+   `if (dto.actual_label) detail.actualLabel = dto.actual_label` 매핑 추가
+4. 화면에서 `actual`/`previous` 값을 보여줄 때 `actualLabel`이 있으면
+   `"{actualLabel} {값}"` 형태로 같이 보여주면 54번에서 만든 라벨(예: "주당 880원",
+   "공모가 8300원", "매출액 79.0조원")이 정상적으로 화면에 나온다
+
+### 3. (참고) 화면 표시 단위 변환(56·57번)은 이 세션에서 이식 예정 - front팀 조치 불필요
+
+`calendar_events`의 `actual`/`previous`는 여전히 API 원본 값 그대로 내려온다
+(`"158861000명"`, `"32486.066십억 달러"` 등 - 56·57번에서 DB에는 원본을 그대로 두기로
+했고, PAYEMS만 "천 명" 축약을 실제 인원 수로 풀어 저장하도록 바꿨다). 이 값을 "약 1억
+5,886만 명"처럼 사람이 읽기 쉽게 바꾸는 `formatEconomicValue()`(`frontend/lib/format-
+economic-value.ts`)는 이번에 `back/feat/calendar`에서 `front/feat/calendar` 구조 위로
+직접 이식하는 작업이라(59번 뒷부분에서 진행), front팀이 별도로 손댈 필요는 없다.
+
+### 실제로 merge를 완료함 - 위 1·2번 내용을 front팀 대신 직접 반영했다
+
+문서만 써두고 끝낸 게 아니라, 사용자가 "front/feat/calendar를 pull 받아줘"라고 다시
+요청해서 실제로 병합까지 완료했다. `back/feat/calendar`의 미커밋 프런트 작업(52~57번)을
+먼저 커밋(`18a18de`)한 뒤 `git merge --no-commit --no-ff origin/front/feat/calendar`를
+실행했는데, 예상보다 훨씬 큰 충돌이 났다(`page.tsx`/`news-data.ts`/`news-panel.tsx` 및
+`components/calendar/*` 8개 파일, `lib/calendar.ts` - 총 10개 파일). 원인은
+`front/feat/calendar`가 조사 시점(51번) 이후 스스로도 프런트를 더 발전시켜서, 정적
+`NEWS` 배열을 완전히 없애고 `getCalendarEvents()`+`toNewsItem()`으로 백엔드를 실시간
+호출하는 구조로 이미 바뀌어 있었기 때문이다 - 이 세션의 "front/dev 기준 재구성"(52번)과
+저쪽의 "front/dev 기준 재구성 + 실시간 API화"가 같은 파일들을 서로 다르게 더 발전시킨
+것.
+
+결정한 병합 방향(사용자 승인): **저쪽(실시간 API) 구조를 그대로 채택**하고 그 위에
+**이 세션에서 만든 기능만 다시 이식**한다. 절차:
+
+1. 충돌난 10개 파일을 전부 `git show origin/front/feat/calendar:<path> > <path>`로
+   덮어써서 "저쪽 그대로"로 만듦(`git checkout --theirs`가 이 환경에서 왜인지
+   "Updated 0 paths"만 출력하고 실제로 반영이 안 되는 문제가 있어서, 더 확실한
+   `git show` 방식으로 바꿔 진행함)
+2. 이제 쓸모없어진 `weekly-summary-panel.tsx`(52번에서 만든 팝업 컴포넌트 - 저쪽의 새
+   `AiSummaryCard`는 실제 주간 일정을 직접 받아서 렌더링하고 클릭 시 기존
+   `DayDetailDialog`를 그대로 열기 때문에 별도 다이얼로그가 필요 없어짐) 삭제
+3. 59번 위쪽에서 문서화했던 수정 내용(1~4번)을 front팀 대신 직접 반영:
+   `lib/api/calendar.ts`의 `CalendarEventDto`에서 `forecast` 삭제·`actual_label` 추가,
+   `news-data.ts`의 `NewsItem.detail`에 `actualLabel` 추가 및 `toNewsItem()` 매핑,
+   `week-list.tsx`/`news-panel.tsx`에서 `actualLabel` 접두 + `formatEconomicValue()`
+   적용, `lib/calendar.ts`의 `announceLabel`에서 "발표 예정" 접미사 제거(50번 항목의
+   요구사항을 새 구조에도 유지)
+4. 58·59번에서 발견한, `front/feat/calendar`에 이미 커밋되어 있던 미해결 git 충돌
+   마커 3개(`backend/main.py`, `core/config.py`, `core/kis_client.py`)도 함께
+   해결했다 - 59번에서 문서화한 방법 그대로: `main.py`/`config.py`는 양쪽 다 유지,
+   `kis_client.py`는 Python 스크립트로 정확한 위치에 재조립(`_download_master`는
+   zip 압축 해제 버전 채택, calendar/heatmap 양쪽 함수 전부 보존) - 재조립 후
+   `python3 -m py_compile`과 `uv run python -c "import main"`으로 문법·임포트 확인함
+
+주의: 처음 merge를 커밋할 때(`4d40ef0`) 이 4번 이식 작업이 실수로 스테이징에서 빠져서
+(theirs로 checkout한 뒤 편집한 시점이 `git add`보다 늦었음) 별도 후속 커밋
+(`8e9d1e6`)으로 나뉘었다 - `git show HEAD:<path>`로 실제 커밋된 내용에 이식 결과가
+들어있는지 재확인해서 잡아냈다.
+
+### 검증 (실사용 화면까지 직접 확인)
+
+- `npx tsc --noEmit` 통과
+- 백엔드 서버(`uv run uvicorn main:app`)를 실제로 띄워서 `import main` 문법 오류 없음과
+  `GET /calendar/events` 응답에 `forecast` 키가 없고 `actual_label`이 채워져 오는 것을
+  확인
+- 프런트(`npm run dev`, `NEXT_PUBLIC_API_BASE_URL`이 로컬 `.env.local`에서 8080으로
+  지정돼 있어 백엔드도 8080으로 맞춰 띄움)를 Playwright로 직접 조작해서:
+  - 실시간으로 불러온 실제 일정이 화면에 정상 표시됨(더 이상 `news-data.ts`의 정적
+    스냅샷이 아니라 매번 `GET /calendar/events`를 호출)
+  - "공모가 14600원"/"공모가 10000원"(IPO), "주당 880원" 등 라벨이 새 구조에서도
+    정상 표시
+  - PAYEMS "약 1억 5,859만 명"/"약 1억 5,843만 명"이 새 구조에서도 정상 변환됨
+  - 일정을 클릭해 여는 상세 팝업에서 "실제값 주당 880원"이 정상 표시됨(news-panel.tsx
+    이식분 확인)
+  - "이번주 AI 요약" 카드가 실제 이번 주 일정(예: "와이즈플래닛컴퍼니 공모주 청약")을
+    실시간으로 보여줌 - 저쪽 구조가 가진 개선점
+
+### 남은 것
+
+`back/feat/calendar`에는 이제 이 merge 커밋이 로컬에만 있고 아직 push하지 않았다.
+push 여부는 사용자 확인 후 진행.
+
+## 60. `front/feat/calendar` 2차 pull — front팀이 그 사이 더 발전시킨 내용 재병합
+
+사용자가 다시 "front/feat/calendar 를 pull"이라고 요청했다. `git fetch`로 확인해보니
+59번에서 병합한 시점(`1a362b3`) 이후 front팀이 새 커밋 3개(`b54aeb5`/`c0f97d7`/
+`e2a35c8`)를 추가로 푸시해뒀다:
+
+- **`e2a35c8`**: 57번에서 이 브랜치가 만든 PAYEMS 실인원수 저장 수정을 그대로 이식 -
+  커밋 메시지에 "back/feat/calendar에서 이미 반영된 수정을 이식"이라고 명시돼 있고
+  Claude Sonnet 5 co-author 표기도 있다(front팀도 Claude Code로 작업 중)
+- **`b54aeb5`**: 58·59번에서 발견한 `main.py`/`config.py`/`kis_client.py`의 미해결
+  git 충돌 마커를 front팀이 스스로 해결. 초보자용 "베끄로 레슨" 기능
+  (`beginner-lessons.ts`, `beginner-lesson-dialog.tsx`, `beginner-lesson-teaser.tsx`)과
+  로딩 스켈레톤(`calendar-skeletons.tsx`) 추가, `ai-summary-card.tsx` →
+  `Weekplan.tsx`로 이름 변경
+- **`c0f97d7`**: "2025년으로 넘어가면 데이터 없음 처리" - `news-data.ts`/`page.tsx`
+  등 다수 개선(날짜 파싱 검증 강화, `hasTime` 필드 추가), **`format-economic-value.ts`도
+  이 커밋에서 이식되어 있었다** - 음수 처리와 `toLocaleString` 활용 등 59번 때보다
+  더 다듬어진 버전으로 발전해 있었다
+
+### 재병합 절차 및 충돌 해결
+
+이번엔 `git merge --no-commit --no-ff origin/front/feat/calendar`가 8개 파일에서
+충돌을 냈지만, 59번 때와 달리 대부분 "같은 걸 양쪽이 비슷하게 고친" 사소한 충돌이었다
+(59번에서 이미 구조를 맞춰뒀기 때문). 파일별 해결:
+
+- `services/calendar.py`: PAYEMS 주석 문구 차이만 있어서 이 브랜치 버전 유지
+- `kis_client.py`: front팀이 heatmap 함수 묶음을 `_download_master` 바로 뒤로
+  재배치했는데, 이 브랜치의 59번 정리본은 파일 끝에 같은 함수들을 중복으로 갖고
+  있었다 - front팀 위치로 통일하고 파일 끝 중복 정의 블록을 삭제
+- `format-economic-value.ts`(add/add 충돌): front팀 버전이 더 다듬어져 있어 통째로 채택
+- `lib/api/calendar.ts`, `news-data.ts`: `actual_label` 관련 주석 문구 차이뿐 -
+  front팀 버전 유지
+- `news-panel.tsx`: 이 브랜치는 facts 배열을 만들 때 미리 `formatEconomicValue()`를
+  적용했는데, front팀은 `[라벨, 원본값]`만 배열에 담고 렌더링(`<dd>`) 시점에 한 번만
+  포맷하는 방식으로 이미 개선해뒀다(코드 다른 곳에 이미 `{formatEconomicValue(v)}`가
+  있었음) - 중복 포맷팅을 없애기 위해 front팀 방식 채택
+- `lib/calendar.ts`: front팀이 새로 만든 `weekLabelOf`/`weekOwnedRangeOfMonth`
+  (월 경계에 걸친 주를 "날짜가 더 많이 속한 달" 기준으로 정확히 배정하는 함수,
+  목요일 기준 ISO 8601 방식)는 그대로 채택하고, `announceLabel`은 이 브랜치의
+  접미사 없는 버전을 유지(front팀 버전엔 트레일링 공백이 남아있는 사소한 흠이 있었음)
+- `week-list.tsx`: front팀이 추가한 `hasTime` 필드 기반 "시간 미정" 표시(시간이
+  아예 확인 안 된 이벤트용)와, 이 브랜치의 "발표일이 지나면 -" 규칙(50번 항목)을
+  둘 다 살려서 `!hasTime → "시간 미정"`, `지난 경우 → "-"`, `그 외 → announceLabel`
+  세 갈래로 합침 - 어느 한쪽만 적용하면 다른 쪽이 다루던 케이스를 놓치게 됨
+
+### 검증
+
+- `npx tsc --noEmit` 통과
+- `python3 -m py_compile main.py core/config.py core/kis_client.py
+  domain/calendar/services/calendar.py` 문법 확인 + `uv run python -c "import main"`
+  임포트 확인 - 전부 통과
+- 백엔드(8080)+프런트(3000) 재기동 후 `/calendar` 화면 Playwright로 직접 확인:
+  - 새로 추가된 "이번 주, 주린이 탈출"(베끄로 레슨 티저)와 "이번 주엔 이런 일정이
+    있어요" 카드가 정상 렌더링됨 - 사용자가 이전에 물어봤던 "이번주에는 이런 일정이
+    있어요" 문구가 바로 이 front팀의 새 기능이었음이 확인됨(그때는 아직 push되기
+    전이라 저장소에 없었던 것)
+  - "공모가 14600원"/"공모가 10000원" 등 54번 라벨이 새 구조에서도 계속 정상 표시
+  - "시간 미정"(공모주 청약처럼 시간 정보가 없는 이벤트) 표시도 정상 작동
+
+### 남은 것
+
+이번 merge(`a658836`)도 아직 로컬에만 있고 push하지 않았다. `backend/tmp_check_columns.py`/
+`backend/tmp_repro_500.py`(front팀이 남긴 디버그용 임시 스크립트로 보임)와
+`.claude/settings.json`(front팀의 로컬 Claude Code 권한 설정)도 함께 들어왔는데,
+이 브랜치 것이 아니라서 그대로 유지했다 - 필요하면 나중에 정리.
