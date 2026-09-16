@@ -1,5 +1,5 @@
 # main.py
-# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바 갱신 1개 + 슬롯 수집 8개), CORS, 라우터 등록.
+# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바·VIX·슬롯 수집 8개·히트맵 수집 2개), CORS, 라우터 등록.
 # 보고서는 따로 예약하지 않는다. 20:00 슬롯 작업이 끝나면 timeline_service가 이어서 만든다
 
 import logging
@@ -13,7 +13,13 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.core.config import get_settings
+from backend.core.logging_config import setup_logging
 from backend.domain.calendar.routers.calendar import router as calendar_router
+from backend.domain.heatmap.routers.heatmap import router as heatmap_router
+from backend.domain.heatmap.services import heatmap
+from backend.domain.market.routers.market import router as market_router
+from backend.domain.market.services import vix_service
 from backend.domain.timeline.routers.timeline import router as timeline_router
 from backend.domain.timeline.services import market_indicator_service
 from backend.core.config import get_settings
@@ -36,21 +42,85 @@ def _refresh_indicators(*, force: bool = False) -> None:
 # 서버 시작·종료 시 실행
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    scheduler = BackgroundScheduler(timezone=_KST)
-    scheduler.add_job(_refresh_indicators, "date", run_date=datetime.now(_KST), kwargs={"force": True})
-    scheduler.add_job(_refresh_indicators, CronTrigger(minute="0,30", timezone=_KST), max_instances=1, coalesce=True)
-    if get_settings().heatmap_enabled:
-        # 저장된 스냅샷을 먼저 복원. 수천 종목 초기 수집 동안에도 HTTP 서버는 응답한다.
-        heatmap.initialize()
-        scheduler.add_job(heatmap.refresh_all, "date", run_date=datetime.now(_KST), kwargs={"force": True})
-        # 매분 체크하되 서비스가 10분 수집시점/휴장/마감 여부를 판단한다.
-        # 30초 여유를 두어 15:30 마감 체결 반영 후 최종값을 저장한다.
-        scheduler.add_job(heatmap.refresh_all, CronTrigger(minute="*", second=30, timezone=_KST), max_instances=1, coalesce=True)
-    scheduler.start()
+    # 로그 설정을 가장 먼저 한다 (작업 등록 중 경고도 파일에 남도록)
+    setup_logging()
+
+    _register_indicator_job()
+    _register_vix_job()
+    _register_slot_jobs()
+    _register_heatmap_jobs()
+
+    jobs = _scheduler.get_jobs()
+    if jobs:
+        _scheduler.start()
+        logger.info("스케줄러 시작 - 작업 %d개 (%s)", len(jobs), ", ".join(job.id for job in jobs))
+    else:
+        logger.warning("등록된 예약 작업이 없습니다. .env의 KIS 키와 DATABASE_URL을 확인해주세요.")
+
+    yield
+
+    if _scheduler.running:
+        _scheduler.shutdown()
+        logger.info("스케줄러 종료")
+
+
+# 지표 바 갱신 작업 등록 (10분마다). minute 값을 바꾸면 주기가 바뀐다 (예: "0,30"이면 30분마다)
+# 등록 전에 캐시를 한 번 채운다. 실패하면(키 없음·KIS 장애) 지표 바만 끄고 서버는 뜬다
+def _register_indicator_job() -> None:
     try:
-        yield
-    finally:
-        scheduler.shutdown(wait=False)
+        market_indicator_service.refresh_all(force=True)
+    except Exception as error:
+        logger.warning("지표 바 비활성화 - %s: %s", type(error).__name__, error)
+        return
+
+    _scheduler.add_job(market_indicator_service.refresh_all, CronTrigger(minute="0,10,20,30,40,50"), id="indicator_bar")
+
+
+# 메인 페이지 VIX 갱신 작업 등록 (24시간, 매시 00분·30분).
+# 서버 시작 시 한 번 채우고 실패해도 예약 작업은 등록해 다음 00·30분에 다시 시도한다. KIS 호출은 kis_client 토큰 캐시를 그대로 쓴다.
+def _register_vix_job() -> None:
+    try:
+        vix_service.refresh()
+    except Exception as error:
+        logger.warning("VIX 초기 갱신 실패 - %s: %s", type(error).__name__, error)
+
+    _scheduler.add_job(
+        vix_service.refresh,
+        CronTrigger(minute="0,30"),
+        id="market_vix",
+        max_instances=1,
+        coalesce=True,
+    )
+
+
+# 슬롯 수집 작업 등록 (하루 8회). 시각은 timeline_service.SLOT_COLLECT_TIMES에서 바꾼다
+# DATABASE_URL이 없으면 등록하지 않는다. 휴장일 판단은 작업 안에서 한다
+def _register_slot_jobs() -> None:
+    if not get_settings().database_url:
+        logger.warning("타임라인 슬롯 수집 비활성화 - DATABASE_URL이 .env에 없습니다.")
+        return
+
+    for slot_key, (hour, minute) in timeline_service.SLOT_COLLECT_TIMES.items():
+        _scheduler.add_job(
+            timeline_service.run_scheduled_collect,
+            CronTrigger(hour=hour, minute=minute),
+            args=[slot_key],
+            id=f"slot_{slot_key}",
+        )
+
+
+# 히트맵 수집 작업 등록 (히트맵 담당). HEATMAP_ENABLED=false면 등록하지 않는다
+# 저장된 스냅샷을 먼저 복원하고(네트워크 없음), 첫 수집은 서버 시작 직후 백그라운드에서 한 번 돌린다
+# 매분 30초에 확인하되 10분 수집 시점·휴장·마감 여부는 heatmap.refresh_all이 판단한다 (30초 여유는 15:30 마감 체결 반영용)
+# refresh_all은 동기 함수라 스케줄러가 별도 스레드에서 실행한다 (타임라인 슬롯 수집을 막지 않는다)
+def _register_heatmap_jobs() -> None:
+    if not get_settings().heatmap_enabled:
+        logger.warning("히트맵 수집 비활성화 - HEATMAP_ENABLED=false")
+        return
+
+    heatmap.initialize()
+    _scheduler.add_job(heatmap.refresh_all, "date", kwargs={"force": True}, id="heatmap_initial", misfire_grace_time=60)
+    _scheduler.add_job(heatmap.refresh_all, CronTrigger(minute="*", second=30), id="heatmap", max_instances=1, coalesce=True)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -74,3 +144,4 @@ def read_root():
 app.include_router(timeline_router)
 app.include_router(calendar_router)
 app.include_router(heatmap_router)
+app.include_router(market_router)

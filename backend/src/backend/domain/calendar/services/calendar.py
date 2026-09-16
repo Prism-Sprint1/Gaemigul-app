@@ -2,7 +2,7 @@
 # FRED API 호출 -> 한국시간/한국어 변환 -> Supabase calendar_events 저장/조회
 #
 # ORM 모델을 쓰지 않는다 - 이 프로젝트에 Calendar용 SQLAlchemy ORM 모델 선례가 없어서, 새 패턴을
-# 도입하는 대신 core/database.py의 async_session을 그대로 재사용해 raw SQL(sqlalchemy.text)로
+# 도입하는 대신 core/database.py의 get_session_factory()를 그대로 재사용해 raw SQL(sqlalchemy.text)로
 # calendar_events 테이블에 접근하기로 팀에서 결정했다(2026-09-10).
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core import dart_client, ecos_client, fed_client, fred_client, kis_client
-from backend.core.database import async_session
+from backend.core.database import get_session_factory
 from backend.domain.calendar.schemas.calendar import CalendarEvent
 
 _US_EASTERN = ZoneInfo("America/New_York")
@@ -162,7 +162,7 @@ def _clean_value(raw: str | None) -> str | None:
 # 한국어로 옮김 - 추측 아님): CPI/PPI/PCE는 지수(Index), GDP는 십억 달러, UNRATE는 %.
 # previous/actual 문자열 끝에 붙여서 화면에서 숫자만 보고 오해하지 않도록 한다.
 # PAYEMS(천 명 단위)는 예외 - "158861천 명"처럼 축약된 값 그대로 저장하면 사람이 읽기
-# 어렵다는 지적에 따라 여기 넣지 않고 _with_unit에서 실제 인원 수로 풀어서
+# 어렵다는 지적(2026-09-16)에 따라 여기 넣지 않고 _with_unit에서 실제 인원 수로 풀어서
 # 저장한다("158861" → "158861000 명").
 _UNITS: dict[str, str] = {
     "CPI": "포인트",  # FRED units: Index 1982-1984=100
@@ -223,7 +223,7 @@ async def _ingest_from_fred(indicator: str) -> CalendarEvent:
         status="SCHEDULED" if actual is None else "RELEASED",
     )
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         await _upsert_event(session, event)
         await session.commit()
 
@@ -325,7 +325,7 @@ async def ingest_year_from_fred(indicator: str, year: int) -> list[CalendarEvent
         )
         events.append(event)
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
         await session.commit()
@@ -416,7 +416,7 @@ async def ingest_fomc_year(year: int) -> list[CalendarEvent]:
         if meeting.minutes_date is not None:
             events.append(_fomc_event(meeting.minutes_date, "FOMC_MINUTES"))
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
         await session.commit()
@@ -530,7 +530,7 @@ async def ingest_preliminary_earnings_from_dart(
 
     events = [_dart_earnings_event(corp_name, stock_code, d) for d in disclosures]
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
         await session.commit()
@@ -593,7 +593,7 @@ async def ingest_bok_rate_decisions(start: str, end: str) -> list[CalendarEvent]
                 events.append(_bok_rate_event(decision_date, previous_value, value))
         previous_value = value
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
         await session.commit()
@@ -682,7 +682,7 @@ async def ingest_kospi200_expiry() -> list[CalendarEvent]:
             expiry_date = f"{raw_date[0:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
             events.append(_kospi200_expiry_event(expiry_date, concurrent=False, today_kst=today_kst))
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
         await session.commit()
@@ -822,7 +822,7 @@ async def ingest_dividends_from_kis(stock_codes: list[str], f_dt: str, t_dt: str
             if event is not None:
                 events.append(event)
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
         await session.commit()
@@ -915,7 +915,7 @@ async def ingest_merger_splits_from_kis(f_dt: str, t_dt: str) -> list[CalendarEv
         if (event := _merger_split_event_from_kis(record, today_kst)) is not None
     ]
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
         await session.commit()
@@ -981,7 +981,7 @@ async def ingest_ipos_from_kis(f_dt: str, t_dt: str) -> list[CalendarEvent]:
         event for record in records if (event := _ipo_event_from_kis(record, today_kst)) is not None
     ]
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
         await session.commit()
@@ -1040,7 +1040,7 @@ async def ingest_paidin_capital_increases_from_kis(f_dt: str, t_dt: str) -> list
         if (event := _paidin_capital_increase_event_from_kis(record, today_kst)) is not None
     ]
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
         await session.commit()
@@ -1095,7 +1095,7 @@ async def ingest_bonus_issues_from_kis(stock_codes: list[str], f_dt: str, t_dt: 
             if event is not None:
                 events.append(event)
 
-    async with async_session() as session:
+    async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
         await session.commit()
