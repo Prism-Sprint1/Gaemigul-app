@@ -29,7 +29,11 @@ export type BriefingArticle = {
   body: string
   statCards?: BriefingStatCard[]
   correlationChart?: BriefingCorrelationChart
-  showImagePlaceholder?: boolean
+  /**
+   * 이 섹션에 이미지 영역이 있는지를 나타낸다.
+   * undefined면 이미지 영역 자체가 없고, null이면 이미지 영역은 있으나 아직 준비되지 않아 기본 이미지를 보여준다.
+   */
+  imageUrl?: string | null
   takeaways: string[]
 }
 
@@ -50,6 +54,8 @@ export type BriefingContent = {
   publishedAt: string
   analyst: string
   lead: string
+  /** 없으면(undefined) 기본 이미지, 있으면 실제 URL을 보여준다. */
+  mainImageUrl?: string | null
   todayBriefPoints: string[]
   article: BriefingArticle[]
   noviceSummary: {

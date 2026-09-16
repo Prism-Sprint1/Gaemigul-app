@@ -10,33 +10,34 @@ import TimelineSectionHeader from "./TimelineSectionHeader"
 
 type TimelineSectionProps = {
   item: ScheduleItem
-  content: TimelineContent
-  /**
-   * 오늘이 아닌 지난 날짜를 보고 있을 때 true로 전달한다.
-   * 지난 날짜는 하루치 데이터가 이미 전부 확정된 상태이므로 시간대 잠금 없이 모두 공개한다.
-   */
-  forceOpen?: boolean
+  /** 백엔드에 해당 슬롯이 아직 없으면 null — 이때는 잠금 화면을 보여준다. */
+  content: TimelineContent | null
+  glossary: Record<string, string>
 }
 
 export default function TimelineSection({
   item,
   content,
-  forceOpen = false,
+  glossary,
 }: TimelineSectionProps) {
-  const isOpen =
-    forceOpen || item.status === "past" || item.status === "current"
+  const isOpen = content !== null
+  const isPending = item.status === "next" || item.status === "upcoming"
 
   return (
-    <section id={item.id} className="flex w-full scroll-mt-6 flex-col gap-5">
+    // scroll-mt는 상단 고정 헤더(h-18.75 = 75px)에 섹션 타이틀이 가려지지 않도록 여유를 둔다.
+    <section id={item.id} className="flex w-full scroll-mt-24 flex-col gap-5">
       <TimelineSectionHeader title={item.title} time={item.time} />
 
-      {isOpen ? (
+      {isOpen && content ? (
         <div className="flex w-full flex-col gap-10 rounded-none border-b border-line-bg bg-neutral-50 p-5">
           {content.marketStats && (
             <MarketStatGrid groups={content.marketStats} />
           )}
-          <LLMSummarySection summary={content.llmSummary} />
-          <BeginnerSummarySection summary={content.beginnerSummary} />
+          <LLMSummarySection summary={content.llmSummary} glossary={glossary} />
+          <BeginnerSummarySection
+            summary={content.beginnerSummary}
+            glossary={glossary}
+          />
           <NewsList news={content.news} />
           {content.sectors && <SectorGrid sectors={content.sectors} />}
           {content.featuredStocks && (
@@ -44,7 +45,7 @@ export default function TimelineSection({
           )}
         </div>
       ) : (
-        <TimelineLockedSection time={item.time} />
+        <TimelineLockedSection time={item.time} pending={isPending} />
       )}
     </section>
   )

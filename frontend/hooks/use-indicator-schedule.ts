@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react"
 
-const INTERVAL_MS = 30 * 60 * 1000 // 30분
+const INTERVAL_MS = 15 * 60 * 1000 // 15분
 
-/** 다음 정시 기준 30분 경계(매시 00분, 30분)까지 남은 시간(ms) */
+/** 다음 정시 기준 15분 경계(매시 00분, 15분, 30분, 45분)까지 남은 시간(ms) */
 function getMsUntilNextBoundary(now = Date.now()) {
   return INTERVAL_MS - (now % INTERVAL_MS)
 }
@@ -18,7 +18,7 @@ function formatRemaining(ms: number) {
 }
 
 /**
- * 정시 기준 30분 간격에 맞춰
+ * 정시 기준 15분 간격에 맞춰
  * - 남은 시간을 "MM:SS" 문자열로 반환하고
  * - 매 경계 시점마다 onTick 콜백을 실행한다.
  */

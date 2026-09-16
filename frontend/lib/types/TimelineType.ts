@@ -52,8 +52,9 @@ export type BeginnerSummaryPoint = {
 }
 
 export type BeginnerSummary = {
-  title: string
-  subtitle: string
+  /** 백엔드가 전체 해설 제목/부제를 따로 주지 않으므로 없으면 렌더링을 생략한다. */
+  title?: string
+  subtitle?: string
   points: BeginnerSummaryPoint[]
 }
 
@@ -96,4 +97,75 @@ export type TimelineContent = {
   news: NewsItem[]
   sectors?: SectorItem[]
   featuredStocks?: FeaturedStock[]
+}
+
+// ── 백엔드 GET /timeline 응답 DTO (backend/domain/timeline/schemas/timeline.py와 1:1 대응) ──
+
+export type ApiBriefingPoint = {
+  seq: number
+  title: string
+  body: string
+}
+
+export type ApiBeginnerGuide = {
+  seq: number
+  title: string
+  body: string
+  tags: string[]
+}
+
+export type ApiNewsItem = {
+  seq: number
+  title: string
+  summary: string
+  url: string
+  published_at: string | null
+}
+
+export type ApiIndicator = {
+  name: string
+  price: number
+  change_rate: number
+}
+
+export type ApiSectorStock = {
+  name: string
+  change_rate: number
+  label: string
+}
+
+export type ApiLeadingSector = {
+  name: string
+  change_rate: number
+  stocks: ApiSectorStock[]
+}
+
+export type ApiTopGainer = {
+  seq: number
+  name: string
+  change_rate: number
+  price: number
+}
+
+export type ApiIntradayChange = {
+  name: string
+  morning_price: number
+  closing_price: number
+  change_rate: number
+}
+
+export type ApiTimelineSlot = {
+  slot_key: string
+  time_slot: string
+  title: string
+  collected_at: string
+  briefing_headline: string | null
+  briefing_subtitle: string | null
+  briefing_points: ApiBriefingPoint[]
+  beginner_guides: ApiBeginnerGuide[]
+  leading_sectors: ApiLeadingSector[]
+  top_gainers: ApiTopGainer[]
+  news: ApiNewsItem[]
+  indicators: ApiIndicator[]
+  intraday_changes: ApiIntradayChange[]
 }

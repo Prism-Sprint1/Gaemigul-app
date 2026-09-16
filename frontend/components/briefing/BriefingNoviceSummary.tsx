@@ -1,15 +1,16 @@
 import type { BriefingContent } from "@/lib/types/BriefingType"
 import { BriefingGlossary } from "@/components/briefing"
-import { briefingContent } from "@/lib/constant/briefingContent"
 
 import { Separator } from "../ui"
 
 type BriefingNoviceSummaryProps = {
   summary: BriefingContent["noviceSummary"]
+  glossary: BriefingContent["glossary"]
 }
 
 export default function BriefingNoviceSummary({
   summary,
+  glossary,
 }: BriefingNoviceSummaryProps) {
   return (
     <article
@@ -57,7 +58,7 @@ export default function BriefingNoviceSummary({
         </ol>
       </div>
 
-      <BriefingGlossary terms={briefingContent.glossary} />
+      {glossary.length > 0 && <BriefingGlossary terms={glossary} />}
     </article>
   )
 }

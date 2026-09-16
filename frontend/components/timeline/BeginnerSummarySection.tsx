@@ -1,12 +1,15 @@
 import { Separator } from "@/components/ui"
 import type { BeginnerSummary } from "@/lib/types/TimelineType"
+import GlossaryText from "./GlossaryText"
 
 type BeginnerSummarySectionProps = {
   summary: BeginnerSummary
+  glossary: Record<string, string>
 }
 
 export default function BeginnerSummarySection({
   summary,
+  glossary,
 }: BeginnerSummarySectionProps) {
   return (
     <div className="flex flex-col gap-3">
@@ -14,8 +17,14 @@ export default function BeginnerSummarySection({
         <span aria-hidden>🌱</span>
         주린이를 위한 해설
       </div>
-      <p className="text-sm font-semibold text-neutral-700">{summary.title}</p>
-      <p className="text-xs text-neutral-500">{summary.subtitle}</p>
+      {summary.title && (
+        <p className="text-sm font-semibold text-neutral-700">
+          {summary.title}
+        </p>
+      )}
+      {summary.subtitle && (
+        <p className="text-xs text-neutral-500">{summary.subtitle}</p>
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         {summary.points.map((point, index) => (
           <div
@@ -29,7 +38,7 @@ export default function BeginnerSummarySection({
               <span className="text-sm font-semibold">{point.title}</span>
             </div>
             <p className="text-xs leading-relaxed text-neutral-500">
-              {point.description}
+              <GlossaryText text={point.description} glossary={glossary} />
             </p>
             <Separator />
             <div className="flex flex-wrap gap-1.5">

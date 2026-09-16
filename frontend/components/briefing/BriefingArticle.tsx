@@ -3,6 +3,7 @@ import type { CSSProperties } from "react"
 import type { BriefingArticle as BriefingArticleType } from "@/lib/types/BriefingType"
 import { getBriefingAccentColor } from "./accentColors"
 import BriefingCorrelationChart from "./BriefingCorrelationChart"
+import BriefingImage from "./BriefingImage"
 import BriefingStatCards from "./BriefingStatCards"
 import BriefingTakeaway from "./BriefingTakeaway"
 
@@ -38,12 +39,8 @@ export default function BriefingArticle({ id, article }: BriefingArticleProps) {
       <Separator className="bg-line-bg/50" />
       <p className="text-sm leading-relaxed text-neutral-600">{article.body}</p>
 
-      {article.showImagePlaceholder && (
-        // 실제 이미지 연동 전까지 임시 그레이 박스로 대체
-        <div
-          className="aspect-1200/400 w-full rounded-lg bg-neutral-200"
-          aria-hidden
-        />
+      {article.imageUrl !== undefined && (
+        <BriefingImage url={article.imageUrl} alt={article.title} />
       )}
 
       {article.statCards && <BriefingStatCards cards={article.statCards} />}

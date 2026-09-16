@@ -36,14 +36,17 @@ function getMonthGrid(month: Date) {
 
 type TimelineDateHeaderProps = {
   selectedDate: Date
-  /** 실제로 데이터가 존재하는 날짜 목록 — 이 목록에 없는 날짜는 선택할 수 없다. */
-  availableDates: Date[]
+  /** 실데이터가 쌓이기 시작한 가장 이른 날짜. 이전 날짜는 선택할 수 없다. */
+  minDate: Date
+  /** 조회 가능한 가장 늦은 날짜(보통 오늘). 이후 날짜는 선택할 수 없다. */
+  maxDate: Date
   onSelect: (date: Date) => void
 }
 
 export default function TimelineDateHeader({
   selectedDate,
-  availableDates,
+  minDate,
+  maxDate,
   onSelect,
 }: TimelineDateHeaderProps) {
   const [open, setOpen] = useState(false)
@@ -51,7 +54,7 @@ export default function TimelineDateHeader({
 
   const days = getMonthGrid(viewMonth)
   const isAvailable = (date: Date) =>
-    availableDates.some((available) => isSameDay(available, date))
+    date.getTime() >= minDate.getTime() && date.getTime() <= maxDate.getTime()
 
   return (
     <Popover.Root

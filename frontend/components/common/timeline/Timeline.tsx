@@ -30,7 +30,10 @@ export default function Timeline() {
   const pathname = usePathname()
   const { items } = useTimelineSchedule(30000)
 
-  const goToSection = (id: string) => {
+  const goToSection = (id: string, event: React.MouseEvent<HTMLButtonElement>) => {
+    // 사이드바 내부 스크롤에서 클릭한 버튼이 상단에 오도록 앵커링한다.
+    event.currentTarget.scrollIntoView({ behavior: "smooth", block: "start" })
+
     if (pathname === TIMELINE_PAGE_PATH) {
       document.getElementById(id)?.scrollIntoView({
         behavior: "smooth",
@@ -53,7 +56,7 @@ export default function Timeline() {
             <li key={item.id} className="pb-5 last:pb-0">
               <button
                 type="button"
-                onClick={() => goToSection(item.id)}
+                onClick={(event) => goToSection(item.id, event)}
                 className={cn(
                   "flex w-full cursor-pointer items-start gap-3 rounded-lg py-1 text-left transition-colors duration-200",
                   item.status !== "current" && "hover:bg-gray-100"

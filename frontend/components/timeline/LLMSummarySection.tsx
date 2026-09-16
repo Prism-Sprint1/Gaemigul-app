@@ -2,6 +2,7 @@ import { cn } from "cn"
 
 import { Badge } from "@/components/ui"
 import type { LLMSummary, SummaryAccent } from "@/lib/types/TimelineType"
+import GlossaryText from "./GlossaryText"
 import SummaryInfoTooltip from "./SummaryInfoTooltip"
 
 const accentBarClassName: Record<SummaryAccent, string> = {
@@ -18,9 +19,13 @@ const accentBadgeClassName: Record<SummaryAccent, string> = {
 
 type LLMSummarySectionProps = {
   summary: LLMSummary
+  glossary: Record<string, string>
 }
 
-export default function LLMSummarySection({ summary }: LLMSummarySectionProps) {
+export default function LLMSummarySection({
+  summary,
+  glossary,
+}: LLMSummarySectionProps) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
@@ -29,7 +34,9 @@ export default function LLMSummarySection({ summary }: LLMSummarySectionProps) {
             <span aria-hidden>⚡</span>
             {summary.title}
           </div>
-          <p className="text-xs text-neutral-500">{summary.subtitle}</p>
+          <p className="text-xs text-neutral-500">
+            <GlossaryText text={summary.subtitle} glossary={glossary} />
+          </p>
         </div>
         <SummaryInfoTooltip />
       </div>
@@ -38,7 +45,7 @@ export default function LLMSummarySection({ summary }: LLMSummarySectionProps) {
           <div
             key={point.id}
             className={cn(
-              "relative flex flex-col gap-2 overflow-hidden rounded-lg border border-neutral-200 bg-white p-4 before:absolute before:inset-x-0 before:top-0 before:h-1 before:content-['']",
+              "relative flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-4 before:absolute before:inset-x-0 before:top-0 before:h-1 before:rounded-t-lg before:content-['']",
               accentBarClassName[point.accent]
             )}
           >
@@ -54,7 +61,7 @@ export default function LLMSummarySection({ summary }: LLMSummarySectionProps) {
               </Badge>
             </div>
             <p className="text-xs leading-relaxed text-neutral-500">
-              {point.description}
+              <GlossaryText text={point.description} glossary={glossary} />
             </p>
           </div>
         ))}

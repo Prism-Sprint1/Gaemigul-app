@@ -1,23 +1,78 @@
 "use client"
 
-import { useState } from "react"
-import { isSameDay, startOfDay } from "date-fns"
+import { useEffect, useMemo, useState } from "react"
+import { format, isSameDay, startOfDay } from "date-fns"
 
 import { PageTitle } from "@/components/common"
 import { useTimelineSchedule } from "@/components/common/timeline"
 import { TimelineDateHeader, TimelineSection } from "@/components/timeline"
-import { timelineContents } from "@/lib/constant/timelineContent"
+import { getTimelineDay, getTimelineGlossary } from "@/lib/api/timeline"
+import { mapSlotToContent } from "@/lib/timeline-mapper"
+import type { ApiTimelineSlot } from "@/lib/types/TimelineType"
 
-// 백엔드 연동 전이라 DB에 데이터가 있는 날짜는 오늘 하루뿐이다.
-// 추후 연동 시 실제로 데이터가 존재하는 날짜 목록으로 교체한다.
 const TODAY = startOfDay(new Date())
-const AVAILABLE_DATES = [TODAY]
+// 백엔드가 실데이터를 쌓기 시작한 날짜. 이전 날짜는 캘린더에서 선택할 수 없다.
+const MIN_DATE = startOfDay(new Date(2026, 8, 14))
+// 오늘은 새 슬롯이 계속 쌓이므로 이 주기로 다시 불러온다.
+const REFRESH_INTERVAL_MS = 60_000
 
 export default function TimelinePage() {
   const { items } = useTimelineSchedule(30000)
   const [selectedDate, setSelectedDate] = useState(TODAY)
-  // 오늘이 아닌 날짜는 하루치 데이터가 이미 확정돼 있으므로 시간대 잠금 없이 전부 보여준다.
   const isViewingToday = isSameDay(selectedDate, TODAY)
+
+  const [slots, setSlots] = useState<ApiTimelineSlot[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [glossary, setGlossary] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    getTimelineGlossary()
+      .then(setGlossary)
+      .catch(() => setGlossary({}))
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const dateParam = format(selectedDate, "yyyy-MM-dd")
+
+    const load = (showLoading: boolean) => {
+      if (showLoading) setIsLoading(true)
+
+      getTimelineDay(dateParam)
+        .then((data) => {
+          if (cancelled) return
+          setSlots(data)
+          setError(null)
+        })
+        .catch(() => {
+          if (cancelled) return
+          setError("타임라인 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
+          setSlots([])
+        })
+        .finally(() => {
+          if (!cancelled && showLoading) setIsLoading(false)
+        })
+    }
+
+    load(true)
+
+    const isToday = isSameDay(selectedDate, TODAY)
+    const timer = isToday
+      ? setInterval(() => load(false), REFRESH_INTERVAL_MS)
+      : undefined
+
+    return () => {
+      cancelled = true
+      if (timer) clearInterval(timer)
+    }
+  }, [selectedDate])
+
+  const slotByKey = useMemo(() => {
+    const map = new Map<string, ApiTimelineSlot>()
+    slots.forEach((slot) => map.set(slot.slot_key, slot))
+    return map
+  }, [slots])
 
   return (
     <div className="flex w-full flex-col gap-6 px-6 py-4">
@@ -28,28 +83,44 @@ export default function TimelinePage() {
 
       <TimelineDateHeader
         selectedDate={selectedDate}
-        availableDates={AVAILABLE_DATES}
+        minDate={MIN_DATE}
+        maxDate={TODAY}
         onSelect={setSelectedDate}
       />
 
-      <div className="flex w-full flex-col gap-15">
-        {items.map((item) => {
-          const content = timelineContents.find(
-            (timelineContent) => timelineContent.id === item.id
-          )
+      {isLoading && (
+        <p className="py-10 text-center text-sm text-neutral-400">
+          타임라인을 불러오는 중이에요...
+        </p>
+      )}
 
-          if (!content) return null
+      {!isLoading && error && (
+        <p className="py-10 text-center text-sm text-decrease">{error}</p>
+      )}
 
-          return (
-            <TimelineSection
-              key={item.id}
-              item={item}
-              content={content}
-              forceOpen={!isViewingToday}
-            />
-          )
-        })}
-      </div>
+      {!isLoading && !error && slots.length === 0 && (
+        <p className="py-10 text-center text-sm text-neutral-400">
+          이 날짜에는 데이터가 없어요. 휴장일이거나 아직 수집되지 않았어요.
+        </p>
+      )}
+
+      {!isLoading && !error && slots.length > 0 && (
+        <div className="flex w-full flex-col gap-15">
+          {items.map((item) => {
+            const slot = slotByKey.get(item.id)
+            if (!slot && !isViewingToday) return null
+
+            return (
+              <TimelineSection
+                key={item.id}
+                item={item}
+                content={slot ? mapSlotToContent(slot) : null}
+                glossary={glossary}
+              />
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

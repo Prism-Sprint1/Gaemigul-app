@@ -12,7 +12,7 @@ export default function BriefingArticleHeader({
     <div className="flex flex-col gap-5 border-b border-neutral-100">
       <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-neutral-500">
         <span className="flex items-center gap-1.5 font-semibold text-neutral-500">
-          <span className="rounded-full bg-point px-1.5 pt-1 text-[10px] font-bold text-white">
+          <span className="rounded-full bg-point px-1.5 pt-0.5 text-[10px] font-bold text-white">
             {content.tag}
           </span>
           {content.category}
