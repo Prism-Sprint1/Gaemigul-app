@@ -43,9 +43,10 @@ class CalendarEvent(Base):
 
     previous: Mapped[str | None] = mapped_column(Text, default=None)
 
-    # 시장 컨센서스 예상값. FRED가 제공하지 않으므로 현재 항상 NULL
-    forecast: Mapped[str | None] = mapped_column(Text, default=None)
-
     actual: Mapped[str | None] = mapped_column(Text, default=None)
+
+    # actual이 무엇에 대한 값인지 알려주는 짧은 라벨(예: "주당", "공모가", "매출액").
+    # schemas/calendar.py의 CalendarEvent.actual_label 설명 참고.
+    actual_label: Mapped[str | None] = mapped_column(Text, default=None)
 
     status: Mapped[str] = mapped_column(Text)

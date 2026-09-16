@@ -340,7 +340,7 @@ async def ingest_ppi_from_fred() -> CalendarEvent:
 # 기간 카드는 며칠 뒤 STATEMENT와 사실상 중복된 신호이고, 기자회견도 같은 날 STATEMENT와 거의 같은
 # 시각에 겹치는 내용이라 초보 투자자 캘린더에 굳이 별도 카드로 넣을 실익이 적다고 판단했다(2026-09-15
 # 결정, 이전에 합병/분할·유무상증자를 제외한 것과 같은 기준).
-# previous/forecast/actual은 FRED 경제지표처럼 억지로 채우지 않고 항상 None으로 둔다 - FOMC
+# previous/actual은 FRED 경제지표처럼 억지로 채우지 않고 항상 None으로 둔다 - FOMC
 # 일정 자체는 "값"이 아니라 "일정"이기 때문이다. 그래서 status도 FRED처럼 실측값 존재 여부가 아니라
 # 발표 시각이 이미 지났는지(KST 기준 현재 시각과 비교)로 판단한다.
 _FOMC_EVENT_TITLES: dict[str, str] = {
@@ -388,7 +388,6 @@ def _fomc_event(event_date: str, event_type: str) -> CalendarEvent:
         title=_FOMC_EVENT_TITLES[event_type],
         summary=_FOMC_EVENT_SUMMARIES[event_type],
         previous=None,
-        forecast=None,
         actual=None,
         status=_fomc_status(published_at, released_time),
     )
@@ -461,6 +460,21 @@ _DART_EARNINGS_SUMMARY_TEMPLATE = (
 )
 
 
+# actual 값이 구체적으로 무엇에 대한 수치인지 title 내용만으로 판단해서 라벨을 붙인다.
+# category만으로는 판별이 안 되는 경우가 있어서(IPO/합병분할/유무상증자가 전부 category="macro"
+# 로 묶여 있음) title을 기준으로 삼는다. 각 title 형식은 그 title을 실제로 만드는 함수
+# (_dividend_event_from_kis/_dart_earnings_event/_ipo_event_from_kis)에서 고정된 형태로
+# 생성하므로 여기서 하는 문자열 매칭은 추측이 아니라 그 형식을 그대로 아는 것이다.
+def _actual_label_from_title(title: str) -> str | None:
+    if "배당기준일" in title:
+        return "주당"
+    if title.endswith("공모주 청약"):
+        return "공모가"
+    if title.endswith("실적 발표"):
+        return "매출액"
+    return None
+
+
 def _dart_earnings_event(corp_name: str, stock_code: str, disclosure: dict) -> CalendarEvent:
     rcept_dt = disclosure["rcept_dt"]
     published_at = f"{rcept_dt[:4]}-{rcept_dt[4:6]}-{rcept_dt[6:8]}"
@@ -489,8 +503,8 @@ def _dart_earnings_event(corp_name: str, stock_code: str, disclosure: dict) -> C
         title=f"{corp_name} 실적 발표",
         summary=summary,
         previous=None,
-        forecast=None,
         actual=f"{revenue}조원" if revenue is not None else None,
+        actual_label=_actual_label_from_title(f"{corp_name} 실적 발표") if revenue is not None else None,
         status="RELEASED",
     )
 
@@ -544,7 +558,6 @@ def _bok_rate_event(decision_date: str, previous: str, actual: str) -> CalendarE
         title="한국은행 기준금리 결정",
         summary=_BOK_RATE_SUMMARY,
         previous=f"{previous}%",
-        forecast=None,
         actual=f"{actual}%",
         status="RELEASED",
     )
@@ -613,7 +626,6 @@ def _kospi200_expiry_event(expiry_date: str, *, concurrent: bool, today_kst: str
         title=title,
         summary=summary,
         previous=None,
-        forecast=None,
         actual=None,
         status="SCHEDULED" if expiry_date >= today_kst else "RELEASED",
     )
@@ -674,10 +686,10 @@ async def _upsert_event(session: AsyncSession, event: CalendarEvent) -> None:
             """
             INSERT INTO calendar_events
                 (id, "publishedAt", start_date, end_date, "time", region, category,
-                 title, summary, importance, previous, forecast, actual, status)
+                 title, summary, importance, previous, actual, actual_label, status)
             VALUES
                 (:id, :publishedAt, :start_date, :end_date, :time, :region, :category,
-                 :title, :summary, :importance, :previous, :forecast, :actual, :status)
+                 :title, :summary, :importance, :previous, :actual, :actual_label, :status)
             ON CONFLICT (id) DO UPDATE SET
                 "publishedAt" = EXCLUDED."publishedAt",
                 start_date = EXCLUDED.start_date,
@@ -689,8 +701,8 @@ async def _upsert_event(session: AsyncSession, event: CalendarEvent) -> None:
                 summary = EXCLUDED.summary,
                 importance = EXCLUDED.importance,
                 previous = EXCLUDED.previous,
-                forecast = EXCLUDED.forecast,
                 actual = EXCLUDED.actual,
+                actual_label = EXCLUDED.actual_label,
                 status = EXCLUDED.status
             """
         ),
@@ -709,7 +721,7 @@ async def get_events_by_month(session: AsyncSession, year: int, month: int) -> l
         text(
             """
             SELECT id, "publishedAt", start_date, end_date, "time", region, category,
-                   title, summary, importance, previous, forecast, actual, status
+                   title, summary, importance, previous, actual, actual_label, status
             FROM calendar_events
             WHERE "publishedAt" >= :start AND "publishedAt" < :end
             ORDER BY "publishedAt" ASC, "time" ASC NULLS LAST
@@ -722,8 +734,8 @@ async def get_events_by_month(session: AsyncSession, year: int, month: int) -> l
 
 # ---------------------------------------------------------------------------
 # KIS(한국투자증권) 예탁원정보(배당일정) 연동
-# FRED 지표와 달리 "수치 발표"가 아니라 "배당기준일이라는 사실" 자체가 중요한 이벤트라, previous/
-# forecast 개념이 없다. region은 국가만 쓰고 회사명은 title에 넣는다(2026-09-14 결정 사항).
+# FRED 지표와 달리 "수치 발표"가 아니라 "배당기준일이라는 사실" 자체가 중요한 이벤트라, previous
+# 개념이 없다. region은 국가만 쓰고 회사명은 title에 넣는다(2026-09-14 결정 사항).
 # ---------------------------------------------------------------------------
 
 
@@ -781,6 +793,7 @@ def _dividend_event_from_kis(record: dict, today_kst: str) -> CalendarEvent | No
         summary=" ".join(summary_parts),
         previous=None,
         actual=f"{per_sto_divi_amt}원" if per_sto_divi_amt else None,
+        actual_label=_actual_label_from_title(title) if per_sto_divi_amt else None,
         status="SCHEDULED" if published_at >= today_kst else "RELEASED",
     )
 
@@ -943,6 +956,7 @@ def _ipo_event_from_kis(record: dict, today_kst: str) -> CalendarEvent | None:
         summary=" ".join(summary_parts),
         previous=None,
         actual=f"{fix_subscr_pri}원" if fix_subscr_pri else None,
+        actual_label=_actual_label_from_title(title) if fix_subscr_pri else None,
         status="SCHEDULED" if published_at >= today_kst else "RELEASED",
     )
 
