@@ -177,7 +177,7 @@ function DayRows({
             </button>
           </td>
           <td className="p-2 text-left text-[12px] whitespace-nowrap text-muted-foreground">
-            {n.hasTime ? announceLabel(n.publishedAt) : "시간 미정"}
+            {n.hasTime ? announceLabel(n.publishedAt) : "-"}
           </td>
           <td
             className="p-2 text-left text-[12px] whitespace-nowrap"
