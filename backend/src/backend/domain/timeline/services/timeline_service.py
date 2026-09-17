@@ -2,7 +2,7 @@
 # 타임라인 슬롯을 수집·저장·조회한다. 슬롯 시간대 정의와 수집 시각도 여기서 정한다.
 #   collect_and_save       슬롯을 수집해서 DB에 저장 (스케줄러·POST /timeline/collect)
 #   get_day                하루치 슬롯을 DB에서 읽기 (GET /timeline)
-#   run_scheduled_collect  스케줄러가 부르는 진입점 (휴장일 확인 + 실패 로깅, 20:00 슬롯 뒤에는 보고서 생성)
+#   run_scheduled_collect  슬롯 전용 스케줄러 진입점 (휴장일 확인 + 실패 로깅)
 
 import asyncio
 import logging
@@ -25,7 +25,7 @@ from backend.domain.timeline.schemas.timeline import (
 )
 from backend.core.database import get_session_factory
 from backend.domain.timeline.models.timeline import TimelineSlot
-from backend.domain.timeline.services import briefing_service, leading_sector_service, market_hours, market_indicator_service, news_service, prompts, report_service, timeline_repository, top_gainer_service
+from backend.domain.timeline.services import briefing_service, leading_sector_service, market_hours, market_indicator_service, news_service, prompts, timeline_repository, top_gainer_service
 
 # 슬롯 정의. slot_key("0730") -> (DB 값 "07:30", 화면 명칭)
 # prompts.SLOT_TITLES에서 만든다. 슬롯을 추가·삭제하려면 SLOT_TITLES를 고친다
@@ -44,8 +44,9 @@ _SLOTS_WITH_INTRADAY = {"1530"}
 _INTRADAY_TARGET_NAMES = ("KOSPI", "KOSDAQ", "USD/KRW")
 
 # 슬롯별 수집 시각 (시, 분). 바꾸면 스케줄러가 그 시각에 수집한다 (서버 재시작 필요)
-# 15:30 슬롯만 15:35에 수집한다. 15:20~15:30 종가 동시호가 동안 지수가 멈춰 있고, 결과가 15:30~15:32에 걸쳐 반영된다
+# 15:30 슬롯만 15:34에 수집한다. 15:20~15:30 종가 동시호가 동안 지수가 멈춰 있고, 결과가 15:30~15:32에 걸쳐 반영된다
 # (코스피는 15:30, 코스닥은 15:32 틱에 종가가 들어오고, 일부 업종은 그 뒤에 확정된다). 정각에 수집하면 15:29 값이 저장된다
+# 최대한 빨리 보여주되 코스닥 반영(15:32) 뒤 여유를 두려고 15:34로 정했다. 당기려면 15:30~15:37 틱으로 확정 시각을 다시 재볼 것
 # 16:00부터 KRX 애프터마켓이 열려 종목 가격이 다시 움직이므로 16:00 전이어야 한다
 SLOT_COLLECT_TIMES = {
     "0730": (7, 30),
@@ -53,14 +54,10 @@ SLOT_COLLECT_TIMES = {
     "0930": (9, 30),
     "1200": (12, 0),
     "1400": (14, 0),
-    "1530": (15, 35),
+    "1530": (15, 34),
     "1730": (17, 30),
     "2000": (20, 0),
 }
-
-# 이 슬롯의 예약 수집이 끝나면 이어서 일간(마지막 거래일이면 주간도) 보고서를 만든다
-# 보고서는 그날 타임라인 전체를 재료로 쓰므로 마지막 슬롯이어야 한다
-_REPORT_AFTER_SLOT = "2000"
 
 # 슬롯당 뉴스 최대 건수. 값은 news_service._PICK_MAX에서 바꾼다
 _NEWS_LIMIT = news_service._PICK_MAX
@@ -254,7 +251,6 @@ async def get_day(session: AsyncSession, trade_date: date, *, now: datetime | No
 
 # 스케줄러가 SLOT_COLLECT_TIMES 시각에 부른다
 # 휴장일이면 아무것도 하지 않고, 실패해도 예외를 밖으로 내보내지 않는다(다른 슬롯 예약은 유지)
-# _REPORT_AFTER_SLOT 슬롯이 끝나면 이어서 보고서를 만든다 (슬롯 수집이 실패해도 앞선 슬롯들로 보고서는 시도한다)
 async def run_scheduled_collect(slot_key: str) -> None:
     if not market_hours.is_trading_day():
         logger.info("[스케줄러] %s 건너뜀 - 오늘은 장이 열리지 않습니다.", slot_key)
@@ -271,6 +267,3 @@ async def run_scheduled_collect(slot_key: str) -> None:
         )
     except Exception as error:
         logger.error("[스케줄러] %s 수집 실패 - %s: %s", slot_key, type(error).__name__, error, exc_info=True)
-
-    if slot_key == _REPORT_AFTER_SLOT:
-        await report_service.run_scheduled_reports()

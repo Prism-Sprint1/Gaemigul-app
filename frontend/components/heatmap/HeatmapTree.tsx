@@ -1,8 +1,7 @@
 "use client"
 
 import { useEffect, useId, useMemo, useRef, useState } from "react"
-import { ArrowLeft, ChevronRight, Expand, Info, Search } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ChevronRight, Expand, Search } from "lucide-react"
 import {
   formatChange,
   formatKoreanAmount,
@@ -11,11 +10,8 @@ import {
   selectHeatmapSectors,
 } from "@/lib/heatmap-layout"
 import type { HeatmapSector, HeatmapStock } from "@/lib/types/HeatmapType"
-
-interface StockSelection {
-  sector: HeatmapSector
-  stock: HeatmapStock
-}
+import HeatmapLegend from "./HeatmapLegend"
+import HeatmapStockDetail from "./HeatmapStockDetail"
 
 export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -65,23 +61,22 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
   )
   const selected = allStocks.find(({ stock }) => stock.code === activeCode)
   const query = search.trim().toLocaleLowerCase()
-  const searchMatches = query
-    ? allStocks.filter(
-        ({ stock }) =>
-          stock.name.toLocaleLowerCase().includes(query) ||
-          stock.code.includes(query)
+  const matchedCodes = useMemo(() => {
+    if (!query) return null
+    const codes = new Set<string>()
+    for (const { stock } of allStocks) {
+      if (
+        stock.name.toLocaleLowerCase().includes(query) ||
+        stock.code.includes(query)
       )
-    : []
+        codes.add(stock.code)
+    }
+    return codes
+  }, [allStocks, query])
 
   function selectSector(code: string | null) {
     setSectorCode(code)
     setActiveCode(null)
-    setSearch("")
-  }
-
-  function selectStock({ sector, stock }: StockSelection) {
-    setSectorCode(sector.code)
-    setActiveCode(stock.code)
     setSearch("")
   }
 
@@ -91,6 +86,7 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
     const fontSize =
       width >= 125 && height >= 95 ? 17 : width >= 76 && height >= 65 ? 12 : 10
     const selectedTile = activeCode === stock.code
+    const dimmed = matchedCodes !== null && !matchedCodes.has(stock.code)
     return (
       <button
         type="button"
@@ -101,10 +97,11 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
         onMouseMove={() => setActiveCode(stock.code)}
         onFocus={() => setActiveCode(stock.code)}
         onClick={() => setActiveCode(stock.code)}
-        className="absolute inset-px flex cursor-pointer flex-col items-center justify-center overflow-hidden px-0.5 text-center text-white transition-[filter] hover:z-10 hover:brightness-110 focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
+        className="absolute inset-px flex cursor-pointer flex-col items-center justify-center overflow-hidden px-0.5 text-center text-white transition-[filter,opacity] hover:z-10 hover:brightness-110 focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
         style={{
           backgroundColor: heatmapColor(stock.change_rate),
           boxShadow: selectedTile ? "inset 0 0 0 2px white" : undefined,
+          opacity: dimmed ? 0.25 : 1,
           fontSize,
           lineHeight: 1.25,
         }}
@@ -125,88 +122,47 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
 
   return (
     <div className="min-w-0">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          {currentSector ? (
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => selectSector(null)}
-            >
-              <ArrowLeft /> 주요 업종
-            </Button>
-          ) : (
-            <span className="text-xs font-semibold text-neutral-600">
-              주요 {displayedSectors.length}개 업종
-            </span>
-          )}
-          <label className="sr-only" htmlFor="heatmap-sector">
-            확대할 업종 선택
-          </label>
-          <select
-            id="heatmap-sector"
-            value={currentSector?.code ?? ""}
-            onChange={(event) => selectSector(event.target.value || null)}
-            className="h-7 max-w-44 rounded-md border border-neutral-200 bg-white px-2 text-xs text-neutral-600 outline-offset-2 focus-visible:outline-point"
-          >
-            <option value="">업종 선택 · 확대</option>
-            {displayedSectors.map((sector) => (
-              <option key={sector.code} value={sector.code}>
-                {sector.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="relative w-full sm:w-48">
-          <Search className="pointer-events-none absolute top-2 left-2.5 size-3.5 text-neutral-400" />
-          <label className="sr-only" htmlFor="heatmap-search">
-            종목명 또는 종목코드 검색
-          </label>
-          <input
-            id="heatmap-search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") setSearch("")
-            }}
-            placeholder="표시된 기업 검색"
-            autoComplete="off"
-            className="h-8 w-full rounded-lg border border-neutral-200 bg-white pr-2 pl-8 text-xs outline-offset-2 placeholder:text-neutral-400 focus-visible:outline-point"
-          />
-          {query && (
-            <div className="absolute top-9 right-0 left-0 z-30 max-h-64 overflow-auto rounded-lg border bg-white p-1 shadow-lg">
-              <p className="px-2 py-1.5 text-[10px] text-neutral-400">
-                표시된 기업 중 {searchMatches.length}개
-              </p>
-              {searchMatches.map((entry) => (
-                <button
-                  key={entry.stock.code}
-                  type="button"
-                  onClick={() => selectStock(entry)}
-                  className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-neutral-100 focus-visible:bg-neutral-100"
-                >
-                  <span className="truncate font-medium">
-                    {entry.stock.name}
-                  </span>
-                  <span className="text-[10px] text-neutral-400">
-                    {entry.stock.code}
-                  </span>
-                </button>
-              ))}
-              {!searchMatches.length && (
-                <p className="px-2 py-3 text-xs text-neutral-500">
-                  표시된 기업 중 일치하는 종목이 없습니다.
-                </p>
-              )}
+      <div className="mb-3 flex flex-wrap justify-between gap-2">
+        <HeatmapStockDetail id={detailId} selected={selected} />
+        <div className="flex flex-col justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-48">
+              <Search className="pointer-events-none absolute top-2 left-2.5 size-3.5 text-neutral-400" />
+              <label className="sr-only" htmlFor="heatmap-search">
+                종목명 또는 종목코드 검색
+              </label>
+              <input
+                id="heatmap-search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setSearch("")
+                }}
+                placeholder="표시된 기업 검색"
+                autoComplete="off"
+                className="h-8 w-full rounded-sm border border-neutral-200 bg-white pr-2 pl-8 text-xs shadow-sm outline-offset-2 placeholder:text-neutral-400 focus-visible:outline-point"
+              />
             </div>
-          )}
+            <label className="sr-only" htmlFor="heatmap-sector">
+              확대할 업종 선택
+            </label>
+            <select
+              id="heatmap-sector"
+              value={currentSector?.code ?? ""}
+              onChange={(event) => selectSector(event.target.value || null)}
+              className="h-8 max-w-44 rounded-md border border-neutral-200 bg-white px-2 text-xs text-neutral-600 outline-offset-2 focus-visible:outline-point"
+            >
+              <option value="">전체</option>
+              {displayedSectors.map((sector) => (
+                <option key={sector.code} value={sector.code}>
+                  {sector.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <HeatmapLegend />
         </div>
       </div>
-
-      <p className="mb-2 text-[10px] leading-5 text-neutral-500">
-        시가총액 상위 업종 · 큰 업종 4개는 기업 5개씩, 나머지는 4개씩 · 총{" "}
-        {allStocks.length}개 기업
-      </p>
 
       <div
         ref={containerRef}
@@ -215,7 +171,7 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
             ? `${currentSector.name} 업종 히트맵`
             : `주요 ${displayedSectors.length}개 업종 주식 히트맵`
         }
-        className="relative h-[490px] w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800 sm:h-[540px] 2xl:h-[610px]"
+        className="relative h-122.5 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800 sm:h-[540px] 2xl:h-[610px]"
       >
         {sectorRects.map(({ item: sector, x, y, width, height }) => {
           const compact = width < 58 || height < 44
@@ -273,58 +229,6 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
         })}
       </div>
 
-      <div
-        id={detailId}
-        className="mt-2 min-h-[88px] rounded-lg border border-neutral-200 bg-white px-3 py-3"
-        aria-live="polite"
-      >
-        {selected ? (
-          <div className="grid grid-cols-2 gap-x-5 gap-y-2 text-xs sm:grid-cols-[1.3fr_1fr_1fr_1fr]">
-            <div>
-              <p className="text-[10px] text-neutral-400">
-                {selected.sector.name} · {selected.stock.code}
-              </p>
-              <p className="mt-1 truncate font-bold">{selected.stock.name}</p>
-              <p
-                className="mt-0.5 font-semibold tabular-nums"
-                style={{
-                  color:
-                    selected.stock.change_rate === null ||
-                    selected.stock.change_rate === 0
-                      ? "#737373"
-                      : selected.stock.change_rate > 0
-                        ? "#e52828"
-                        : "#2563eb",
-                }}
-              >
-                {formatChange(selected.stock.change_rate)}
-              </p>
-            </div>
-            <Detail
-              label="현재가"
-              value={`${selected.stock.price.toLocaleString("ko-KR")}원`}
-            />
-            <Detail
-              label="시가총액"
-              value={formatKoreanAmount(selected.stock.market_cap)}
-            />
-            <Detail
-              label="선택 기간 거래량"
-              value={formatKoreanAmount(selected.stock.volume, "주")}
-            />
-          </div>
-        ) : (
-          <div className="flex min-h-14 items-center gap-2 text-xs leading-relaxed text-neutral-400">
-            <Info className="size-4 shrink-0" />
-            <p>
-              종목을 가리키거나 선택하면 상세 정보를 볼 수 있어요.
-              <br />
-              작은 종목은 업종 확대 또는 검색으로 확인하세요.
-            </p>
-          </div>
-        )}
-      </div>
-
       {currentSector && (
         <details className="mt-3 rounded-lg border border-neutral-200 bg-white text-xs">
           <summary className="cursor-pointer px-3 py-2.5 font-medium text-neutral-600">
@@ -365,15 +269,6 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
           </div>
         </details>
       )}
-    </div>
-  )
-}
-
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[10px] text-neutral-400">{label}</p>
-      <p className="mt-1 font-semibold tabular-nums">{value}</p>
     </div>
   )
 }

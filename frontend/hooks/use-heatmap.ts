@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react"
 import { getHeatmap } from "@/lib/api/heatmap"
+import { isAfterMarketClose } from "@/lib/heatmap-format"
 import {
   beginManualRefresh,
   getManualRefreshWaitSeconds,
@@ -16,7 +17,9 @@ import type {
 
 const FALLBACK_INTERVAL_MS = 10 * 60 * 1000
 
-function nextPollDelay(data: HeatmapResponse | null) {
+/** 장 마감(15:30 KST) 이후에는 자동 갱신을 멈춘다. null이면 다음 폴링을 예약하지 않는다. */
+function nextPollDelay(data: HeatmapResponse | null): number | null {
+  if (isAfterMarketClose()) return null
   // A first collection can take minutes; check progress without retriggering KIS.
   if (
     !data ||
@@ -46,7 +49,7 @@ export function useHeatmap(market: HeatmapMarket, period: HeatmapPeriod) {
     getServerManualRefreshWaitSeconds
   )
   const refresh = useCallback(() => {
-    if (isLoading || !beginManualRefresh()) return
+    if (isLoading || isAfterMarketClose() || !beginManualRefresh()) return
     setRequestVersion((value) => value + 1)
   }, [isLoading])
 
@@ -76,7 +79,8 @@ export function useHeatmap(market: HeatmapMarket, period: HeatmapPeriod) {
         clearTimeout(timeout)
         if (!disposed) {
           setIsLoading(false)
-          pollTimer = setTimeout(poll, nextPollDelay(snapshot))
+          const delay = nextPollDelay(snapshot)
+          if (delay !== null) pollTimer = setTimeout(poll, delay)
         }
       }
     }

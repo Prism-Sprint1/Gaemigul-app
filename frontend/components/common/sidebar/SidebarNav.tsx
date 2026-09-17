@@ -8,11 +8,15 @@ import { sidebarNavItems } from "@/lib/constant/sidebar"
 
 import { Badge } from "../../ui"
 
+// 브리핑 페이지는 실시간 페로몬(타임라인)의 하위 화면이라 같은 항목을 active 처리한다.
+const TIMELINE_PATH = "/timeline"
+const BRIEFING_PATH = "/briefing"
+
 export default function SidebarNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="px-2.5 py-3">
+    <nav className="bg-white px-2.5 py-3">
       <ul className="flex flex-col gap-2.5">
         {sidebarNavItems.map(
           ({
@@ -24,7 +28,9 @@ export default function SidebarNav() {
             activeBadgeClassName,
           }) => {
             const isActive =
-              pathname === href || pathname.startsWith(`${href}/`)
+              pathname === href ||
+              pathname.startsWith(`${href}/`) ||
+              (href === TIMELINE_PATH && pathname.startsWith(BRIEFING_PATH))
 
             return (
               <li key={href} className="flex items-center justify-between">

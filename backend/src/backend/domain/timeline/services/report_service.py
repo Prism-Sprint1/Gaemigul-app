@@ -5,7 +5,7 @@
 #   get_report               날짜로 보고서 조회 (GET /timeline/report)
 #   get_report_list          월별 보고서 목록 - 주 묶음 (GET /timeline/reports)
 #   to_response              DB 보고서 -> 응답 DTO (비율·증감률·VKOSPI 뱃지 계산 포함)
-#   run_scheduled_reports    20:00 슬롯이 끝나면 timeline_service가 부른다 (휴장일·마지막 거래일 판단 + 실패 로깅)
+#   run_scheduled_reports    20:05 전용 예약 작업이 부른다 (휴장일·마지막 거래일 판단 + 실패 로깅)
 #
 # LLM 문구는 타임라인 브리핑과 같은 원칙으로 만든다
 #   먼저 수치를 저장하고, 그 수치를 [확정 수치]로, 타임라인 글·뉴스를 따로 나눠 넘겨 없는 숫자를 만들지 못하게 한다
@@ -15,6 +15,7 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -298,39 +299,109 @@ def _generate_content(report_type: str, start_date: date, end_date: date, data: 
     content["terms"] = _pick_terms(content, answer.get("terms") or [])
     return {
         "content": content,
-        "main_scene": _image_scene(answer.get("main_image"), f"{report_type} {start_date} main"),
-        "section1_scene": _image_scene(answer.get("section1_image"), f"{report_type} {start_date} section1"),
+        "main_scene": _image_scene(answer.get("main_image"), f"{report_type} {start_date} main", content["summary"], role="main", layout_index=start_date.toordinal()),
+        "section1_scene": _image_scene(answer.get("section1_image"), f"{report_type} {start_date} section1", content["sections"][0]["description"], role="section1", layout_index=start_date.toordinal()),
+        "main_annotations": _image_annotations(answer.get("main_image"), content["summary"], content["title"], role="main"),
+        "section1_annotations": _image_annotations(answer.get("section1_image"), content["sections"][0]["description"], content["sections"][0]["title"], role="section1"),
     }
 
 
-# LLM이 고른 이미지 재료 {"symbols": [원인 소재 이름], "flow": 자금 흐름 이름, "mood": 분위기 이름} -> 영어 그림 설명
-# prompts.IMAGE_SCENE 틀에 서울 도심·분위기·원인 소재·자금 흐름을 채운다. 목록에 없는 이름은 버리고(경고) 기본값을 쓴다
-def _image_scene(plan, label: str) -> str:
+# 문구에서 코스피의 직접적인 등락 표현만 찾는다. 모호하거나 상반되면 방향을 그리지 않는다.
+# 한국어 원문·양방향 예시를 이미지 모델에 보내지 않고 확정한 영어 지시 하나만 보낸다.
+def _image_market_direction(source_text: str) -> str | None:
+    matches = re.findall(
+        r"(?:코스피|KOSPI)(?:지수| 지수)?(?:가|는|은|도)?\s*"
+        r"(?:[0-9.,%]+|포인트|넘게|넘는|이상|이하|가까이|약|대|큰\s*폭으로|소폭|크게|\s){0,30}"
+        r"(하락|급락|약세|내렸|떨어졌|상승|급등|강세|반등|회복|올랐)",
+        source_text, re.IGNORECASE,
+    )
+    directions = {"down" if value in {"하락", "급락", "약세", "내렸", "떨어졌"} else "up" for value in matches}
+    return next(iter(directions)) if len(directions) == 1 else None
+
+
+# 원문에 있는 표현만 짧은 한글 라벨로 쓴다. 근거가 없으면 방향 없는 소재명으로 둔다.
+def _image_prop_label(name: str, source_text: str) -> str:
+    if name == "금리·연준·중앙은행":
+        if "금리 인상 우려" in source_text:
+            return "금리 우려"
+        return "금리"
+    if name == "유가·원유":
+        if re.search(r"(?:국제)?유가(?:가|는|의)?\s*(?:상승|급등)", source_text):
+            return "유가 상승"
+        if re.search(r"(?:국제)?유가(?:가|는|의)?\s*(?:하락|급락)", source_text):
+            return "유가 하락"
+        return "유가"
+    return {"인공지능(AI)": "인공지능", "환율·달러": "환율", "국채·채권": "국채"}.get(name, name.split("·")[0])
+
+
+def _image_annotations(plan, source_text: str, headline: str, *, role: str = "main") -> dict:
+    plan = plan if isinstance(plan, dict) else {}
+    names = list(dict.fromkeys(name for name in (plan.get("symbols") or []) if name in prompts.IMAGE_SYMBOLS))[:_IMAGE_SYMBOL_COUNT]
+    labels = []
+    direction = _image_market_direction(source_text)
+    if role == "main" and direction:
+        labels.append("코스피 하락" if direction == "down" else "코스피 상승")
+    if role != "main":
+        labels.extend(_image_prop_label(name, source_text) for name in names)
+    flow = plan.get("flow")
+    if role == "main" and flow in {"외국인 매도", "외국인 매수"}:
+        labels.append(flow)
+    return {"headline": headline, "labels": list(dict.fromkeys(labels))[:4]}
+
+
+# 기존 LLM의 소재·흐름·분위기 키 유지. Pollinations에는 글자 없는 영어 장면만 보내며 추가 LLM 호출은 없다.
+def _image_scene(plan, label: str, source_text: str = "", *, role: str = "main", layout_index: int = 0) -> str:
     plan = plan if isinstance(plan, dict) else {}
     picked = [name for name in plan.get("symbols") or [] if isinstance(name, str)]
     names = list(dict.fromkeys(name for name in picked if name in prompts.IMAGE_SYMBOLS))[:_IMAGE_SYMBOL_COUNT]
+    # 메인은 시장 결과와 자금 흐름, 섹션1은 원인 분석을 맡는다. 같은 원인 소품을 두 장에 반복하지 않는다.
+    scene_names = [] if role == "main" else names
     flow, mood = plan.get("flow"), plan.get("mood")
     if len(names) < len(picked) or flow not in prompts.IMAGE_FLOWS or mood not in prompts.IMAGE_MOODS:
         logger.warning("%s 이미지 재료에 목록에 없는 이름이 있습니다 - 소재 %s, 흐름 %s, 분위기 %s", label, picked, flow, mood)
+    layouts = prompts.IMAGE_MAIN_LAYOUTS if role == "main" else prompts.IMAGE_SECTION_LAYOUTS
     values = {
-        "city": prompts.IMAGE_CITY,
+        "city": layouts[layout_index % len(layouts)],
         "mood": prompts.IMAGE_MOODS.get(mood, prompts.IMAGE_MOODS[_DEFAULT_IMAGE_MOOD]),
-        "flow": prompts.IMAGE_FLOWS.get(flow, prompts.IMAGE_FLOWS[_DEFAULT_IMAGE_FLOW]),
-        "causes": " and ".join(prompts.IMAGE_SYMBOLS[name] for name in names),
+        "flow": prompts.IMAGE_FLOWS.get(flow, prompts.IMAGE_FLOWS[_DEFAULT_IMAGE_FLOW]) if role == "main" else prompts.IMAGE_FLOWS[_DEFAULT_IMAGE_FLOW],
+        "causes": " and ".join(prompts.IMAGE_SYMBOLS[name] for name in scene_names),
     }
-    return (prompts.IMAGE_SCENE if names else prompts.IMAGE_SCENE_NO_CAUSE).format(**values)
+    scene = (prompts.IMAGE_SCENE if scene_names else prompts.IMAGE_SCENE_NO_CAUSE).format(**values)
+    direction = _image_market_direction(source_text) if role == "main" else None
+    if direction == "down":
+        scene += " On the wall behind the main person, one precisely drawn closed rectangular wooden frame contains exactly ONE thick BLUE zigzag arrow descending from upper left to lower right, ending at the bottom right. All four straight frame borders and all four corners must be fully visible and connected. Keep the entire arrow line and arrowhead inside the cream panel with generous inner padding on every side; it must never touch, overlap, cross or protrude beyond the rectangular border. The main person looks mildly worried. This single blue arrow is the only saturated color. The panel has a plain cream surface with no grid or writing."
+    elif direction == "up":
+        scene += " On the wall behind the main person, one precisely drawn closed rectangular wooden frame contains exactly ONE thick RED zigzag arrow ascending from lower left to upper right, ending at the top right. All four straight frame borders and all four corners must be fully visible and connected. Keep the entire arrow line and arrowhead inside the cream panel with generous inner padding on every side; it must never touch, overlap, cross or protrude beyond the rectangular border. The main person looks gently hopeful. This single red arrow is the only saturated color. The panel has a plain cream surface with no grid or writing."
+    else:
+        scene += ' No market chart or colored arrow; keep the entire scene in neutral tones.'
+    if role == "main":
+        scene += " Compose this as a wide whole-market overview: the market outcome, central investor, wall arrow and doorway money flow are the visual story."
+    else:
+        scene += (
+            " Compose this as a close cause-explanation workshop, clearly different from a whole-market overview. "
+            "Place the main person at the right third, actively examining the economic cause props on a workbench at the left. "
+            "Show the cause props larger and more concrete. No doorway, no secondary investor, no suitcase, no money-flow arrow and no market-direction chart."
+        )
+    if re.search(r"의료[·ㆍ\s]*정밀|의료기기|의료·정밀기기", source_text):
+        scene += " A small neutral-gray microscope and caliper on a subordinate shelf represent medical precision instruments."
+    return scene
 
 
-# 그림 설명으로 이미지를 만들어 올리고 공개 URL을 돌려준다 (동기). 실패하면 None
-# 경로에 생성 시각을 넣는다 - 같은 경로에 덮어쓰면 CDN 캐시 때문에 한동안 옛 이미지가 보인다
-def _make_image(scene: str, report_type: str, start_date: date, name: str) -> str | None:
+# 그림 설명으로 이미지를 만들어 고정된 보고서 파일명으로 올리고 공개 URL을 돌려준다 (동기). 실패하면 None
+# 같은 파일을 교체할 때 DB URL의 버전 쿼리를 바꿔 CDN의 이전 이미지 캐시를 피한다.
+def _make_image(scene: str, report_type: str, start_date: date, name: str, annotations: dict | None = None) -> str | None:
     if not scene:
         logger.warning("%s %s %s 이미지 그림 설명이 없어 건너뜁니다.", report_type, start_date, name)
         return None
     try:
         image = image_client.generate_image(f"{scene}, {prompts.IMAGE_STYLE}")
-        path = f"{report_type.lower()}/{start_date}/{name}_{datetime.now(_KST):%H%M%S}.jpg"
-        return storage_client.upload_file(_IMAGE_BUCKET, path, image, "image/jpeg")
+        if annotations:
+            image = image_client.add_korean_labels(image, headline=annotations["headline"], labels=annotations["labels"])
+        extension, content_type = image_client.image_format(image)
+        generated_at = datetime.now(_KST)
+        path = f"{report_type.lower()}/{start_date}/{name}_{report_type.lower()}_{start_date:%Y%m%d}.{extension}"
+        public_url = storage_client.upload_file(_IMAGE_BUCKET, path, image, content_type)
+        return f"{public_url}?v={generated_at:%Y%m%d%H%M%S%f}"
     except (RuntimeError, KeyError, ValueError, httpx.HTTPError) as error:
         logger.warning("%s %s %s 이미지 생성·업로드 실패 - %s: %s", report_type, start_date, name, type(error).__name__, error)
         return None
@@ -348,9 +419,9 @@ async def _write_report(session: AsyncSession, report: TimelineReport, data: str
 
     await report_repository.save_report_content(session, report_type, start_date, generated["content"])
 
-    # 두 장을 동시에 요청하면 Cloudflare가 429(요청 한도 초과)를 줄 수 있어 한 장씩 만든다
-    main_url = await asyncio.to_thread(_make_image, generated["main_scene"], report_type, start_date, "main")
-    section1_url = await asyncio.to_thread(_make_image, generated["section1_scene"], report_type, start_date, "section1")
+    # 생성 서비스의 요청 한도를 고려해 두 장을 순차 생성한다
+    main_url = await asyncio.to_thread(_make_image, generated["main_scene"], report_type, start_date, "main", generated["main_annotations"])
+    section1_url = await asyncio.to_thread(_make_image, generated["section1_scene"], report_type, start_date, "section1", generated["section1_annotations"])
     return await report_repository.save_report_images(session, report_type, start_date, main_image_url=main_url, section1_image_url=section1_url)
 
 
