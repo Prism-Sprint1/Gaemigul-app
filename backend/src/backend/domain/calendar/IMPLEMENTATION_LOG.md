@@ -1246,7 +1246,7 @@ federalreserve.gov/monetarypolicy/fomccalendars.htm도 API·JSON·ICS 없이 HTM
 
 - 8회 회의 날짜는 그대로 유지(1/27-28, 3/17-18, 4/28-29, 6/16-17, 7/28-29, 9/15-16,
   10/27-28, 12/8-9)
-- SEP 동반 회의(*): 3월/6월/9월/12월 — 공식 페이지의 `panel-footer` 각주로 재확인
+- SEP 동반 회의(\*): 3월/6월/9월/12월 — 공식 페이지의 `panel-footer` 각주로 재확인
 - 의사록(Minutes) 공개일: 공식 페이지 원문(raw HTML)에서 "Released ..." 문구를 직접 확인.
   1월→2/18, 3월→4/8, 4월→5/20, 6월→7/8, 7월→8/19. **9월/10월/12월 회의는 아직 열리지
   않았거나(9월은 오늘 진행 중) 공식 캘린더에 의사록 공개일 자체가 비어 있음** — "3주 뒤"라는
@@ -1422,6 +1422,7 @@ API·공시원문(document.xml)은 1회성 조사 스크립트로만 확인했�
 일부).
 
 **분기당 이 report_nm으로 정확히 2번 공시된다**(직접 원문 대조로 확인, 아래 3번 참고):
+
 - 분기 종료 후 약 1~1.5주 뒤: "가이던스"성 1차 공시 (매출액/영업이익만, 조원 단위 반올림)
 - 분기 종료 후 약 4주 뒤: "상세" 2차 공시 (매출액/영업이익/법인세비용차감전순이익/당기순이익
   전부, 억원 단위 정확한 수치) — 같은 날 "[기재정정]"으로 한 번 더 올라오는 경우가 많음
@@ -1432,18 +1433,19 @@ document.xml로 1차/2차 잠정실적 공시 원문을 직접 대조해서 확�
 정리하면:
 
 | 대상 분기 | 1차(가이던스) rcept_dt | 2차(상세) rcept_dt | 정기보고서 rcept_dt | 정기보고서 종류 |
-|---|---|---|---|---|
-| 2024 Q4 | 2025-01-08 | 2025-01-31 | 2025-03-11 | 사업보고서 |
-| 2025 Q1 | 2025-04-08 | 2025-04-30 | 2025-05-15 | 분기보고서 |
-| 2025 Q2 | 2025-07-08 | 2025-07-31 | 2025-08-14 | 반기보고서 |
-| 2025 Q3 | 2025-10-08 | 2025-10-31 | 2025-11-14 | 분기보고서 |
-| 2025 Q4 | 2026-01-08 | 2026-01-29 | 2026-03-10 | 사업보고서 |
-| 2026 Q1 | 2026-04-07 | 2026-04-30 | 2026-05-15 | 분기보고서 |
-| 2026 Q2 | 2026-07-07 | 2026-07-30 | 2026-08-14 | 반기보고서 |
+| --------- | ---------------------- | ------------------ | ------------------- | --------------- |
+| 2024 Q4   | 2025-01-08             | 2025-01-31         | 2025-03-11          | 사업보고서      |
+| 2025 Q1   | 2025-04-08             | 2025-04-30         | 2025-05-15          | 분기보고서      |
+| 2025 Q2   | 2025-07-08             | 2025-07-31         | 2025-08-14          | 반기보고서      |
+| 2025 Q3   | 2025-10-08             | 2025-10-31         | 2025-11-14          | 분기보고서      |
+| 2025 Q4   | 2026-01-08             | 2026-01-29         | 2026-03-10          | 사업보고서      |
+| 2026 Q1   | 2026-04-07             | 2026-04-30         | 2026-05-15          | 분기보고서      |
+| 2026 Q2   | 2026-07-07             | 2026-07-30         | 2026-08-14          | 반기보고서      |
 
 **세 날짜가 전부 다르다.** 1차 공시가 항상 가장 빠르고(분기 종료 후 7~9일), 2차 공시가 그
 2.5~3주 뒤(분기 종료 후 28~31일), 정기보고서가 가장 늦다(1차 대비 +31~62일, 2차 대비
 +14~40일). 2026년 1분기를 document.xml로 직접 대조한 결과:
+
 - 1차(04-07): 매출액 133.00(조원), 영업이익 57.20(조원) — 당기순이익 항목 자체가 "-"로 비어있음
 - 2차(04-30): 매출액 1,338,734(억원=133.8734조, 1차와 정합), 영업이익 572,328(억원),
   법인세비용차감전계속사업이익 588,284(억원), 당기순이익 472,253(억원), 지배기업소유주지분
@@ -1455,6 +1457,7 @@ document.xml로 1차/2차 잠정실적 공시 원문을 직접 대조해서 확�
 ### 4. DART에서 실적 발표 이벤트를 만들 때 쓸 날짜
 
 **1차(가이던스) 공시의 rcept_dt를 "실적 발표일"로 쓰는 것이 적절하다.** 이유:
+
 - 시장이 실제로 반응하는 시점은 매출액/영업이익이 처음 공개되는 1차 공시일이다(뉴스 헤드라인도
   보통 이날 나옴) - 2차 공시는 이미 알려진 숫자에 당기순이익을 추가하는 것이라 시장 임팩트가
   1차보다 작음
@@ -1485,6 +1488,7 @@ bfefrmtrm_nm, bfefrmtrm_dt, bfefrmtrm_amount, ord, currency
 ### 6. 매출액/영업이익/당기순이익 필드 확인
 
 2025 사업보고서(CFS, 연결) 기준 실제 값:
+
 - 매출액: 333,605,938,000,000원 (약 333.6조)
 - 영업이익: 43,601,051,000,000원 (약 43.6조)
 - 당기순이익(손실): 45,206,805,000,000원 (약 45.2조) - `account_nm == "당기순이익(손실)"`로
@@ -1543,13 +1547,13 @@ category="earnings" 고정)대로 삼성전자 1개 기업의 실적 이벤트�
 
 - `_dart_quarter_period(rcept_dt)`: 1차 공시 발표월(1/4/7/10월 - 삼성전자가 실제로 이 네
   달에만 1차 공시를 낸다는 걸 실측으로 확인)로 `fnlttSinglAcnt` 조회에 쓸 `(bsns_year,
-  reprt_code, 분기라벨)`을 판단. 1월 공시는 전년도 4분기/연간(`reprt_code="11011"`)으로
+reprt_code, 분기라벨)`을 판단. 1월 공시는 전년도 4분기/연간(`reprt_code="11011"`)으로
   처리(12월 결산이라 1월엔 전년도 실적이 나옴)
 - `_format_trillion_won()`: 원 단위 정수를 "조원" 문자열(소수 1자리)로 변환, 값 없으면 `None`
   그대로 유지(0으로 채우지 않음)
 - `_dart_earnings_event()`: `id="dart-earnings-{stock_code}-{rcept_dt}"`(기존
   `fred-{series}-{date}`/`fomc-{date}-{type}`와 같은 소스-식별자-날짜 규칙), `category=
-  "earnings"`, `region="한국"`, `title="{corp_name} 실적 발표"`, `time=None`(정확한 발표
+"earnings"`, `region="한국"`, `title="{corp_name} 실적 발표"`, `time=None`(정확한 발표
   시각을 DART가 주지 않으므로 임의로 채우지 않음), `start_date`/`end_date`는 단일 발표일이라
   기존 FRED 방식과 동일하게 `None`(다일 이벤트가 아니므로 KIS의 IPO/합병분할과는 다름),
   `previous=None`/`forecast=None`(FRED 방식과 혼동하지 않도록 임의로 채우지 않음),
@@ -1581,15 +1585,15 @@ end_date)` 신규. 기존 `_upsert_event()`(id 충돌 시 UPDATE)를 그대로 �
 - `category`는 7건 전부 `"earnings"`
 - 실제 DART 매출액/영업이익/당기순이익(조원, `fnlttSinglAcnt.json` CFS 기준):
 
-  | 분기 | 매출액 | 영업이익 | 당기순이익 |
-  |---|---|---|---|
-  | 2024 Q4(연간) | 300.9 | 32.7 | 34.5 |
-  | 2025 Q1 | 79.1 | 6.7 | 8.2 |
-  | 2025 Q2 | 74.6 | 4.7 | 5.1 |
-  | 2025 Q3 | 86.1 | 12.2 | 12.2 |
-  | 2025 Q4(연간) | 333.6 | 43.6 | 45.2 |
-  | 2026 Q1 | 133.9 | 57.2 | 47.2 |
-  | 2026 Q2 | 171.5 | 89.5 | 71.6 |
+  | 분기          | 매출액 | 영업이익 | 당기순이익 |
+  | ------------- | ------ | -------- | ---------- |
+  | 2024 Q4(연간) | 300.9  | 32.7     | 34.5       |
+  | 2025 Q1       | 79.1   | 6.7      | 8.2        |
+  | 2025 Q2       | 74.6   | 4.7      | 5.1        |
+  | 2025 Q3       | 86.1   | 12.2     | 12.2       |
+  | 2025 Q4(연간) | 333.6  | 43.6     | 45.2       |
+  | 2026 Q1       | 133.9  | 57.2     | 47.2       |
+  | 2026 Q2       | 171.5  | 89.5     | 71.6       |
 
 - DB 중복 방지: `ingest_preliminary_earnings_from_dart()`를 두 번 연속 실행해도 7건 그대로
   (upsert라 덮어쓰기만 되고 새 행 생성 안 됨) 확인
@@ -1709,11 +1713,11 @@ timeline(지표 바·슬롯 수집·보고서)·briefing 도메인이 이미 들
 
 `get_corp_codes()` + `find_corp_by_stock_code()`로 조회해서 확인:
 
-| 기업 | corp_code | stock_code |
-|---|---|---|
-| 삼성전자 | 00126380 | 005930 |
-| SK하이닉스 | 00164779 | 000660 |
-| 현대차(DART 등록명: 현대자동차) | 00164742 | 005380 |
+| 기업                            | corp_code | stock_code |
+| ------------------------------- | --------- | ---------- |
+| 삼성전자                        | 00126380  | 005930     |
+| SK하이닉스                      | 00164779  | 000660     |
+| 현대차(DART 등록명: 현대자동차) | 00164742  | 005380     |
 
 ### 발견한 문제: `_PRELIMINARY_EARNINGS_KEYWORD`가 현대차의 월간 판매실적까지 잘못 잡음
 
@@ -1760,11 +1764,11 @@ SK하이닉스·현대차는 삼성전자와 달리 **분기당 1건만** 공시
 - Supabase 전체: 167 → **181건**(+14, 신규 2개 기업분만 순증)
 - 각 기업 실제 DART 수치(조원, CFS 기준) 일부:
 
-  | 기업 | 2025 Q1 매출 | 2025 Q1 영업이익 | 2025 Q1 당기순이익 |
-  |---|---|---|---|
-  | 삼성전자 | 79.1 | 6.7 | 8.2 |
-  | SK하이닉스 | 17.6 | 7.4 | 8.1 |
-  | 현대차 | 44.4 | 3.6 | 3.4 |
+  | 기업       | 2025 Q1 매출 | 2025 Q1 영업이익 | 2025 Q1 당기순이익 |
+  | ---------- | ------------ | ---------------- | ------------------ |
+  | 삼성전자   | 79.1         | 6.7              | 8.2                |
+  | SK하이닉스 | 17.6         | 7.4              | 8.1                |
+  | 현대차     | 44.4         | 3.6              | 3.4                |
 
 - `GET /calendar/events`: 2026-01/04월, 2025-10월 각각 조회해서 세 기업의
   `dart-earnings-{stock_code}-*` 이벤트가 해당 월에 정확히 1건씩(총 3건) 포함되는 것 확인,
@@ -1834,6 +1838,7 @@ SK하이닉스·현대차는 삼성전자와 달리 **분기당 1건만** 공시
 
 기존 시딩 스크립트를 그대로 재실행해서 "지금" 기준으로 상태를 다시 계산시켰다(로직 변경 없음,
 데이터만 최신화):
+
 - `scripts/seed_kis_dividends.py`, `scripts/seed_kis_corporate_actions.py`(IPO)
 - `scripts/seed_2026_calendar.py`(FRED - 그사이 새로 발표된 실측값이 있으면 같이 반영)
 - `scripts/seed_fomc_2026.py`(FOMC - 시각 기준 재계산, 9/16 회의는 아직 발표 전이라 그대로
@@ -1884,17 +1889,17 @@ SK하이닉스·현대차는 삼성전자와 달리 **분기당 1건만** 공시
 
 기존 `calendar_events`와 같은 방식(KST 기준 관리, id로 upsert)을 그대로 따르는 설계.
 
-| 컬럼 | 타입 | 설명 |
-|---|---|---|
-| `id` | text (PK) | 예: `"ai-summary-2026-09-14"` (그 주 월요일 날짜) |
-| `week_start` | text | 그 주 월요일(KST, `YYYY-MM-DD`) |
-| `week_end` | text | 그 주 토요일(앱이 월~토 6일 주 기준) |
-| `headline` | text | 맨 위 굵은 한 줄 요약 |
-| `highlights` | text | "이번주 주요 소식이에요" 문단 |
-| `additional_notes` | text (nullable) | "이런 소식도 있어요" 문단 |
-| `event_ids` | jsonb/text[] | 이 요약이 참고한 `calendar_events.id` 목록 |
-| `generated_at` | timestamp | 생성 시각 |
-| `model` | text | 어떤 LLM으로 생성했는지(감사/디버깅용) |
+| 컬럼               | 타입            | 설명                                              |
+| ------------------ | --------------- | ------------------------------------------------- |
+| `id`               | text (PK)       | 예: `"ai-summary-2026-09-14"` (그 주 월요일 날짜) |
+| `week_start`       | text            | 그 주 월요일(KST, `YYYY-MM-DD`)                   |
+| `week_end`         | text            | 그 주 토요일(앱이 월~토 6일 주 기준)              |
+| `headline`         | text            | 맨 위 굵은 한 줄 요약                             |
+| `highlights`       | text            | "이번주 주요 소식이에요" 문단                     |
+| `additional_notes` | text (nullable) | "이런 소식도 있어요" 문단                         |
+| `event_ids`        | jsonb/text[]    | 이 요약이 참고한 `calendar_events.id` 목록        |
+| `generated_at`     | timestamp       | 생성 시각                                         |
+| `model`            | text            | 어떤 LLM으로 생성했는지(감사/디버깅용)            |
 
 `event_ids`로 실제 이벤트를 참조만 하고, "주요 경제지표" 표는 프런트가 이미 갖고 있는
 `GET /calendar/events` 데이터와 조인해서 그리는 방식 - 이벤트 내용을 이 테이블에 중복
@@ -2060,7 +2065,7 @@ CREATE UNIQUE INDEX idx_calendar_weekly_summaries_week_start
 - `npx tsc --noEmit` 통과
 - 백엔드(8080)/프런트(3000) 기동 후 Playwright로 "자세히 보기" 클릭 → 실제 팝업 캡처.
   2026-09-15(오늘) 기준 이번 주(9/14~9/19)에 해당하는 FOMC 이벤트 2건(`미국 경제전망(SEP)
-  공개`, `미국 FOMC 금리결정`, 둘 다 9/17 발표 예정)이 표에 정확히 표시되는 것 확인 -
+공개`, `미국 FOMC 금리결정`, 둘 다 9/17 발표 예정)이 표에 정확히 표시되는 것 확인 -
   헤드라인도 하드코딩이 아니라 `events.length`(=2)로 실시간 계산된 값
 - 테스트 후 두 서버 모두 종료
 
@@ -2120,10 +2125,10 @@ ADD COLUMN news_ids jsonb NOT NULL DEFAULT '[]'::jsonb;
 `event_ids`(계산 근거: `calendar_events.id` 목록)와 대칭되는 구조로, `news_ids`는
 `additional_notes`를 만들 때 참고한 `timeline_news.id` 목록을 담는다. 최종 컬럼 구성:
 
-| 컬럼 | 근거 데이터 |
-|---|---|
-| `highlights` | `event_ids` → `calendar_events` |
-| `additional_notes` | `news_ids` → `timeline_news` |
+| 컬럼               | 근거 데이터                     |
+| ------------------ | ------------------------------- |
+| `highlights`       | `event_ids` → `calendar_events` |
+| `additional_notes` | `news_ids` → `timeline_news`    |
 
 ### 다음 단계
 
@@ -2225,15 +2230,15 @@ additional_notes`에 저장하고 `news_ids`에 근거 기사 id(예: [6, 49, 54
 
 - KIS 공식 GitHub(`koreainvestment/open-trading-api`)에서 4개 API의 정확한 URI/TR_ID/파라미터
   확인 후, 기존 `kis_client.get_access_token()`을 그대로 재사용해 실제 라이브 호출로 검증
-- **국내옵션전광판_옵션월물리스트**(`FHPIO056104C0`): 응답 필드가 `mtrt_yymm_code`/
+- **국내옵션전광판\_옵션월물리스트**(`FHPIO056104C0`): 응답 필드가 `mtrt_yymm_code`/
   `mtrt_yymm` 2개뿐 - 만기 "년월"만 주고 정확한 날짜는 없음
-- **국내옵션전광판_선물**(`FHPIF05030200`, `display-board-futures`): 가격·미결제약정 등
+- **국내옵션전광판\_선물**(`FHPIF05030200`, `display-board-futures`): 가격·미결제약정 등
   20개 필드, 만기일 필드 없음. 대신 `FID_COND_MRKT_CLS_CODE`로 상품이 갈리는 것을 실제
   호출로 발견 - `""`(빈 값)은 **정규 KOSPI200선물**(종목코드 `A01XXX`, `F 202612`처럼
   분기월 3·6·9·12월만 존재), `"MKI"`는 **미니 KOSPI200선물**(종목코드 `A05XXX`,
   `미니F 202610`처럼 월물 전체 존재) - 문서에 명시된 값이 아니라 여러 후보를 실제로 호출해
   결과 이름으로 구분해낸 것
-- **국내옵션전광판_콜풋**(`FHPIF05030100`, `display-board-callput`): 행사가·그릭스 등 40여
+- **국내옵션전광판\_콜풋**(`FHPIF05030100`, `display-board-callput`): 행사가·그릭스 등 40여
   필드, 이것도 만기일 필드 없음. `optn_shrn_iscd`(예: `B01610C41` - B0=옵션, 1610=만기월,
   C=콜, 41=행사가지수)로 종목 식별
 - **선물옵션 시세**(`FHMIF10000000`, `inquire-price`)에서 드디어 `futs_last_tr_date`(선물
@@ -2312,41 +2317,41 @@ additional_notes`에 저장하고 `news_ids`에 근거 기사 id(예: [6, 49, 54
     (`"SCHEDULED" if expiry_date >= today_kst else "RELEASED"`)을 그대로 재사용 - task가
     "기존 공통 규칙이 있으면 그걸 우선하라"고 한 부분에 해당
 - **수정**: `scripts/test_rate_api.py` - 조회만 하던 걸 `ingest_bok_rate_decisions()` 실행
-  + 재실행 중복 방지 확인까지 포함하도록 확장
+  - 재실행 중복 방지 확인까지 포함하도록 확장
 - **수정**: `scripts/test_kis_expiry.py` - 직접 만들었던 임시 `_call()` 헬퍼를 지우고
   승격된 `kis_client` 함수를 그대로 사용하도록 재작성, `ingest_kospi200_expiry()` 실행
-  + 재실행 중복 방지 확인까지 포함
+  - 재실행 중복 방지 확인까지 포함
 
 ### 테스트 결과
 
 **ECOS**: `get_base_rate_series("202401","202609")` 32개월 조회, 6건 upsert, 재실행해도
 6건 그대로(중복 없음). 저장된 6건 전부 요청한 결정일과 정확히 일치:
 
-| 날짜 | previous | actual |
-|---|---|---|
-| 2024-10-11 | 3.5 | 3.25 |
-| 2024-11-28 | 3.25 | 3 |
-| 2025-02-25 | 3 | 2.75 |
-| 2025-05-29 | 2.75 | 2.5 |
-| 2026-07-16 | 2.5 | 2.75 |
-| 2026-08-27 | 2.75 | 3 |
+| 날짜       | previous | actual |
+| ---------- | -------- | ------ |
+| 2024-10-11 | 3.5      | 3.25   |
+| 2024-11-28 | 3.25     | 3      |
+| 2025-02-25 | 3        | 2.75   |
+| 2025-05-29 | 2.75     | 2.5    |
+| 2026-07-16 | 2.5      | 2.75   |
+| 2026-08-27 | 2.75     | 3      |
 
 **KIS**: 옵션월물리스트 11개월 확보, 정규 선물 전광판 7개(분기월) 확보, 11건 upsert(콜/풋
 확장 후 재실행해도 11건 그대로). 저장된 이벤트:
 
-| publishedAt | title | status |
-|---|---|---|
-| 2026-10-08 | KOSPI200 옵션 만기 | SCHEDULED |
-| 2026-11-12 | KOSPI200 옵션 만기 | SCHEDULED |
-| 2026-12-10 | 선물·옵션 동시만기 | SCHEDULED |
-| 2027-01-14 | KOSPI200 옵션 만기 | SCHEDULED |
-| 2027-02-11 | KOSPI200 옵션 만기 | SCHEDULED |
-| 2027-03-11 | 선물·옵션 동시만기 | SCHEDULED |
-| 2027-06-10 | 선물·옵션 동시만기 | SCHEDULED |
-| 2027-09-09 | 선물·옵션 동시만기 | SCHEDULED |
-| 2027-12-09 | 선물·옵션 동시만기 | SCHEDULED |
-| 2028-06-08 | 선물·옵션 동시만기 | SCHEDULED |
-| 2028-12-14 | 선물·옵션 동시만기 | SCHEDULED |
+| publishedAt | title              | status    |
+| ----------- | ------------------ | --------- |
+| 2026-10-08  | KOSPI200 옵션 만기 | SCHEDULED |
+| 2026-11-12  | KOSPI200 옵션 만기 | SCHEDULED |
+| 2026-12-10  | 선물·옵션 동시만기 | SCHEDULED |
+| 2027-01-14  | KOSPI200 옵션 만기 | SCHEDULED |
+| 2027-02-11  | KOSPI200 옵션 만기 | SCHEDULED |
+| 2027-03-11  | 선물·옵션 동시만기 | SCHEDULED |
+| 2027-06-10  | 선물·옵션 동시만기 | SCHEDULED |
+| 2027-09-09  | 선물·옵션 동시만기 | SCHEDULED |
+| 2027-12-09  | 선물·옵션 동시만기 | SCHEDULED |
+| 2028-06-08  | 선물·옵션 동시만기 | SCHEDULED |
+| 2028-12-14  | 선물·옵션 동시만기 | SCHEDULED |
 
 **API**: `GET /calendar/events`로 2026-08(rate), 2026-10/12(optionExpiry) 각각 조회해서
 정상 노출 확인. 2026-09 조회 시 macro 13건 그대로, earnings/dividend 등 기존 카테고리
@@ -2375,14 +2380,14 @@ macro 118 전부 그대로.
 FRED 6개 지표는 series 메타데이터(`/fred/series` 엔드포인트)를 실제로 호출해서 공식
 `units`/`units_short` 값을 확인한 뒤 한국어로 옮겼다:
 
-| 지표 | FRED 공식 단위 | 붙인 단위 |
-|---|---|---|
-| CPI(CPIAUCSL) | Index 1982-1984=100 | 포인트 |
-| PPI(PPIACO) | Index 1982=100 | 포인트 |
-| GDP | Billions of Dollars | 십억 달러 |
-| PAYEMS | Thousands of Persons | 천 명 |
-| UNRATE | Percent | % |
-| PCE(PCEPI) | Index 2017=100 | 포인트 |
+| 지표          | FRED 공식 단위       | 붙인 단위 |
+| ------------- | -------------------- | --------- |
+| CPI(CPIAUCSL) | Index 1982-1984=100  | 포인트    |
+| PPI(PPIACO)   | Index 1982=100       | 포인트    |
+| GDP           | Billions of Dollars  | 십억 달러 |
+| PAYEMS        | Thousands of Persons | 천 명     |
+| UNRATE        | Percent              | %         |
+| PCE(PCEPI)    | Index 2017=100       | 포인트    |
 
 그 외는 이미 알고 있는 실제 단위를 그대로 사용: KIS 배당/IPO(원), DART 실적(조원, 이미
 `_format_trillion_won`으로 조원 단위 숫자를 만들고 있었으니 접미사만 추가), ECOS 기준금리(%).
@@ -2520,7 +2525,7 @@ DB 텍스트도 정정했다(upsert라 건수 변화 없음).
   `calendar-view.tsx` 하나에 직접 해온 수정(44번 "이번주 AI 요약" 팝업 연결, 50번 `actual`
   필드 배선, 방금 한 "발표시간" 라벨 수정 등)이 전부 이 리팩터링과 충돌한다
 - `front/dev`의 `news-data.ts`는 여전히 더미 상태다(`/* TODO: API 연동 시 NEWS 배열만
-  교체 */`, 실제 항목 0건) - 19번 항목 이후 이 브랜치에서 계속해온 Supabase 실데이터 동기화
+교체 */`, 실제 항목 0건) - 19번 항목 이후 이 브랜치에서 계속해온 Supabase 실데이터 동기화
   작업도 전혀 반영되어 있지 않다
 - `frontend/app/calendar-api-test/page.tsx`(원본 데이터 확인용 테스트 페이지)도 diff에서
   "96줄 삭제"로 나온다 - `front/dev`에는 이 페이지 자체가 없다
@@ -2646,10 +2651,12 @@ DB에 라벨 컬럼을 새로 추가하는 대신, 이미 저장된 `category`/`
 
 ```ts
 export function actualLabelOf(n: NewsItem): string | null {
-  if (n.category === "dividend") return "주당"
-  if (n.category === "earnings" && n.title.endsWith("실적 발표")) return "매출액"
-  if (n.category === "macro" && n.title.endsWith("공모주 청약")) return "공모가"
-  return null
+  if (n.category === "dividend") return "주당";
+  if (n.category === "earnings" && n.title.endsWith("실적 발표"))
+    return "매출액";
+  if (n.category === "macro" && n.title.endsWith("공모주 청약"))
+    return "공모가";
+  return null;
 }
 ```
 
@@ -2771,7 +2778,7 @@ forecast를 넘기지도 않았다 - pydantic 기본값 None에 의존).
   ON CONFLICT SQL과 `get_events_by_month`의 SELECT SQL에서 `forecast` 컬럼 제거,
   관련 주석 2곳도 정리
 - **`scripts/drop_forecast_column.py`**(신규, 1회성): `ALTER TABLE calendar_events
-  DROP COLUMN IF EXISTS forecast` 실행 - 마이그레이션 도구 없이 기존 방식대로
+DROP COLUMN IF EXISTS forecast` 실행 - 마이그레이션 도구 없이 기존 방식대로
   `core/database.py` 세션으로 raw SQL 직접 실행
 
 ### `actual_label`을 title 기반 공용 함수로 전환
@@ -2851,7 +2858,7 @@ def _actual_label_from_title(title: str) -> str | None:
 ### 새로 만든 공통 포맷터 — `frontend/lib/format-economic-value.ts`
 
 ```ts
-export function formatEconomicValue(raw: string | null | undefined): string
+export function formatEconomicValue(raw: string | null | undefined): string;
 ```
 
 내부적으로 `raw` 문자열을 정규식(`/^(-?\d+(?:\.\d+)?)\s*(.*)$/`)으로 "숫자 부분"과
@@ -2901,15 +2908,15 @@ export function formatEconomicValue(raw: string | null | undefined): string
 
 `npx tsx`로 스펙 9번 항목의 7개 테스트 케이스를 전부 직접 실행해서 확인했다:
 
-| 입력 | 기대값 | 결과 |
-| --- | --- | --- |
-| `"159075천명"` | 약 1억 5,908만 명 | ✅ 일치 |
-| `"159075천 명"` | 약 1억 5,908만 명 | ✅ 일치 |
-| `"32486.066십억 달러"` | 약 32.49조 달러 | ✅ 일치 |
-| `"1523.5십억 달러"` | 약 1.52조 달러 | ✅ 일치 |
-| `"85.6십억 달러"` | 약 856억 달러 | ✅ 일치 |
-| `"3.5%"` | 3.5% | ✅ 일치(변경 없음) |
-| `null` | 기존 표시 유지 | ✅ `"-"` |
+| 입력                   | 기대값            | 결과               |
+| ---------------------- | ----------------- | ------------------ |
+| `"159075천명"`         | 약 1억 5,908만 명 | ✅ 일치            |
+| `"159075천 명"`        | 약 1억 5,908만 명 | ✅ 일치            |
+| `"32486.066십억 달러"` | 약 32.49조 달러   | ✅ 일치            |
+| `"1523.5십억 달러"`    | 약 1.52조 달러    | ✅ 일치            |
+| `"85.6십억 달러"`      | 약 856억 달러     | ✅ 일치            |
+| `"3.5%"`               | 3.5%              | ✅ 일치(변경 없음) |
+| `null`                 | 기존 표시 유지    | ✅ `"-"`           |
 
 추가로 실데이터 경계 케이스도 확인: `"79.0조원"`/`"880원"`/`"326.588포인트"`/`"2.50%"`
 전부 원본 그대로 통과함을 확인. `npx tsc --noEmit` 통과, `npm run dev` + Playwright로
@@ -3022,6 +3029,7 @@ origin/front/feat/calendar`를 실행해서 실제 결과를 확인했다. 이 �
 노출되지 않는다.
 
 ### 발견 - git 자체는 충돌 없이 merge에 성공했지만, `front/feat/calendar`의 커밋된 코드에
+
 이미 풀리지 않은 병합 마커가 들어있었다
 
 `git merge`는 "Automatic merge went well"이라고 보고했다(진짜 3-way 충돌은 없었다는
@@ -3250,7 +3258,7 @@ push 여부는 사용자 확인 후 진행.
 
 - `npx tsc --noEmit` 통과
 - `python3 -m py_compile main.py core/config.py core/kis_client.py
-  domain/calendar/services/calendar.py` 문법 확인 + `uv run python -c "import main"`
+domain/calendar/services/calendar.py` 문법 확인 + `uv run python -c "import main"`
   임포트 확인 - 전부 통과
 - 백엔드(8080)+프런트(3000) 재기동 후 `/calendar` 화면 Playwright로 직접 확인:
   - 새로 추가된 "이번 주, 주린이 탈출"(베끄로 레슨 티저)와 "이번 주엔 이런 일정이
@@ -3378,6 +3386,7 @@ heatmap은 이미 있음), 발표 시각이 지나도 DB의 status는 계속 `SC
 ### 구현
 
 **`services/calendar.py`**
+
 - `_fomc_rate_range(as_of_date)`: DFEDTARU/DFEDTARL을 `as_of_date` 기준으로 조회해서
   `"하단~상단%"` 문자열로 합침(예: `"3.5~3.75%"`). 관측치가 없으면(미래 날짜 등) `None`
   그대로 반환 - 임의 추정 안 함
@@ -3399,6 +3408,7 @@ heatmap은 이미 있음), 발표 시각이 지나도 DB의 status는 계속 `SC
   확정된 건 다시 계산 안 함 - 시간은 거꾸로 안 흐름)
 
 **`main.py`**
+
 - `_refresh_fomc()`: `ingest_fomc_year(현재 연도)`를 동기 스케줄러에서 `asyncio.run`으로
   감싸 실행(`_refresh_indicators`와 같은 패턴). 시작 시 1회 + 이후 매시 0분/30분마다
   실행(`_refresh_indicators`와 같은 주기) - upsert라 반복 실행해도 안전
@@ -3448,6 +3458,7 @@ WebSearch로 연준 공식 발표문(federalreserve.gov)과 CNBC/Fox Business �
 지연이 있을 수 있다는 걸 놓쳤다.**
 
 **실제 확인된 사실**(federalreserve.gov 공식 발표문, 2026-09-17 직접 확인):
+
 - 기준금리 목표범위 25bp 인상: 3.50~3.75% → **3.75~4.00%**
 - 투표: **찬성 12명, 반대 0명(만장일치)**
 - 2023년 이후 첫 인상
@@ -3568,7 +3579,7 @@ def _refresh_fred_indicators() -> None:
 
 - `uv run uvicorn main:app` 재기동 - 로그에 에러/예외 없음, 스케줄러 정상 등록
 - `GET /calendar/events?year=2026&month=9` 재호출 - PAYEMS(`158913000명 →
-  159075000명`)와 FOMC(`3.5~3.75% → 3.75~4.00%`) 둘 다 정정된 값으로 정상 응답
+159075000명`)와 FOMC(`3.5~3.75% → 3.75~4.00%`) 둘 다 정정된 값으로 정상 응답
 - `python3 -m py_compile main.py` 통과
 
 ### 이번엔 다루지 않은 것 - DART 기업실적의 "정정 공시" 위험
@@ -3596,6 +3607,120 @@ earnings()`가 자동으로 최신 것을 골라내지만(`rcept_no` 기준 정�
    방향이 실제 보도와 반대"라는 걸 실제 BLS 보고서와 대조해서 잡아낸 것이다. 수치가
    있는 데이터는 "그럴듯해 보이는지"가 아니라 실제 1차 출처와 대조해서 확인해야 한다.
 
+## 66. calendar 도메인 API 및 사용 방법 정리
+
+프런트엔드/다른 도메인 개발자가 참고할 수 있도록, 지금까지 만든 calendar 도메인의
+API 명세와 실제 데이터가 어떻게 채워지는지를 한곳에 정리한다.
+
+### API - 엔드포인트는 현재 1개뿐이다
+
+```text
+GET /calendar/events?year={YYYY}&month={MM}
+```
+
+- `year`: 1900~2100 (필수)
+- `month`: 1~12 (필수)
+- 응답: 그 연/월에 `publishedAt`(한국시간 기준 발표일)이 속하는 `CalendarEvent` 배열
+- 인증 없음, region 등으로 필터링하는 옵션은 없다 - 프런트에서 필요하면 응답을 받은
+  뒤 클라이언트 쪽에서 걸러야 한다.
+
+요청 예시:
+
+```bash
+curl "http://localhost:8000/calendar/events?year=2026&month=9"
+```
+
+응답 예시(FOMC 발표 후 이벤트 1건):
+
+```json
+{
+  "id": "fomc-2026-09-16-FOMC_STATEMENT",
+  "publishedAt": "2026-09-16",
+  "start_date": null,
+  "end_date": null,
+  "time": "04:00",
+  "region": "미국",
+  "category": "macro",
+  "title": "미국 FOMC 금리결정",
+  "summary": "FOMC(연방공개시장위원회)가 정례회의를 마치고 미국의 기준금리 목표범위를 3.5~3.75%에서 3.75~4.00%로 인상했습니다(25bp 인상). ...",
+  "importance": null,
+  "previous": "3.5~3.75%",
+  "actual": "3.75~4.00%",
+  "actual_label": null,
+  "status": "RELEASED"
+}
+```
+
+### 응답 필드(`CalendarEvent`) 의미
+
+`schemas/calendar.py`에 정의돼 있으며, Supabase `calendar_events` 테이블과 필드명이
+동일하다.
+
+| 필드                    | 설명                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                    | 소스별 고유 ID(아래 "id 규칙" 참고). upsert 키라서 재수집해도 중복이 안 생긴다.                                                                |
+| `publishedAt`           | 한국시간(KST) 기준 발표일. 미국 지표라도 이미 KST로 변환된 값이다.                                                                             |
+| `start_date`/`end_date` | 현재 항상 `null`(보류 컬럼).                                                                                                                   |
+| `time`                  | 한국시간 기준 발표 시각. 공식적으로 확인된 시각이 없으면 `null`(임의 생성 금지).                                                               |
+| `region`                | `"미국"` 또는 `"한국"`.                                                                                                                        |
+| `category`              | 아래 "category 종류" 참고.                                                                                                                     |
+| `title`/`summary`       | 한국 주식 초보자 기준 한국어 제목/설명.                                                                                                        |
+| `importance`            | FRED 등에서 표준 중요도를 제공하지 않아 현재 항상 `null`.                                                                                      |
+| `previous`/`actual`     | 직전 발표값/실제 발표값. 단위가 붙는 경우 문자열에 단위까지 포함(`"3.75~4.00%"`, `"159075000명"` 등). 아직 발표 전이면 `actual=null`.          |
+| `actual_label`          | `actual`이 구체적으로 무엇에 대한 값인지 알려주는 라벨(`"주당"`, `"공모가"`, `"매출액"`). 제목만으로 맥락이 드러나는 FRED/BOK 이벤트는 `null`. |
+| `status`                | `"SCHEDULED"`(발표 전) 또는 `"RELEASED"`(발표 후, `actual` 값 존재).                                                                           |
+
+### category 종류와 데이터 출처
+
+| category       | region | 의미                                     | 데이터 출처                                   |
+| -------------- | ------ | ---------------------------------------- | --------------------------------------------- |
+| `macro`        | 미국   | CPI/PPI/GDP/PAYEMS/UNRATE/PCE, FOMC 회의 | FRED API, `fed_client`(FOMC 일정 정적 데이터) |
+| `macro`        | 한국   | 합병·분할, IPO, 유상증자, 무상증자       | KIS Open API                                  |
+| `earnings`     | 한국   | 코스피 대형주 잠정실적 발표              | DART Open API                                 |
+| `rate`         | 한국   | 한국은행 기준금리 결정                   | ECOS API(시계열) + 공식 결정일 수동 매핑 표   |
+| `dividend`     | 한국   | 배당기준일                               | KIS Open API                                  |
+| `optionExpiry` | 한국   | KOSPI200 선물·옵션 만기(트리플위칭 포함) | 정적 계산(매월 둘째 목요일 규칙)              |
+
+### id 규칙(소스별 prefix)
+
+재수집 시 upsert(`ON CONFLICT (id) DO UPDATE`)로 덮어쓰기 때문에, 같은 이벤트를
+몇 번을 다시 수집해도 중복 행이 생기지 않는다. 형식:
+
+```text
+fred-{series_id}-{observation_date}     예) fred-PAYEMS-2026-08-01
+fomc-{event_date}-{event_type}          예) fomc-2026-09-16-FOMC_STATEMENT
+dart-earnings-{stock_code}-{rcept_dt}   예) dart-earnings-005930-20260130
+bok-rate-{decision_date(YYYYMMDD)}      예) bok-rate-20260827
+kis-dividend-{stock_code}-{record_date}
+kis-mergersplit-{stock_code}-{record_date}-{seq}
+kis-ipo-{stock_code}-{record_date}
+kis-paidincap-{stock_code}-{record_date}
+kis-bonusissue-{stock_code}-{record_date}
+```
+
+### 데이터가 채워지는 방식 - 자동 재수집 vs 수동 스크립트
+
+`main.py`의 스케줄러(62~65번 항목)가 자동으로 반복 재수집하는 대상은 아래 3종류뿐이다.
+
+| 대상                 | 서비스 함수                                                         | 주기                          |
+| -------------------- | ------------------------------------------------------------------- | ----------------------------- |
+| FOMC 일정/금리       | `ingest_fomc_year`                                                  | 서버 기동 시 1회 + 30분마다   |
+| FRED 6개 지표        | `ingest_year_from_fred`(CPI/PPI/GDP/PAYEMS/UNRATE/PCE)              | 서버 기동 시 1회 + 6시간마다  |
+| DART 대형주 3사 실적 | `ingest_preliminary_earnings_from_dart`(삼성전자/SK하이닉스/현대차) | 서버 기동 시 1회 + 매일 00:10 |
+
+나머지(한국은행 기준금리, KOSPI200 만기, KIS 배당/합병분할/IPO/유상증자/무상증자)는
+아직 스케줄러가 없고 `backend/scripts/seed_*.py`를 수동으로 실행해야 채워지거나
+갱신된다. 65번 항목의 원칙("재수집 가능한 ingest 함수는 스케줄러에 물린다")에 따라
+필요해지면 나중에 스케줄러를 추가할 수 있다.
+
+### 유의할 점
+
+- `previous`/`actual`은 표시용으로 이미 단위가 붙은 문자열이라, 프런트에서 산술 연산이
+  필요하면 파싱해서 써야 한다(예: `"3.75~4.00%"`에서 상단값만 뽑기).
+- FRED/DART처럼 발표 후에도 값이 수정(revision)될 수 있는 소스는 재수집 스케줄러가
+  붙어 있어도 갱신 주기(FRED 6시간, DART 1일) 사이의 짧은 지연은 있을 수 있다 - "지금
+  이 순간의 최신값"을 보장하지는 않는다.
+
 ## 65. DART 정정공시 위험 조사 + 재수집 스케줄러 추가 중 발견한 동시성 버그 수정
 
 64번 끝에서 범위 밖으로 미뤄뒀던 "DART 잠정실적 정정공시" 위험을 별도로 조사해달라는
@@ -3608,9 +3733,10 @@ earnings()`가 자동으로 최신 것을 골라내지만(`rcept_no` 기준 정�
 `get_preliminary_earnings()`가 이미 **같은 날짜에 올라온** "[기재정정]" 공시는
 `rcept_no` 오름차순으로 정렬해서 나중 것(정정본)으로 덮어쓰는 방식으로 처리하고
 있었다. 삼성전자는 실제로 같은 날 정정이 올라온 사례가 있었고(예: 20250131 원공시
-+ 20250131 [기재정정]) 전부 정상적으로 정정본이 선택됐다. SK하이닉스·현대차는 조사
-기간 내 정정 공시 자체가 없었다. 현재 DB에 저장된 21건 전체를 `get_key_accounts()`
-로 실시간 재조회해서 대조한 결과도 전부 일치 - 지금 틀린 값은 없다.
+
+- 20250131 [기재정정]) 전부 정상적으로 정정본이 선택됐다. SK하이닉스·현대차는 조사
+  기간 내 정정 공시 자체가 없었다. 현재 DB에 저장된 21건 전체를 `get_key_accounts()`
+  로 실시간 재조회해서 대조한 결과도 전부 일치 - 지금 틀린 값은 없다.
 
 다만 **다른 날짜에 나중에 따로 올라오는 정정**은 이 로직이 애초에 못 잡는 구조이고,
 64번에서 정리한 "재수집 안 되면 나중 수정을 놓친다"는 구조적 위험이 DART에도 똑같이
@@ -3710,6 +3836,6 @@ async def ingest_fomc_year(year: int) -> list[CalendarEvent]:
    로 감싼다 - 그렇지 않으면 그 호출 하나가 서버 전체를 멈춘다. "DB 접근은 메인
    루프에, 블로킹 I/O는 스레드로"라는 경계를 항상 지킨다.
 3. **동시성 수정은 증상 하나를 없애는 걸로 끝났다고 보지 않는다.** 이번에도 락으로
-   에러 빈도만 줄이고 넘어갔다면 메인 API의 500 에러라는 더 큰 문제를 놓칠 뻔했다 -
+   에러 빈도만 줄이고 넘어j갔다면 메인 API의 500 에러라는 더 큰 문제를 놓칠 뻔했다 -
    "에러가 줄었다"가 아니라 "실제 API 응답이 항상 정상인가"까지 직접 재현해서
    확인해야 한다.
