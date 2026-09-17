@@ -6,7 +6,7 @@ import {
   formatChange,
   formatKoreanAmount,
   heatmapColor,
-  layoutTreemap,
+  layoutMarketCapTreemap,
   selectHeatmapSectors,
 } from "@/lib/heatmap-layout"
 import type { HeatmapSector, HeatmapStock } from "@/lib/types/HeatmapType"
@@ -43,9 +43,9 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
 
   const sectorRects = useMemo(
     () =>
-      layoutTreemap(
+      layoutMarketCapTreemap(
         currentSector ? [currentSector] : displayedSectors,
-        (sector) => Math.sqrt(Math.max(0, sector.market_cap)),
+        (sector) => sector.market_cap,
         size.width,
         size.height
       ),
@@ -81,10 +81,16 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
   }
 
   function stockTile(stock: HeatmapStock, width: number, height: number) {
-    const showName = width >= 44 && height >= 25
-    const showChange = width >= 48 && height >= 43
+    const showName = width >= 25 && height >= 21
+    const showChange = width >= 38 && height >= 40
     const fontSize =
-      width >= 125 && height >= 95 ? 17 : width >= 76 && height >= 65 ? 12 : 10
+      width >= 125 && height >= 95
+        ? 17
+        : width >= 76 && height >= 65
+          ? 12
+          : width < 50
+            ? 9
+            : 10
     const selectedTile = activeCode === stock.code
     const dimmed = matchedCodes !== null && !matchedCodes.has(stock.code)
     return (
@@ -107,7 +113,7 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
         }}
       >
         {showName && (
-          <span className="max-w-full truncate font-semibold">
+          <span className="line-clamp-2 max-w-full font-semibold break-all">
             {stock.name}
           </span>
         )}
@@ -164,6 +170,14 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
         </div>
       </div>
 
+      <p className="mb-2 text-[10px] leading-5 text-neutral-500">
+        시가총액 상위 {displayedSectors.length}개 업종 · 업종별 대표 기업 5개 ·
+        총 {allStocks.length}개 기업
+        {displayedSectors.length < 15 &&
+          " · 시세가 있는 기업 5개 이상인 업종만 표시합니다."}
+        {currentSector && ` · 현재 ${currentSector.name} 확대 중`}
+      </p>
+
       <div
         ref={containerRef}
         aria-label={
@@ -171,16 +185,16 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
             ? `${currentSector.name} 업종 히트맵`
             : `주요 ${displayedSectors.length}개 업종 주식 히트맵`
         }
-        className="relative h-122.5 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800 sm:h-[540px] 2xl:h-[610px]"
+        className={`relative w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800 ${currentSector ? "h-[520px] sm:h-[720px]" : "h-[1200px] sm:h-[780px] 2xl:h-[820px]"}`}
       >
         {sectorRects.map(({ item: sector, x, y, width, height }) => {
           const compact = width < 58 || height < 44
           const headerHeight = compact ? height : 23
           const stocks = compact
             ? []
-            : layoutTreemap(
+            : layoutMarketCapTreemap(
                 sector.stocks,
-                (stock) => Math.sqrt(Math.max(0, stock.market_cap)),
+                (stock) => stock.market_cap,
                 Math.max(0, width - 4),
                 Math.max(0, height - headerHeight - 4)
               )

@@ -1,6 +1,6 @@
 import type { HeatmapSector } from "@/lib/types/HeatmapType"
 
-/** 화면만 축약한다. 업종 전체 시가총액과 백엔드 거래량 집계는 그대로 둔다. */
+/** 기업 5개를 표시할 수 있는 업종 중 시가총액 상위 15개를 선택한다. */
 export function selectHeatmapSectors(
   sectors: HeatmapSector[]
 ): HeatmapSector[] {
@@ -18,12 +18,12 @@ export function selectHeatmapSectors(
           (a, b) => b.market_cap - a.market_cap || a.code.localeCompare(b.code)
         ),
     }))
-    .filter((sector) => sector.stocks.length > 0)
+    .filter((sector) => sector.stocks.length >= 5)
     .sort((a, b) => b.market_cap - a.market_cap || a.code.localeCompare(b.code))
-    .slice(0, 8)
-    .map((sector, index) => ({
+    .slice(0, 15)
+    .map((sector) => ({
       ...sector,
-      stocks: sector.stocks.slice(0, index < 4 ? 5 : 4),
+      stocks: sector.stocks.slice(0, 5),
     }))
 }
 
@@ -37,8 +37,7 @@ export interface HeatmapRect<T> {
 
 /**
  * Squarified treemap: keep adjacent rectangles readable while preserving the
- * supplied weights. Callers pass sqrt(market cap) to soften size differences.
- * No artificial minimum area is added, so the layout always fits its bounds.
+ * supplied weights. All weights are normalized to fit the available bounds.
  */
 export function layoutTreemap<T>(
   items: T[],
@@ -116,6 +115,30 @@ export function layoutTreemap<T>(
     }
   }
   return result
+}
+
+/** 시총 순서를 유지하면서 40%는 균등 배분해 작은 업종·기업도 보이게 한다. */
+export function layoutMarketCapTreemap<T>(
+  items: T[],
+  getMarketCap: (item: T) => number,
+  width: number,
+  height: number
+): HeatmapRect<T>[] {
+  const valid = items.filter((item) => {
+    const cap = getMarketCap(item)
+    return Number.isFinite(cap) && cap > 0
+  })
+  const total = valid.reduce(
+    (sum, item) => sum + Math.pow(getMarketCap(item), 0.35),
+    0
+  )
+  return layoutTreemap(
+    valid,
+    (item) =>
+      0.6 * (Math.pow(getMarketCap(item), 0.35) / total) + 0.4 / valid.length,
+    width,
+    height
+  )
 }
 
 export function formatChange(rate: number | null) {

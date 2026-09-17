@@ -19,6 +19,32 @@ export interface HeatmapSector {
   stocks: HeatmapStock[]
 }
 
+export interface HeatmapRelatedSector {
+  code: string
+  name: string
+  change_rate: number | null
+  reason: string
+  relationship_kind: "industry" | "market_trend"
+  stocks: HeatmapStock[]
+}
+
+export interface HeatmapNewsItem {
+  title: string
+  url: string
+  source: string
+  published_at: string | null
+  summary: string | null
+}
+
+export interface HeatmapNewsResponse {
+  sector_code: string | null
+  sector_name: string | null
+  updated_at: string | null
+  is_stale: boolean
+  message: string | null
+  items: HeatmapNewsItem[]
+}
+
 export interface HeatmapResponse {
   market: HeatmapMarket
   period: HeatmapPeriod
@@ -42,4 +68,5 @@ export interface HeatmapResponse {
     change_rate: number | null
   } | null
   sectors: HeatmapSector[]
+  related_sectors?: HeatmapRelatedSector[]
 }

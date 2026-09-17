@@ -1,57 +1,30 @@
 import { Lightbulb } from "lucide-react"
-import { Badge } from "@/components/ui"
+import { formatChange } from "@/lib/heatmap-layout"
+import type { HeatmapRelatedSector } from "@/lib/types/HeatmapType"
 
-interface AssociationTag {
-  text: string
-  highlight: string
+const ASSOCIATION_EMOJIS = ["🏠", "🍲", "👕"]
+
+function changeColor(rate: number | null) {
+  return rate === null || rate === 0
+    ? "text-neutral-500"
+    : rate > 0
+      ? "text-point"
+      : "text-blue-600"
 }
-
-interface AssociationChain {
-  emoji: string
-  label: string
-  quote: string
-  tags: AssociationTag[]
-}
-
-const ASSOCIATION_CHAINS: AssociationChain[] = [
-  {
-    emoji: "🏠",
-    label: "[살 곳] 철강·후판",
-    quote: "배 뼈대 필수 공급",
-    tags: [
-      { text: "철광석 해상운송 ", highlight: "포스코홀딩스" },
-      { text: "특수 용접 피팅 ", highlight: "태광" },
-    ],
-  },
-  {
-    emoji: "🍲",
-    label: "[먹을거리] 친환경 엔진",
-    quote: "LNG 이중연료 심장",
-    tags: [
-      { text: "단조 피스톤 부품 ", highlight: "HD현대마린엔진" },
-      { text: "고압 변압기 ", highlight: "HD현대일렉트릭" },
-    ],
-  },
-  {
-    emoji: "👕",
-    label: "[입을거리] 극저온 보냉재",
-    quote: "영하 163도 특수 패딩",
-    tags: [
-      { text: "초저온 글라스 ", highlight: "동성화인텍" },
-      { text: "누출방지 밸브 ", highlight: "한국카본" },
-    ],
-  },
-]
 
 export default function HeatmapRecommendation({
   topSectorName,
+  relatedSectors,
+  isLoading,
 }: {
   topSectorName: string | undefined
+  relatedSectors: HeatmapRelatedSector[]
+  isLoading: boolean
 }) {
   return (
     <aside
       aria-labelledby="heatmap-recommendation-title"
-      className="h-[calc(100%-28px)] flex-2 rounded-xl border border-neutral-200 bg-white p-4 shadow-xs"
+      className="rounded-xl border border-neutral-200 bg-white p-4 shadow-xs"
     >
       <h2
         id="heatmap-recommendation-title"
@@ -59,60 +32,87 @@ export default function HeatmapRecommendation({
       >
         지금 몰리고 있는 섹터 의식주!
       </h2>
-      <p className="mt-1.5 text-[10px] leading-5 text-neutral-400">
-        애기 개미들을 위한 꼬리에 꼬리를 무는 연쇄 연상법
+      <p className="mt-1.5 text-[10px] leading-5 text-neutral-500">
+        상승률 1위 업종에서 이어지는 산업과 대표 기업
       </p>
 
       <div className="my-4 h-px bg-neutral-100" />
-
       <div className="rounded-full bg-point px-4 py-2.5 text-center text-sm font-bold text-white shadow-sm">
-        {topSectorName ?? "집계 중"}
+        {topSectorName ?? "상승률 집계 중"}
       </div>
       <div className="mx-auto h-3 w-px border-l-2 border-dashed border-point/40" />
 
-      <div className="flex flex-col gap-2.5">
-        {ASSOCIATION_CHAINS.map((chain) => (
-          <div
-            key={chain.label}
-            className="rounded-lg border border-neutral-100 bg-neutral-50/80 p-3"
-          >
-            <p className="text-xs font-bold text-neutral-800">
-              {chain.emoji} {chain.label}
-            </p>
-            <p className="mt-1 text-[10px] text-neutral-500">
-              &ldquo;{chain.quote}&rdquo;
-            </p>
-            <div className="mt-2.5 flex items-start gap-2">
-              <span className="mt-1 shrink-0 text-[10px] text-neutral-400">
-                → 연쇄 낙수
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col items-end gap-1">
-                {chain.tags.map((tag) => (
-                  <Badge
-                    key={tag.highlight}
-                    variant="outline"
-                    className="max-w-full justify-end truncate rounded-full border-neutral-200 bg-white px-2.5 py-1 text-[10px] font-normal text-neutral-600"
-                  >
-                    {tag.text}
-                    <span className="font-semibold text-point">
-                      {tag.highlight}
-                    </span>
-                  </Badge>
-                ))}
+      {relatedSectors.length ? (
+        <div className="flex flex-col gap-2.5">
+          {relatedSectors.slice(0, 3).map((sector, index) => (
+            <article
+              key={sector.code}
+              className="rounded-lg border border-neutral-100 bg-neutral-50/80 p-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <h3 className="text-xs font-bold text-neutral-800">
+                  {ASSOCIATION_EMOJIS[index]} {sector.name}
+                </h3>
+                <span
+                  className={`text-[11px] font-semibold tabular-nums ${changeColor(sector.change_rate)}`}
+                >
+                  {formatChange(sector.change_rate)}
+                </span>
               </div>
-            </div>
-          </div>
-        ))}
-      </div>
+              <p className="mt-2 text-[10px] font-medium text-neutral-500">
+                {sector.relationship_kind === "market_trend"
+                  ? "시장 흐름 참고"
+                  : "산업 연관"}
+              </p>
+              <p className="mt-1 text-[11px] leading-5 text-neutral-600">
+                {sector.reason}
+              </p>
+              <ul
+                className="mt-2.5 space-y-1.5"
+                aria-label={`${sector.name} 대표 기업`}
+              >
+                {sector.stocks.slice(0, 2).map((stock) => (
+                  <li
+                    key={stock.code}
+                    className="flex items-start justify-between gap-2 rounded-md border border-neutral-200 bg-white px-2.5 py-2"
+                  >
+                    <span className="min-w-0 text-[11px] font-semibold text-neutral-700">
+                      {stock.name}
+                      <span className="mt-0.5 block text-[9px] font-normal text-neutral-400">
+                        {stock.code}
+                      </span>
+                    </span>
+                    <span
+                      className={`shrink-0 pt-0.5 text-[10px] tabular-nums ${changeColor(stock.change_rate)}`}
+                    >
+                      {stock.change_rate === null
+                        ? "—"
+                        : formatChange(stock.change_rate)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p
+          role="status"
+          className="rounded-lg bg-neutral-50 px-3 py-5 text-xs leading-6 text-neutral-500"
+        >
+          {isLoading
+            ? "연관 업종과 대표 기업을 확인하고 있어요."
+            : "현재 데이터에서 확인할 수 있는 연관 업종이 없습니다."}
+        </p>
+      )}
 
       <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50/60 p-3">
         <p className="flex items-center gap-1 text-[11px] font-semibold text-amber-700">
           <Lightbulb className="size-3.5" /> 개미 연상 TIP
         </p>
-        <p className="mt-1 text-[12px] leading-5 text-neutral-500">
-          배를 만들면 <span className="font-medium">철판(집)</span>을 깔고{" "}
-          <span className="font-medium">엔진(밥)</span>을 먹인 뒤{" "}
-          <span className="font-medium">보랭재(옷)</span>를 입힌다!
+        <p className="mt-1 text-[11px] leading-5 text-neutral-600">
+          산업 간 연결 이유와 선택한 기간의 등락률을 함께 살펴보세요. 대표
+          기업은 각 업종의 시가총액 상위 2개입니다.
         </p>
       </div>
     </aside>

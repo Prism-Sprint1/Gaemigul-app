@@ -37,14 +37,14 @@ export default function HeatmapDashboard({
   const collecting = data?.is_refreshing
   const coverage = data?.coverage
   const partial = Boolean(coverage?.missing_stocks)
-  const volumePeriodLabel = getVolumePeriodLabel(period, data?.as_of_date)
+  const periodLabel = getVolumePeriodLabel(period, data?.as_of_date)
 
   return (
     <div className="bg-ant-bg p-5">
       <HeatmapTopSectorBanner
         market={market}
         topSector={topSector}
-        volumePeriodLabel={volumePeriodLabel}
+        periodLabel={periodLabel}
         partial={partial}
         isLoading={isLoading}
         collecting={collecting}
@@ -83,10 +83,14 @@ export default function HeatmapDashboard({
           <HeatmapLegendFootnote />
         </section>
 
-        <HeatmapRecommendation topSectorName={topSector?.name} />
+        <HeatmapRecommendation
+          topSectorName={topSector?.name}
+          relatedSectors={data?.related_sectors ?? []}
+          isLoading={isLoading || Boolean(collecting)}
+        />
       </div>
 
-      <HeatmapNewsSection topSectorName={topSector?.name} />
+      <HeatmapNewsSection market={market} period={period} snapshot={data} />
     </div>
   )
 }

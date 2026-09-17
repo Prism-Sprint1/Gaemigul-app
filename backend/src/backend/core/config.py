@@ -5,7 +5,6 @@ from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
 
 
 # .env의 키 이름(대소문자 무관)과 필드 이름이 같으면 자동으로 채워진다
@@ -21,7 +20,7 @@ class Settings(BaseSettings):
 
     # 히트맵 수집 설정. 시세 조회만 사용하며 기존 KIS 계정/토큰을 함께 쓴다.
     heatmap_enabled: bool = True
-    # 히트맵 KIS 호출 속도(초당). kis_client._get을 거치는 호출에만 적용된다. 계정의 실제 한도에 맞춰 낮출 수 있다.
+    # 전 도메인이 공유하는 KIS 조회 속도(초당). 기존 환경변수 이름을 유지하며 계정 한도에 맞춰 낮출 수 있다.
     heatmap_requests_per_second: float = Field(default=5.0, gt=0, le=20)
     # 수능일 등 특별 거래시간은 KRX 공지에 맞춰 날짜별로 지정한다(한국 시간).
     # 예: {"2026-01-02": {"open": "10:00", "close": "15:30"}}
