@@ -105,7 +105,7 @@ function ReportSidebarMobileNavContent() {
 
   return (
     <nav
-      className="sticky z-20 flex flex-col gap-2 border-b border-neutral-100 bg-background/95 px-4 py-3 backdrop-blur-sm md:hidden"
+      className="sticky z-20 flex flex-col gap-2 border-b border-neutral-100 bg-background/95 py-3 backdrop-blur-sm md:hidden md:px-4"
       style={{ top: "var(--header-height, 75px)" }}
     >
       <div className="flex items-center justify-between">
@@ -167,7 +167,7 @@ function ReportSidebarMobileNavContent() {
                     )
                   }
                   className={cn(
-                    "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] whitespace-nowrap transition-colors duration-200",
+                    "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-0.5 text-[10px] whitespace-nowrap transition-colors duration-200 md:py-1.5 md:text-[12px]",
                     isOpen
                       ? "border-point bg-point/10 font-semibold text-point"
                       : "border-neutral-200 text-neutral-500"
@@ -188,7 +188,10 @@ function ReportSidebarMobileNavContent() {
           {weeks
             .filter((group) => group.id === openGroupId)
             .map((group) => (
-              <div key={group.id} className="flex gap-2 overflow-x-auto">
+              <div
+                key={group.id}
+                className="flex gap-2 overflow-x-auto py-2 md:py-0"
+              >
                 {group.items.map((item) => {
                   const isActive =
                     activeType === item.type && activeDate === item.date

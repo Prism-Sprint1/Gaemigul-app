@@ -56,7 +56,7 @@ export default function Header() {
           </strong>
           <p className="flex items-center gap-1 text-[10px] text-neutral-500">
             <Info size="11" />
-            지수 데이터는 정시 기준 30분마다 갱신됩니다.
+            지수 데이터는 정시 기준 15분마다 갱신됩니다.
           </p>
         </div>
       </div>
