@@ -40,7 +40,7 @@ export default function ReportSidebar() {
   const month = reportMonths[monthIndex]
 
   return (
-    <aside className="sticky top-18.75 h-[calc(100vh-75px)] w-67.5 min-w-67.5">
+    <aside className="sticky top-18.75 hidden h-[calc(100vh-75px)] w-67.5 min-w-67.5 md:block">
       <div>
         {/* 상단 월 교체 영역 */}
         <div className="flex items-center justify-between px-5 py-3">

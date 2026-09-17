@@ -15,15 +15,14 @@ export default function MainLayout({
 
   return (
     <>
-      <Header />
       <div className="flex w-full">
-        <Sidebar />
-        <main className={`${isMatch ? "w-[calc(100%-540px)]" : "w-full"}`}>
+        <main
+          className={`w-full min-w-0 ${isMatch ? "md:w-[calc(100%-540px)]" : ""}`}
+        >
           {children}
         </main>
         <ReportSidebar />
       </div>
-      <Footer />
     </>
   )
 }

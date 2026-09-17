@@ -345,21 +345,37 @@ export default function CalendarPage() {
                 setSelectedDate(today)
               }}
             />
-            {loading ? (
-              <BeginnerLessonTeaserSkeleton />
-            ) : (
-              <BeginnerLessonTeaser
-                data={weeklyLesson}
-                tags={weeklyLessonTags}
-                onOpen={() => setBeginnerLessonOpen(true)}
-              />
-            )}
-            {loading ? (
-              <WeekPlanSkeleton />
-            ) : (
-              <WeekPlan items={weekNews} onOpenItem={openWeekSummaryItem} />
-            )}
+            <div className="hidden lg:block">
+              {loading ? (
+                <BeginnerLessonTeaserSkeleton />
+              ) : (
+                <BeginnerLessonTeaser
+                  data={weeklyLesson}
+                  tags={weeklyLessonTags}
+                  onOpen={() => setBeginnerLessonOpen(true)}
+                />
+              )}
+            </div>
+            <div className="order-2 lg:order-0">
+              {loading ? (
+                <WeekPlanSkeleton />
+              ) : (
+                <WeekPlan items={weekNews} onOpenItem={openWeekSummaryItem} />
+              )}
+            </div>
           </aside>
+        </div>
+
+        <div className="lg:hidden">
+          {loading ? (
+            <BeginnerLessonTeaserSkeleton />
+          ) : (
+            <BeginnerLessonTeaser
+              data={weeklyLesson}
+              tags={weeklyLessonTags}
+              onOpen={() => setBeginnerLessonOpen(true)}
+            />
+          )}
         </div>
       </div>
 

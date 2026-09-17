@@ -50,7 +50,7 @@ export function FilterBar({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-nowrap items-center gap-1 lg:grid lg:grid-cols-[auto_1fr_auto]">
+      <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto scrollbar-none lg:grid lg:grid-cols-[auto_1fr_auto] lg:overflow-visible">
         <div className="flex flex-1 gap-1 rounded-lg bg-muted p-1 text-xs lg:col-start-1 lg:flex-none lg:shrink-0">
           <button
             type="button"
@@ -126,7 +126,7 @@ export function FilterBar({
       </div>
 
       {/* 서브 카테고리 — 현재 탭(전체/경제지표/실적)에 속한 카테고리만 다중 선택. 아무것도 안 골랐으면(=categorySet 빈 집합) '전체'만 활성으로 보여준다 */}
-      <div className="flex flex-nowrap items-center gap-1">
+      <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto scrollbar-none">
         <button
           type="button"
           onClick={onSelectAllCategories}

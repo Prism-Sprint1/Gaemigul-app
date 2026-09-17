@@ -1,6 +1,7 @@
 export { default as TimelineDateHeader } from "./TimelineDateHeader"
 export { default as TimelineSection } from "./TimelineSection"
 export { default as TimelineSectionHeader } from "./TimelineSectionHeader"
+export { default as TimelineSectionsNav } from "./TimelineSectionsNav"
 export { default as MarketStatGrid } from "./MarketStatGrid"
 export { default as LLMSummarySection } from "./LLMSummarySection"
 export { default as BeginnerSummarySection } from "./BeginnerSummarySection"

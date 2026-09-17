@@ -27,7 +27,10 @@ export default function TimelineSection({
     forceOpen || item.status === "past" || item.status === "current"
 
   return (
-    <section id={item.id} className="flex w-full scroll-mt-6 flex-col gap-5">
+    <section
+      id={item.id}
+      className="flex w-full scroll-mt-[calc(var(--header-height,75px)+64px)] flex-col gap-5"
+    >
       <TimelineSectionHeader title={item.title} time={item.time} />
 
       {isOpen ? (
