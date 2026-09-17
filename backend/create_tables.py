@@ -9,6 +9,7 @@ import sys
 sys.path.insert(0, "src")
 
 from backend.core.database import Base, get_engine
+from backend.domain.market.models import exchange_rate  # noqa: F401 - 모델 등록용
 from backend.domain.timeline.models import report, timeline  # noqa: F401 - 모델 등록용
 
 

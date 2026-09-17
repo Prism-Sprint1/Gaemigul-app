@@ -2,7 +2,7 @@
 # 타임라인 슬롯을 수집·저장·조회한다. 슬롯 시간대 정의와 수집 시각도 여기서 정한다.
 #   collect_and_save       슬롯을 수집해서 DB에 저장 (스케줄러·POST /timeline/collect)
 #   get_day                하루치 슬롯을 DB에서 읽기 (GET /timeline)
-#   run_scheduled_collect  스케줄러가 부르는 진입점 (휴장일 확인 + 실패 로깅, 20:00 슬롯 뒤에는 보고서 생성)
+#   run_scheduled_collect  슬롯 전용 스케줄러 진입점 (휴장일 확인 + 실패 로깅)
 
 import asyncio
 import logging
@@ -25,7 +25,7 @@ from backend.domain.timeline.schemas.timeline import (
 )
 from backend.core.database import get_session_factory
 from backend.domain.timeline.models.timeline import TimelineSlot
-from backend.domain.timeline.services import briefing_service, leading_sector_service, market_hours, market_indicator_service, news_service, prompts, report_service, timeline_repository, top_gainer_service
+from backend.domain.timeline.services import briefing_service, leading_sector_service, market_hours, market_indicator_service, news_service, prompts, timeline_repository, top_gainer_service
 
 # 슬롯 정의. slot_key("0730") -> (DB 값 "07:30", 화면 명칭)
 # prompts.SLOT_TITLES에서 만든다. 슬롯을 추가·삭제하려면 SLOT_TITLES를 고친다
@@ -58,10 +58,6 @@ SLOT_COLLECT_TIMES = {
     "1730": (17, 30),
     "2000": (20, 0),
 }
-
-# 이 슬롯의 예약 수집이 끝나면 이어서 일간(마지막 거래일이면 주간도) 보고서를 만든다
-# 보고서는 그날 타임라인 전체를 재료로 쓰므로 마지막 슬롯이어야 한다
-_REPORT_AFTER_SLOT = "2000"
 
 # 슬롯당 뉴스 최대 건수. 값은 news_service._PICK_MAX에서 바꾼다
 _NEWS_LIMIT = news_service._PICK_MAX
@@ -255,7 +251,6 @@ async def get_day(session: AsyncSession, trade_date: date, *, now: datetime | No
 
 # 스케줄러가 SLOT_COLLECT_TIMES 시각에 부른다
 # 휴장일이면 아무것도 하지 않고, 실패해도 예외를 밖으로 내보내지 않는다(다른 슬롯 예약은 유지)
-# _REPORT_AFTER_SLOT 슬롯이 끝나면 이어서 보고서를 만든다 (슬롯 수집이 실패해도 앞선 슬롯들로 보고서는 시도한다)
 async def run_scheduled_collect(slot_key: str) -> None:
     if not market_hours.is_trading_day():
         logger.info("[스케줄러] %s 건너뜀 - 오늘은 장이 열리지 않습니다.", slot_key)
@@ -272,6 +267,3 @@ async def run_scheduled_collect(slot_key: str) -> None:
         )
     except Exception as error:
         logger.error("[스케줄러] %s 수집 실패 - %s: %s", slot_key, type(error).__name__, error, exc_info=True)
-
-    if slot_key == _REPORT_AFTER_SLOT:
-        await report_service.run_scheduled_reports()

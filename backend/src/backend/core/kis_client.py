@@ -44,6 +44,8 @@ _INVESTOR_DAILY_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-investor-
 _INVESTOR_DAILY_TR_ID = "FHPTJ04040000"
 _INDEX_DAILY_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-index-daily-price"
 _INDEX_DAILY_TR_ID = "FHPUP02120000"
+_INDEX_MINUTE_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-time-indexchartprice"
+_INDEX_MINUTE_TR_ID = "FHKUP03500200"
 _OVERSEAS_PERIOD_ENDPOINT = "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice"
 _OVERSEAS_PERIOD_TR_ID = "FHKST03030100"
 _ITEM_PERIOD_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
@@ -359,6 +361,25 @@ def get_index_daily_price(index_code: str, base_date: str, period: str = "D") ->
             "FID_INPUT_ISCD": index_code,
             "FID_INPUT_DATE_1": base_date,
             "FID_PERIOD_DIV_CODE": period,
+        },
+    )
+
+
+# 국내 업종 분봉 - 시간대별 거래대금 분포에 쓴다.
+# index_code 코스피 "0001" / 코스닥 "1001", interval_seconds "1800"은 30분.
+# include_previous=True면 KIS가 보유한 과거 분봉도 함께 요청한다.
+# 응답 output2: stck_bsop_date / stck_cntg_hour / acml_tr_pbmn(누적 거래대금, 백만원)
+def get_index_minute_price(index_code: str, interval_seconds: str = "1800", include_previous: bool = True) -> dict:
+    settings = _checked_settings()
+    return _get_with_retry(
+        f"{settings.kis_base_url}{_INDEX_MINUTE_ENDPOINT}",
+        headers=_headers(settings, _INDEX_MINUTE_TR_ID),
+        params={
+            "FID_COND_MRKT_DIV_CODE": "U",
+            "FID_ETC_CLS_CODE": "1",
+            "FID_INPUT_ISCD": index_code,
+            "FID_INPUT_HOUR_1": interval_seconds,
+            "FID_PW_DATA_INCU_YN": "Y" if include_previous else "N",
         },
     )
 

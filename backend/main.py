@@ -1,9 +1,9 @@
 # main.py
-# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바·VIX·슬롯 수집 8개·히트맵 수집 2개), CORS, 라우터 등록.
-# 보고서는 따로 예약하지 않는다. 20:00 슬롯 작업이 끝나면 timeline_service가 이어서 만든다
+# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바·market 데이터·슬롯·보고서), CORS, 라우터 등록.
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,9 +17,9 @@ from backend.domain.calendar.routers.calendar import router as calendar_router
 # from backend.domain.heatmap.routers.heatmap import router as heatmap_router
 # from backend.domain.heatmap.services import heatmap
 from backend.domain.market.routers.market import router as market_router
-from backend.domain.market.services import vix_service
+from backend.domain.market.services import exchange_rate_service, investor_flow_service, sentiment_service, trading_value_service, vix_service
 from backend.domain.timeline.routers.timeline import router as timeline_router
-from backend.domain.timeline.services import market_indicator_service, timeline_service
+from backend.domain.timeline.services import market_indicator_service, report_service, timeline_service
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,11 @@ async def lifespan(app: FastAPI):
 
     _register_indicator_job()
     _register_vix_job()
+    _register_sentiment_job()
+    _register_exchange_rate_job()
+    _register_trading_value_job()
     _register_slot_jobs()
-    # _register_heatmap_jobs()
+    _register_report_job()
 
     jobs = _scheduler.get_jobs()
     if jobs:
@@ -84,6 +87,67 @@ def _register_vix_job() -> None:
     )
 
 
+# 투자자 수급과 개미굴 시장심리지수는 같은 KIS 수급 원본을 공유한다.
+# 서버 시작 시 한 번, 평일 국내장 09:00~15:30에 30분마다 갱신한다.
+def _refresh_market_session() -> None:
+    investor_raw = None
+    try:
+        investor_raw = investor_flow_service.refresh()
+    except Exception as error:
+        logger.warning("투자자 수급 갱신 실패 - %s: %s", type(error).__name__, error)
+
+    try:
+        sentiment_service.refresh(investor_raw)
+    except Exception as error:
+        logger.warning("개미굴 시장심리지수 갱신 실패 - %s: %s", type(error).__name__, error)
+
+
+def _register_sentiment_job() -> None:
+    _refresh_market_session()
+
+    _scheduler.add_job(
+        _refresh_market_session,
+        CronTrigger(day_of_week="mon-fri", hour="9-15", minute="0,30"),
+        id="market_session",
+        max_instances=1,
+        coalesce=True,
+    )
+
+
+# 원/달러 환율은 24시간 매시 00분·30분에 실제값을 DB에 적재하고 세 기간 캐시를 갱신한다.
+# 초기 실행은 스케줄러 시작 직후 수행해 서버 시작 자체를 막지 않는다.
+def _register_exchange_rate_job() -> None:
+    if not get_settings().database_url:
+        logger.warning("원/달러 환율 차트 비활성화 - DATABASE_URL이 .env에 없습니다.")
+        return
+
+    _scheduler.add_job(
+        exchange_rate_service.refresh,
+        CronTrigger(minute="0,30"),
+        id="market_exchange_rate",
+        max_instances=1,
+        coalesce=True,
+        next_run_time=datetime.now(ZoneInfo("Asia/Seoul")),
+    )
+
+
+# 시간대별 거래대금은 서버 시작 시 최근 완성 거래일을 읽고, 평일 15:34에 오늘 완성본으로 교체한다.
+# 타임라인 수집과 같은 분에 실행하되 KIS 호출 집중을 피하려고 거래대금은 30초 뒤에 시작한다.
+def _register_trading_value_job() -> None:
+    try:
+        trading_value_service.refresh()
+    except Exception as error:
+        logger.warning("시간대별 거래대금 초기 갱신 실패 - %s: %s", type(error).__name__, error)
+
+    _scheduler.add_job(
+        trading_value_service.refresh,
+        CronTrigger(day_of_week="mon-fri", hour=15, minute=34, second=30),
+        id="market_trading_value",
+        max_instances=1,
+        coalesce=True,
+    )
+
+
 # 슬롯 수집 작업 등록 (하루 8회). 시각은 timeline_service.SLOT_COLLECT_TIMES에서 바꾼다
 # DATABASE_URL이 없으면 등록하지 않는다. 휴장일 판단은 작업 안에서 한다
 def _register_slot_jobs() -> None:
@@ -100,18 +164,19 @@ def _register_slot_jobs() -> None:
         )
 
 
-# 히트맵 수집 작업 등록 (히트맵 담당). HEATMAP_ENABLED=false면 등록하지 않는다
-# 저장된 스냅샷을 먼저 복원하고(네트워크 없음), 첫 수집은 서버 시작 직후 백그라운드에서 한 번 돌린다
-# 매분 30초에 확인하되 10분 수집 시점·휴장·마감 여부는 heatmap.refresh_all이 판단한다 (30초 여유는 15:30 마감 체결 반영용)
-# refresh_all은 동기 함수라 스케줄러가 별도 스레드에서 실행한다 (타임라인 슬롯 수집을 막지 않는다)
-# def _register_heatmap_jobs() -> None:
-#     if not get_settings().heatmap_enabled:
-#         logger.warning("히트맵 수집 비활성화 - HEATMAP_ENABLED=false")
-#         return
+# 일간·주간 보고서는 20:00 슬롯과 분리해 20:05에 만든다.
+# KIS의 투자자 수급·업종 거래대금이 20:00 직후에도 정산되는 것을 실데이터로 확인해 5분의 여유를 둔다.
+def _register_report_job() -> None:
+    if not get_settings().database_url:
+        return
 
-#     heatmap.initialize()
-#     _scheduler.add_job(heatmap.refresh_all, "date", kwargs={"force": True}, id="heatmap_initial", misfire_grace_time=60)
-#     _scheduler.add_job(heatmap.refresh_all, CronTrigger(minute="*", second=30), id="heatmap", max_instances=1, coalesce=True)
+    _scheduler.add_job(
+        report_service.run_scheduled_reports,
+        CronTrigger(hour=20, minute=5),
+        id="timeline_reports",
+        max_instances=1,
+        coalesce=True,
+    )
 
 
 app = FastAPI(lifespan=lifespan)

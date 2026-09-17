@@ -100,6 +100,7 @@ BRIEFING_PROMPT = """너는 한국 주식시장 브리핑을 쓰는 금융 에�
     기사 발행 시각과 [현재 시각]을 비교해, 일어나지 않은 일은 "~할 예정입니다"로 써라.
 15. "혼조"는 오르는 것과 내리는 것이 섞였을 때만 쓴다. 지수가 한 방향으로 크게 움직였으면 쓰지 마라.
 16. "홀로", "유일하게", "가장 크게" 같은 비교 표현은 [확정 수치]에서 다른 대상과 비교해 확인될 때만 쓴다.
+17. 저장 전에 조사와 맞춤법을 확인해라. 금리 인상은 반드시 "기준금리를 인상"처럼 쓰고 "기준금을 인상"이라고 쓰지 마라.
 
 [길이]
 - headline: 30자 이내. 오늘 시장을 한마디로 요약한 제목. 무엇이 어떻게 됐는지(방향·원인·주인공)가 드러나게 쓴다.
@@ -197,6 +198,8 @@ BEGINNER_PROMPT = """너는 주식을 막 시작한 사람에게 오늘 시황�
 18. "팔아치웠다", "쓸어 담았다" 같은 구어·과장 표현을 쓰지 마라. 하루 하락을 "약세장"(길게 이어지는 하락장)이라고 부르지 마라.
     뉴스가 "급등·급락"이라고 쓴 대상에만 그 말을 쓴다. 여러 대상을 묶어 한꺼번에 "급등했다"고 쓰지 마라.
 19. 기간 평균·누적 수치에는 원문의 집계 기간과 기준을 반드시 붙이고 오늘 장중 값처럼 쓰지 마라. 금리·환율과 매매 사실이 함께 나와도 인과를 만들지 말며, 인수 소식에 사업 안정 기대나 "확실한 호재" 같은 근거 없는 평가를 덧붙이지 마라.
+20. 뉴스에 직접 적히지 않은 불확실성 해소·관심 집중·기대감 형성·매수 주문 집중을 실제 상승 원인이나 투자자 심리로 단정하지 마라.
+21. 인수 기사에 인수 사실과 주가 반응만 있으면 자금력 확보·새 사업 기회·사업 확장 기대·기업 가치 상승을 이유로 덧붙이지 마라.
 
 [길이]
 - points[].title: 30자 이내. 그 문단이 무엇을 설명하는지 알 수 있는 제목
@@ -393,10 +396,20 @@ REPORT_PROMPT = """너는 한국 주식시장 보고서를 쓰는 금융 에디�
 # 보고서 이미지 장면. 문구 생성 방식과 재료 키는 유지하고 그림의 표현만 바꾼다.
 IMAGE_SCENE = "{city} Market mood: {mood}. Related miniature props: {causes}. {flow}"
 IMAGE_SCENE_NO_CAUSE = "{city} Market mood: {mood}. {flow}"
-IMAGE_CITY = (
-    "One coherent handcrafted miniature market room with warm plaster walls, wooden window frames and desk. "
-    "One friendly clay beginner investor seated at the center or right third is the main focal character. "
-    "Related economic props sit in the window or on shelves, smaller and slightly out of focus."
+IMAGE_MAIN_LAYOUTS = (
+    "A handcrafted miniature securities office with a broad plaster wall, one wooden desk and a side doorway. The main clay beginner investor stands beside the desk, facing the market symbol.",
+    "A handcrafted miniature market observation room with a wide window, a low wooden bench and a side doorway. The main clay beginner investor sits on the bench, watching the market symbol.",
+    "A handcrafted miniature exchange lobby with warm plaster pillars, a central wooden information desk and a side exit. The main clay beginner investor stands at the center of the lobby.",
+    "A handcrafted miniature home study with a wooden cabinet, a compact writing desk and a side doorway. The main clay beginner investor sits at the desk, studying the market symbol.",
+    "A handcrafted miniature market strategy room with a broad planning table, a tall side window and a side doorway. The main clay beginner investor stands beside the table, facing the market symbol.",
+)
+
+IMAGE_SECTION_LAYOUTS = (
+    "A handcrafted miniature analyst workshop with a long wooden workbench and shallow wall shelves. The main clay beginner investor sits at the right third, examining the cause props.",
+    "A handcrafted miniature research library with a central display table, small wooden bookcases and a warm plaster wall. The main clay beginner investor stands at the right third, comparing the cause props.",
+    "A handcrafted miniature economic laboratory with a sturdy wooden table, small cabinets and a wide window. The main clay beginner investor sits at the right third, inspecting the cause props.",
+    "A handcrafted miniature newsroom studio with a low wooden presentation table and softly focused shelving. The main clay beginner investor stands at the right third, arranging the cause props.",
+    "A handcrafted miniature economic archive room with a wide wooden map table, shallow document drawers and warm plaster walls. The main clay beginner investor sits at the right third, tracing the cause props.",
 )
 
 # 자금 흐름은 작은 보조 인물의 이동으로 나타낸다. 주인공보다 작게, 방향 화살표도 작게 둔다.
@@ -457,7 +470,7 @@ IMAGE_STYLE = (
     "Only the explicitly specified props belong in the scene. Neutral beige, taupe, brown and warm gray "
     "everywhere except the single explicitly specified market-arrow accent. "
     "Keep the doorway movement arrow small and dark brown. "
-    "Keep the upper 115 pixels visually quiet with the same continuous plaster-wall texture because the application overlays a title there. "
+    "The upper 82 pixels must be completely bare uninterrupted plaster wall, edge to edge: no frames, shelves, windows, props, marks or shapes there, because the application overlays a compact title. "
     "Continue the room, wooden floor or workbench texture through the lower 70 pixels edge to edge; keep it visually quiet but never blank or white because keyword plaques are overlaid there. "
     "Place all important people, arrows and props inside the middle horizontal band without cropping. "
     "Absolutely no text, letters, numbers, signs, labels, logos, watermarks or pseudo-writing anywhere. "
