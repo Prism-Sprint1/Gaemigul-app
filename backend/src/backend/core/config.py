@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # 한국투자증권 오픈API (timeline 지표 바·슬롯, heatmap)
+    # 한국투자증권 오픈API (timeline 지표 바·슬롯·보고서, market 메인 페이지 데이터)
     kis_app_key: str | None = None
     kis_app_secret: str | None = None
     kis_base_url: str = "https://openapi.koreainvestment.com:9443"
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # Supabase Postgres 연결 문자열. "postgresql+asyncpg://"로 시작해야 한다
     database_url: str | None = None
 
-    # Pollinations 보고서 이미지 생성. 키는 서버에서만 쓴다.
+    # Pollinations 이미지 생성 (timeline 보고서 이미지). 키(sk_)는 서버에서만 쓴다. 모델 id를 바꾸면 화풍·비용이 바뀐다
     pollinations_api_key: str | None = None
     pollinations_image_model: str = "z-image-turbo"
 

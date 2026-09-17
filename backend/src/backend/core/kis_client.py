@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import json
+import threading
 import time
 import zipfile
 from pathlib import Path
@@ -57,30 +58,39 @@ _RETRY_COUNT = 3
 _RETRY_WAIT_SECONDS = 0.5
 _TIMEOUT_SECONDS = 10.0
 
+# 토큰 발급 잠금. 예약 작업(지표 바·VIX·환율·수급)은 서로 다른 스레드에서 같은 분에 시작되므로,
+# 토큰이 만료된 순간 여러 작업이 동시에 발급하지 않게 한 번에 하나만 캐시 확인·발급을 한다
+_TOKEN_LOCK = threading.Lock()
 
-# 캐시된 토큰 (없거나 만료됐으면 None)
+
+# 캐시된 토큰 (없거나 만료됐으면 None). 중간에 끊긴 쓰기·옛 형식 캐시도 None으로 보고 새로 발급한다
 def _read_cached_token() -> str | None:
     if not _TOKEN_CACHE_PATH.exists():
         return None
 
-    cached = json.loads(_TOKEN_CACHE_PATH.read_text())
-    if cached["expires_at"] <= time.time():
+    try:
+        cached = json.loads(_TOKEN_CACHE_PATH.read_text(encoding="utf-8"))
+        if cached["expires_at"] > time.time():
+            return cached["access_token"]
+    except (OSError, ValueError, KeyError, TypeError):
         return None
+    return None
 
-    return cached["access_token"]
 
-
-# 발급받은 토큰을 파일에 저장한다
+# 발급받은 토큰을 파일에 저장한다. 임시 파일에 쓴 뒤 바꿔치기해서 읽는 쪽이 반쯤 쓴 파일을 보지 않게 한다
 def _write_cached_token(access_token: str, expires_in: int) -> None:
     _TOKEN_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _TOKEN_CACHE_PATH.write_text(
+    temporary = _TOKEN_CACHE_PATH.with_suffix(".tmp")
+    temporary.write_text(
         json.dumps(
             {
                 "access_token": access_token,
                 "expires_at": time.time() + expires_in - 60,  # 만료 60초 전부터는 새로 발급
             }
-        )
+        ),
+        encoding="utf-8",
     )
+    temporary.replace(_TOKEN_CACHE_PATH)
 
 
 # 키 설정을 확인하고 설정값을 돌려준다. 키가 없으면 RuntimeError
@@ -138,6 +148,12 @@ def _send_with_retry(url: str, *, headers: dict | None = None, params: dict | No
 def get_access_token() -> str:
     settings = _checked_settings()
 
+    with _TOKEN_LOCK:
+        return _get_access_token_locked(settings)
+
+
+# 잠금을 잡은 상태에서만 부른다 (get_access_token 전용)
+def _get_access_token_locked(settings) -> str:
     cached_token = _read_cached_token()
     if cached_token:
         return cached_token
@@ -172,8 +188,9 @@ def get_domestic_index_price(market_div_code: str, index_code: str) -> dict:
     )
 
 
-# 해외 지수·환율 현재가 (지표 바의 나스닥·S&P500·니케이·환율)
-# market_div_code 지수 "N" / 환율 "X", symbol 나스닥 "COMP" / S&P500 "SPX" / 니케이 "JP#NI225" / 원달러 "FX@KRW"
+# 해외 지수·환율 현재가 - 지표 바(나스닥·S&P500·니케이·환율), market(VIX, 환율 차트, 시장심리 환율 등락률)
+# market_div_code 지수 "N" / 환율 "X", symbol 나스닥 "COMP" / S&P500 "SPX" / 니케이 "JP#NI225" / VIX "VIX" / 원달러 "FX@KRW"
+# 주의: 환율은 분봉(output2)이 빈 배열로 온다. 지난 시각 값이 필요하면 직접 쌓아야 한다 (market_exchange_rate_snapshot)
 # 응답 output1: ovrs_nmix_prpr(현재가) / prdy_ctrt(전일 대비 등락률)
 def get_overseas_index_or_fx_price(market_div_code: str, symbol: str) -> dict:
     settings = _checked_settings()
@@ -303,7 +320,7 @@ def get_expected_ranking(market_open_code: str = "0", rank_sort_code: str = "0",
     )
 
 
-# 시장별 투자자 매매동향 (일별) - 보고서의 외국인·기관·개인 순매수, 차트 분기 외국인 합산에 쓴다
+# 시장별 투자자 매매동향 (일별) - 보고서의 외국인·기관·개인 순매수·차트 분기 외국인 합산, market의 투자자 수급·시장심리에 쓴다
 # base_date: "20260911" 형태. 이 날짜부터 거슬러 최근 300거래일이 온다 (더 이전은 base_date를 옮겨 다시 호출)
 # market_code 코스피 "KSP" / 코스닥 "KSQ", index_code 코스피 "0001" / 코스닥 "1001"
 # 날짜를 지정해 조회하므로 지난 날짜도 나중에 다시 받을 수 있다
@@ -325,7 +342,7 @@ def get_investor_daily_by_market(base_date: str, market_code: str = "KSP", index
     )
 
 
-# 국내 업종 지수 일자별·주별 - 보고서의 섹터 카드, VKOSPI에 쓴다
+# 국내 업종 지수 일자별·주별 - 보고서의 섹터 카드·VKOSPI, market 시장심리(코스피·코스닥·VKOSPI 최근 거래일 분포)에 쓴다
 # index_code: 업종코드 (VKOSPI "0503", 코스피 "0001"), base_date: "20260911" 형태
 # period: "D" 일별 / "W" 주별 / "M" 월별
 # 응답 output1 (현재 값 하나): bstp_nmix_prpr(지수) / bstp_nmix_prdy_ctrt(전일 대비 등락률) /
@@ -349,10 +366,11 @@ def get_index_daily_price(index_code: str, base_date: str, period: str = "D") ->
     )
 
 
-# 국내 업종 분봉 - 시간대별 거래대금 분포에 쓴다.
-# index_code 코스피 "0001" / 코스닥 "1001", interval_seconds "1800"은 30분.
-# include_previous=True면 KIS가 보유한 과거 분봉도 함께 요청한다.
-# 응답 output2: stck_bsop_date / stck_cntg_hour / acml_tr_pbmn(누적 거래대금, 백만원)
+# 국내 업종 분봉 - market 시간대별 거래대금 분포에 쓴다. 업종 등락률을 슬롯 시각 기준으로 검증할 때도 쓸 수 있다
+# index_code 코스피 "0001" / 코스닥 "1001" / 개별 업종코드
+# interval_seconds 봉 간격(초) "60" 1분 / "1800" 30분 - FID_INPUT_HOUR_1에 들어간다 (시각 "093000"을 넣으면 일봉 행만 온다)
+# include_previous=True면 KIS가 보유한 과거 분봉도 함께 요청한다 (30분봉은 전 거래일도 오고, 1분봉은 당일 최근 약 100개만 온다)
+# 응답 output2 (최신부터): stck_bsop_date / stck_cntg_hour(봉 시각) / bstp_nmix_prpr(지수) / acml_tr_pbmn(그날 누적 거래대금, 백만원)
 def get_index_minute_price(index_code: str, interval_seconds: str = "1800", include_previous: bool = True) -> dict:
     settings = _checked_settings()
     return _get_with_retry(
@@ -368,7 +386,7 @@ def get_index_minute_price(index_code: str, interval_seconds: str = "1800", incl
     )
 
 
-# 해외 지수·환율 기간별 시세 - 보고서 차트의 분기별 환율에 쓴다
+# 해외 지수·환율 기간별 시세 - 보고서 차트의 분기별 환율, market의 VIX 전일 종가·환율 1개월 차트·시장심리 환율 분포에 쓴다
 # market_div_code 지수 "N" / 환율 "X", symbol 원달러 "FX@KRW" (심볼은 get_overseas_index_or_fx_price와 같다)
 # start_date·end_date: "20260101" 형태, period: "D" 일 / "W" 주 / "M" 월 / "Y" 년
 # 주의: 틀린 심볼도 rt_cd "0"으로 성공하고 값이 0이 온다. 받는 쪽에서 0 값을 걸러낼 것

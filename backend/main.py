@@ -1,5 +1,13 @@
 # main.py
-# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바·market 데이터·슬롯·보고서), CORS, 라우터 등록.
+# FastAPI 앱 진입점. 로그 설정, 스케줄러, CORS, 라우터 등록.
+# 예약 작업 (한국 시간)
+#   indicator_bar          지표 바              10분마다
+#   market_vix             VIX                  매시 00·30분
+#   market_session         투자자 수급·시장심리  평일 09:00~15:00 30분마다 + 15:35 (장 마감 반영)
+#   market_exchange_rate   원/달러 환율 차트     매시 00·30분 (서버 시작 직후 1회)
+#   market_trading_value   시간대별 거래대금      평일 15:34:30
+#   slot_0730 ~ slot_2000  타임라인 슬롯 8개      timeline_service.SLOT_COLLECT_TIMES
+#   timeline_reports       일간·주간 보고서       매일 20:10 (휴장일 판단은 작업 안에서, 주간은 일간 직후)
 
 import logging
 from contextlib import asynccontextmanager
@@ -7,6 +15,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.combining import OrTrigger
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -67,8 +76,8 @@ def _register_indicator_job() -> None:
     _scheduler.add_job(market_indicator_service.refresh_all, CronTrigger(minute="0,10,20,30,40,50"), id="indicator_bar")
 
 
-# 메인 페이지 VIX 갱신 작업 등록 (24시간, 매시 00분·30분).
-# 서버 시작 시 한 번 채우고 실패해도 예약 작업은 등록해 다음 00·30분에 다시 시도한다. KIS 호출은 kis_client 토큰 캐시를 그대로 쓴다.
+# VIX 갱신 작업 등록 (매시 00·30분). minute 값을 바꾸면 주기가 바뀐다
+# 등록 전에 캐시를 한 번 채운다. 실패해도 작업은 등록해 다음 00·30분에 다시 시도한다 (그 전까지 GET /market/vix는 503)
 def _register_vix_job() -> None:
     try:
         vix_service.refresh()
@@ -84,8 +93,8 @@ def _register_vix_job() -> None:
     )
 
 
-# 투자자 수급과 개미굴 시장심리지수는 같은 KIS 수급 원본을 공유한다.
-# 서버 시작 시 한 번, 평일 국내장 09:00~15:30에 30분마다 갱신한다.
+# 투자자 수급 -> 시장심리지수 순으로 갱신한다. 수급에서 받은 KIS 원본을 시장심리지수가 재사용한다 (KIS 2회 절약)
+# 수급이 실패해도 시장심리지수는 자체 조회로 시도한다. 둘 다 실패하면 각자 기존 캐시를 유지한다
 def _refresh_market_session() -> None:
     investor_raw = None
     try:
@@ -99,20 +108,29 @@ def _refresh_market_session() -> None:
         logger.warning("개미굴 시장심리지수 갱신 실패 - %s: %s", type(error).__name__, error)
 
 
+# 투자자 수급·시장심리지수 작업 등록 (평일 09:00~15:00 30분마다 + 15:35). 등록 전에 한 번 채운다
+# 마지막은 15:30이 아니라 15:35다. 15:30:00에는 종가 동시호가(15:20~15:30) 체결이 수급·등락률에 아직 안 들어가 있다
+# 15:34:00(15:30 슬롯)·15:34:30(거래대금)과 KIS 호출이 겹치지 않게 15:35:00에 둔다. 15:35 값이 다음 날 09:00까지 유지된다
 def _register_sentiment_job() -> None:
     _refresh_market_session()
 
     _scheduler.add_job(
         _refresh_market_session,
-        CronTrigger(day_of_week="mon-fri", hour="9-15", minute="0,30"),
+        OrTrigger(
+            [
+                CronTrigger(day_of_week="mon-fri", hour="9-14", minute="0,30"),
+                CronTrigger(day_of_week="mon-fri", hour=15, minute="0,35"),
+            ]
+        ),
         id="market_session",
         max_instances=1,
         coalesce=True,
     )
 
 
-# 원/달러 환율은 24시간 매시 00분·30분에 실제값을 DB에 적재하고 세 기간 캐시를 갱신한다.
-# 초기 실행은 스케줄러 시작 직후 수행해 서버 시작 자체를 막지 않는다.
+# 원/달러 환율 작업 등록 (매시 00·30분, DB 적재). DATABASE_URL이 없으면 등록하지 않는다
+# 첫 실행은 next_run_time으로 스케줄러 시작 직후에 한다 (async 작업이라 여기서 바로 부를 수 없다)
+# 시작 직후 실행은 30분 칸 시각과 멀어 DB에 저장하지 않고 캐시만 채운다 (exchange_rate_service._SNAPSHOT_TOLERANCE)
 def _register_exchange_rate_job() -> None:
     if not get_settings().database_url:
         logger.warning("원/달러 환율 차트 비활성화 - DATABASE_URL이 .env에 없습니다.")
@@ -128,8 +146,8 @@ def _register_exchange_rate_job() -> None:
     )
 
 
-# 시간대별 거래대금은 서버 시작 시 최근 완성 거래일을 읽고, 평일 15:34에 오늘 완성본으로 교체한다.
-# 타임라인 수집과 같은 분에 실행하되 KIS 호출 집중을 피하려고 거래대금은 30초 뒤에 시작한다.
+# 시간대별 거래대금 작업 등록 (평일 15:34:30). 등록 전에 최근 완성 거래일로 한 번 채운다
+# 15:30 봉이 생긴 뒤 오늘 분포로 바꾸는 시각이다. 같은 분(15:34:00)에 시작하는 15:30 슬롯과 KIS 호출이 겹치지 않게 30초 늦춘다
 def _register_trading_value_job() -> None:
     try:
         trading_value_service.refresh()
@@ -161,15 +179,16 @@ def _register_slot_jobs() -> None:
         )
 
 
-# 일간·주간 보고서는 20:00 슬롯과 분리해 20:05에 만든다.
-# KIS의 투자자 수급·업종 거래대금이 20:00 직후에도 정산되는 것을 실데이터로 확인해 5분의 여유를 둔다.
+# 보고서 작업 등록 (매일 20:10). 휴장일·주간 여부는 report_service.run_scheduled_reports가 판단한다
+# 20:00 직후에는 KIS 투자자 수급·업종 거래대금이 아직 정산 중이라 10분 늦춘다. 값이 덜 정산되면 minute를 늦춘다
+# 주간 보고서는 따로 등록하지 않는다 - 같은 작업이 일간을 만든 직후 그 주 마지막 거래일이면 이어서 만든다
 def _register_report_job() -> None:
     if not get_settings().database_url:
         return
 
     _scheduler.add_job(
         report_service.run_scheduled_reports,
-        CronTrigger(hour=20, minute=5),
+        CronTrigger(hour=20, minute=10),
         id="timeline_reports",
         max_instances=1,
         coalesce=True,

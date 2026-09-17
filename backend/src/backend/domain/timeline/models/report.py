@@ -10,7 +10,7 @@
 #                    └─ timeline_report_term           어려운 용어 3행
 #
 # [조회 기준] 프런트는 날짜 하나로 그날 만든 보고서만 불러온다
-#   일간: report_type="DAILY"  이고 start_date = 그 날짜 (거래일마다 20:00 슬롯 뒤 생성)
+#   일간: report_type="DAILY"  이고 start_date = 그 날짜 (거래일마다 20:10 생성)
 #   주간: report_type="WEEKLY" 이고 end_date = 그 날짜 (그 주 마지막 거래일에만 일간 뒤 생성)
 #
 # [저장 순서] 수치 칼럼을 먼저 채우고 LLM 문구 칼럼은 나중에 채운다.
