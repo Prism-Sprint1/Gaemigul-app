@@ -43,7 +43,7 @@ export default function Sidebar() {
             type="button"
             onClick={close}
             aria-label="메뉴 닫기"
-            className="w-fit p-1 text-neutral-500"
+            className="w-fit self-end p-1 text-neutral-500"
           >
             <X size={20} />
           </button>
