@@ -1,6 +1,13 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react"
 
 interface MobileSidebarContextValue {
   isOpen: boolean
@@ -16,15 +23,17 @@ const MobileSidebarContext = createContext<MobileSidebarContextValue | null>(
 export function MobileSidebarProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
 
+  const open = useCallback(() => setIsOpen(true), [])
+  const close = useCallback(() => setIsOpen(false), [])
+  const toggle = useCallback(() => setIsOpen((prev) => !prev), [])
+
+  const value = useMemo(
+    () => ({ isOpen, open, close, toggle }),
+    [isOpen, open, close, toggle]
+  )
+
   return (
-    <MobileSidebarContext.Provider
-      value={{
-        isOpen,
-        open: () => setIsOpen(true),
-        close: () => setIsOpen(false),
-        toggle: () => setIsOpen((prev) => !prev),
-      }}
-    >
+    <MobileSidebarContext.Provider value={value}>
       {children}
     </MobileSidebarContext.Provider>
   )

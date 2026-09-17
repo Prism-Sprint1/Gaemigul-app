@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
+import { useEffect, useRef } from "react"
 import { Badge, Separator } from "@/components/ui"
 
 import Logo from "@/public/images/logo.svg"
@@ -13,9 +14,30 @@ import { useMobileSidebar } from "./sidebar"
 
 export default function Header() {
   const { toggle } = useMobileSidebar()
+  const headerRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const node = headerRef.current
+    if (!node) return
+
+    const updateHeaderHeight = () => {
+      document.documentElement.style.setProperty(
+        "--header-height",
+        `${node.offsetHeight}px`
+      )
+    }
+
+    updateHeaderHeight()
+    const observer = new ResizeObserver(updateHeaderHeight)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   return (
-    <header className="left-00 top-0 w-full">
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-30 w-full bg-background"
+    >
       {/* 데스크톱 헤더 (기존 그대로) */}
       <div className="hidden w-full md:flex">
         <Link
@@ -24,9 +46,6 @@ export default function Header() {
         >
           <Image src={Logo} alt="개미굴 로고"></Image>
           <div className="flex items-center gap-2.5">
-            <Badge className="bg-point text-[12px] font-semibold text-white">
-              BETA
-            </Badge>
             <Separator orientation="vertical" />
           </div>
         </Link>
@@ -44,7 +63,7 @@ export default function Header() {
       </div>
 
       {/* 모바일 헤더: 좌측 로고 / 우측 TIMER + 햄버거 메뉴, 같은 높이로 정렬 */}
-      <div className="flex w-full items-center justify-between px-4 py-3 md:hidden">
+      <div className="flex w-full items-center justify-between px-4 pt-4 pb-3 md:hidden">
         <Link href={"/"} className="flex items-center">
           <Image src={Logo} alt="개미굴 로고" className="h-9 w-auto" />
         </Link>

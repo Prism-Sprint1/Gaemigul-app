@@ -7,7 +7,5 @@ export {
 } from "./sidebar"
 export { Timeline, TimelineTimer, useTimelineSchedule } from "./timeline"
 export { default as PageTitle } from "./title"
-export { Sidebar, SidebarNav } from "./sidebar"
-
+export { default as Footer } from "./footer"
 export { default as IndexCard } from "./index-card"
-export { Timeline, TimelineTimer, useTimelineSchedule } from "./timeline"
