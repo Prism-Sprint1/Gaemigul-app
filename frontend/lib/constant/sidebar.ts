@@ -24,7 +24,7 @@ export const sidebarNavItems: SidebarNavItem[] = [
     activeBadgeClassName: "bg-white/20 text-white",
   },
   {
-    href: "/hitmap",
+    href: "/heatmap",
     label: "단물 지도",
     icon: Lollipop,
     badge: "HOT",

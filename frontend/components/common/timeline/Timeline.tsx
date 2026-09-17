@@ -43,84 +43,86 @@ export default function Timeline() {
   }
 
   return (
-    <ol className="relative flex flex-col bg-ant-bg px-5 py-3">
-      <span className="absolute top-5.5 bottom-5.5 left-6.75 w-0.5 bg-neutral-200" />
-      {items.map((item) => {
-        const isMuted = mutedStatuses.has(item.status)
+    <div className="h-[calc(100%-322px)] overflow-y-scroll">
+      <ol className="relative flex flex-col px-5 py-3">
+        <span className="absolute top-5.5 bottom-5.5 left-6.75 w-0.5 bg-neutral-200" />
+        {items.map((item) => {
+          const isMuted = mutedStatuses.has(item.status)
 
-        return (
-          <li key={item.id} className="pb-5 last:pb-0">
-            <button
-              type="button"
-              onClick={() => goToSection(item.id)}
-              className={cn(
-                "flex w-full cursor-pointer items-start gap-3 rounded-lg py-1 text-left transition-colors duration-200",
-                item.status !== "current" && "hover:bg-gray-100"
-              )}
-            >
-              <div className="flex h-5 w-4 shrink-0 items-center justify-center">
-                {item.status === "current" ? (
-                  <span className="relative flex size-3.5 items-center justify-center">
-                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-point opacity-75" />
-                    <span className="relative z-10 size-2.5 rounded-full bg-point ring-2 ring-white" />
-                  </span>
-                ) : (
-                  <span
-                    className={cn(
-                      "z-10 size-2 rounded-full transition-colors duration-200",
-                      dotClassName[item.status]
-                    )}
-                  />
-                )}
-              </div>
-              <div
+          return (
+            <li key={item.id} className="pb-5 last:pb-0">
+              <button
+                type="button"
+                onClick={() => goToSection(item.id)}
                 className={cn(
-                  "flex-1 rounded-lg",
-                  item.status === "current" &&
-                    "border border-point bg-white px-3 py-2"
+                  "flex w-full cursor-pointer items-start gap-3 rounded-lg py-1 text-left transition-colors duration-200",
+                  item.status !== "current" && "hover:bg-gray-100"
                 )}
               >
-                <div className="flex items-center gap-1.5">
-                  <span
+                <div className="flex h-5 w-4 shrink-0 items-center justify-center">
+                  {item.status === "current" ? (
+                    <span className="relative flex size-3.5 items-center justify-center">
+                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-point opacity-75" />
+                      <span className="relative z-10 size-2.5 rounded-full bg-point ring-2 ring-white" />
+                    </span>
+                  ) : (
+                    <span
+                      className={cn(
+                        "z-10 size-2 rounded-full transition-colors duration-200",
+                        dotClassName[item.status]
+                      )}
+                    />
+                  )}
+                </div>
+                <div
+                  className={cn(
+                    "flex-1 rounded-lg",
+                    item.status === "current" &&
+                      "border border-point bg-white px-3 py-2"
+                  )}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "text-[12px] font-medium transition-colors duration-200",
+                        isMuted ? "text-neutral-400" : "text-neutral-500"
+                      )}
+                    >
+                      {item.time}
+                    </span>
+                    {item.status !== "upcoming" && (
+                      <Badge
+                        className={cn(
+                          "text-[10px] transition-colors duration-200",
+                          badgeClassName[item.status]
+                        )}
+                      >
+                        {item.badgeLabel}
+                      </Badge>
+                    )}
+                  </div>
+                  <strong
                     className={cn(
-                      "text-[12px] font-medium transition-colors duration-200",
+                      "mt-1 block text-[14px] font-semibold transition-colors duration-200",
+                      isMuted ? "text-neutral-400" : "text-foreground"
+                    )}
+                  >
+                    {item.title}
+                  </strong>
+                  <p
+                    className={cn(
+                      "mt-0.5 text-[12px] transition-colors duration-200",
                       isMuted ? "text-neutral-400" : "text-neutral-500"
                     )}
                   >
-                    {item.time}
-                  </span>
-                  {item.status !== "upcoming" && (
-                    <Badge
-                      className={cn(
-                        "text-[10px] transition-colors duration-200",
-                        badgeClassName[item.status]
-                      )}
-                    >
-                      {item.badgeLabel}
-                    </Badge>
-                  )}
+                    {item.description}
+                  </p>
                 </div>
-                <strong
-                  className={cn(
-                    "mt-1 block text-[14px] font-semibold transition-colors duration-200",
-                    isMuted ? "text-neutral-400" : "text-foreground"
-                  )}
-                >
-                  {item.title}
-                </strong>
-                <p
-                  className={cn(
-                    "mt-0.5 text-[12px] transition-colors duration-200",
-                    isMuted ? "text-neutral-400" : "text-neutral-500"
-                  )}
-                >
-                  {item.description}
-                </p>
-              </div>
-            </button>
-          </li>
-        )
-      })}
-    </ol>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
   )
 }

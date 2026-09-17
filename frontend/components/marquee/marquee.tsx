@@ -4,6 +4,7 @@ import {
   Card,
   CardContent,
   ChartContainer,
+  Skeleton,
   type ChartConfig,
 } from "@/components/ui"
 
@@ -11,53 +12,20 @@ import { Area, AreaChart } from "recharts"
 
 import { Marquee } from "@/components/animations/marquee"
 
-const indexData = [
-  {
-    name: "KOSPI123",
-    value: "2,684.50",
-    change: "+1.42%",
-    isIncrease: false,
-  },
-  {
-    name: "KOSPI456",
-    value: "2,684.50",
-    change: "-1.42%",
-    isIncrease: true,
-  },
-  {
-    name: "KOSPIaa",
-    value: "2,684.50",
-    change: "+1.42%",
-    isIncrease: false,
-  },
-  {
-    name: "KOSPIss",
-    value: "2,684.50",
-    change: "-1.42%",
-    isIncrease: true,
-  },
-  {
-    name: "KOSPIdd",
-    value: "2,684.50",
-    change: "+1.42%",
-    isIncrease: true,
-  },
-  {
-    name: "KOSPIcc",
-    value: "2,684.50",
-    change: "-1.42%",
-    isIncrease: false,
-  },
-]
+import {
+  getTimelineIndicators,
+  type MarketIndicatorItem,
+} from "@/lib/api/indicator"
 
-const chartData = [
-  { desktop: 186 },
-  { desktop: 305 },
-  { desktop: 237 },
-  { desktop: 73 },
-  { desktop: 209 },
-  { desktop: 214 },
-]
+import { useIndicatorSchedule } from "@/hooks/use-indicator-schedule"
+
+import { useCallback, useEffect, useState } from "react"
+
+import {
+  uptrendChartData,
+  downtrendChartData,
+  flatChartData,
+} from "@/lib/constant/indicatorChartData"
 
 const chartConfig = {
   desktop: {
@@ -66,34 +34,42 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-const firstRow = indexData.slice(0, indexData.length / 2)
-
 const IndexDataCard = ({
+  code,
   name,
-  value,
-  change,
-  isIncrease,
-}: {
-  name: string
-  value: string
-  change: string
-  isIncrease: boolean
-}) => {
-  const chartColor = isIncrease
-    ? "var(--color-increase)"
-    : "var(--color-decrease)"
-  const gradientId = `fill-${name}`
+  price,
+  change_rate,
+}: MarketIndicatorItem) => {
+  const direction: "up" | "down" | "flat" =
+    change_rate > 0 ? "up" : change_rate < 0 ? "down" : "flat"
+  const value = price.toLocaleString("ko-KR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+  const change = `${change_rate > 0 ? "+" : ""}${change_rate.toFixed(2)}%`
+  const chartColor = {
+    up: "var(--color-increase)",
+    down: "var(--color-decrease)",
+    flat: "var(--muted-foreground)",
+  }[direction]
+  const changeTextClass = {
+    up: "text-increase",
+    down: "text-decrease",
+    flat: "text-neutral-500",
+  }[direction]
+  const chartData = {
+    up: uptrendChartData,
+    down: downtrendChartData,
+    flat: flatChartData,
+  }[direction]
+  const gradientId = `fill-${code}`
   return (
     <Card className="h-full rounded-lg border-border bg-card px-3.5 py-2.25 shadow-none">
       <CardContent className="flex min-w-42 gap-3 px-0">
         <div>
           <p className="flex items-center gap-1.25 text-[12px] font-medium text-neutral-600">
             {name}
-            <span
-              className={`text-[12px] ${isIncrease ? "text-increase" : "text-decrease"}`}
-            >
-              {change}
-            </span>
+            <span className={`text-[12px] ${changeTextClass}`}>{change}</span>
           </p>
           <strong className="text-base font-semibold">{value}</strong>
         </div>
@@ -132,13 +108,48 @@ const IndexDataCard = ({
   )
 }
 
+const IndexDataCardSkeleton = () => (
+  <Card className="h-full rounded-lg border-border bg-card px-3.5 py-2.25 shadow-none">
+    <CardContent className="flex min-w-42 gap-3 px-0">
+      <div className="flex flex-col gap-1.5">
+        <Skeleton className="h-3.5 w-24" />
+        <Skeleton className="h-5 w-20" />
+      </div>
+      <Skeleton className="h-10 w-20" />
+    </CardContent>
+  </Card>
+)
+
+const SKELETON_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6"]
+
 export default function TestimonialMarqueeDemo() {
+  const [items, setItems] = useState<MarketIndicatorItem[]>([])
+
+  const fetchTimelineIndicators = useCallback(async () => {
+    try {
+      const data = await getTimelineIndicators()
+      setItems(data.items)
+    } catch (error) {
+      console.error("[getTimelineIndicators] 실패", error)
+    }
+  }, [])
+
+  // 최초 진입 시 1회 실행
+  useEffect(() => {
+    fetchTimelineIndicators()
+  }, [fetchTimelineIndicators])
+
+  // 정시 기준 30분 간격마다 실행
+  useIndicatorSchedule(fetchTimelineIndicators)
+
+  const isLoading = items.length === 0
+
   return (
     <div className="relative flex w-full flex-1 flex-col items-center justify-center overflow-hidden">
       <Marquee pauseOnHover className="[--duration:30s]">
-        {firstRow.map((index) => (
-          <IndexDataCard key={index.name} {...index} />
-        ))}
+        {isLoading
+          ? SKELETON_KEYS.map((key) => <IndexDataCardSkeleton key={key} />)
+          : items.map((item) => <IndexDataCard key={item.code} {...item} />)}
       </Marquee>
       <div className="pointer-events-none absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-background"></div>
       <div className="pointer-events-none absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-background"></div>
