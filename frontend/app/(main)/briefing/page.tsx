@@ -13,6 +13,7 @@ import {
   ReportSectionsNav,
 } from "@/components/briefing"
 import { PageTitle } from "@/components/common"
+import { ReportSidebarMobileNav } from "@/components/home/reportSidebar/ReportSidebar"
 import { getReport, getReportList, type ReportKind } from "@/lib/api/report"
 import {
   isReportReady,
@@ -116,6 +117,8 @@ function BriefingPageContent() {
           description="시장의 급박한 변화와 핵심 뉴스 요약을 페로몬 흔적처럼 빠르게 따라갑니다."
         />
 
+        <ReportSidebarMobileNav />
+
         {isLoading && <BriefingSkeleton />}
 
         {!isLoading && isEmpty && (
@@ -128,7 +131,7 @@ function BriefingPageContent() {
 
         {!isLoading && !isEmpty && content && (
           <div className="flex items-start gap-6">
-            <section className="flex min-w-0 flex-1 flex-col gap-6 rounded-xl bg-ant-bg p-5">
+            <section className="flex min-w-0 flex-1 flex-col gap-6 rounded-xl bg-ant-bg px-3 py-5">
               <BriefingArticleHeader content={content} />
 
               <BriefingImage url={content.mainImageUrl} alt={content.title} />

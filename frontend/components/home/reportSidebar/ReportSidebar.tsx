@@ -33,19 +33,13 @@ function compareYearMonth(
   return a.year * 12 + a.month - (b.year * 12 + b.month)
 }
 
-function ReportSidebarContent() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const searchParams = useSearchParams()
-
+/** 데스크톱 사이드바·모바일 상단 바가 함께 쓰는 월별 리포트 목록 조회 상태. */
+function useReportSidebarState() {
   const MAX_YEAR_MONTH = useMemo(() => getCurrentYearMonth(), [])
   const [yearMonth, setYearMonth] = useState(MAX_YEAR_MONTH)
   const [weeks, setWeeks] = useState<ReportWeekSection[] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [openGroupId, setOpenGroupId] = useState<string | null>(null)
-
-  const activeType = searchParams.get("type")
-  const activeDate = searchParams.get("date")
 
   useEffect(() => {
     let cancelled = false
@@ -77,6 +71,208 @@ function ReportSidebarContent() {
     }
   }, [yearMonth])
 
+  return {
+    MAX_YEAR_MONTH,
+    yearMonth,
+    setYearMonth,
+    weeks,
+    isLoading,
+    openGroupId,
+    setOpenGroupId,
+  }
+}
+
+/**
+ * 브리핑 페이지 전용 모바일 상단 바. 타임라인 페이지에는 나타나면 안 되고, 브리핑 페이지의
+ * main 콘텐츠 안에서 직접 렌더링해야 해서(요청사항) 전역 레이아웃이 아니라 브리핑 페이지
+ * 컴포넌트에서 직접 마운트한다.
+ */
+function ReportSidebarMobileNavContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const {
+    MAX_YEAR_MONTH,
+    yearMonth,
+    setYearMonth,
+    weeks,
+    isLoading,
+    openGroupId,
+    setOpenGroupId,
+  } = useReportSidebarState()
+
+  const activeType = searchParams.get("type")
+  const activeDate = searchParams.get("date")
+
+  return (
+    <nav
+      className="sticky z-20 flex flex-col gap-2 border-b border-neutral-100 bg-background/95 px-4 py-3 backdrop-blur-sm md:hidden"
+      style={{ top: "var(--header-height, 75px)" }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-baseline gap-1.5">
+          <strong className="text-[18px] font-bold">
+            {String(yearMonth.month).padStart(2, "0")}월
+          </strong>
+          <span className="text-[11px] font-medium text-neutral-400">
+            {yearMonth.year}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="이전 달"
+            disabled={compareYearMonth(yearMonth, MIN_YEAR_MONTH) <= 0}
+            onClick={() => setYearMonth((current) => shiftMonth(current, -1))}
+            className="cursor-pointer rounded-md p-1 text-neutral-400 transition-colors duration-200 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronLeft size="16" />
+          </button>
+          <button
+            type="button"
+            aria-label="다음 달"
+            disabled={compareYearMonth(yearMonth, MAX_YEAR_MONTH) >= 0}
+            onClick={() => setYearMonth((current) => shiftMonth(current, 1))}
+            className="cursor-pointer rounded-md p-1 text-neutral-400 transition-colors duration-200 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronRight size="16" />
+          </button>
+        </div>
+      </div>
+
+      {isLoading && (
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-24 shrink-0 rounded-full" />
+          <Skeleton className="h-8 w-24 shrink-0 rounded-full" />
+        </div>
+      )}
+
+      {!isLoading && weeks && weeks.length === 0 && (
+        <p className="py-2 text-center text-[12px] text-neutral-400">
+          아직 리포트가 생성되지 않았습니다.
+        </p>
+      )}
+
+      {!isLoading && weeks && weeks.length > 0 && (
+        <>
+          <div className="flex gap-2 overflow-x-auto">
+            {weeks.map((group) => {
+              const isOpen = openGroupId === group.id
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() =>
+                    setOpenGroupId((current) =>
+                      current === group.id ? null : group.id
+                    )
+                  }
+                  className={cn(
+                    "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] whitespace-nowrap transition-colors duration-200",
+                    isOpen
+                      ? "border-point bg-point/10 font-semibold text-point"
+                      : "border-neutral-200 text-neutral-500"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      isOpen ? "bg-point" : "bg-neutral-300"
+                    )}
+                  />
+                  {group.rangeLabel}
+                </button>
+              )
+            })}
+          </div>
+
+          {weeks
+            .filter((group) => group.id === openGroupId)
+            .map((group) => (
+              <div key={group.id} className="flex gap-2 overflow-x-auto">
+                {group.items.map((item) => {
+                  const isActive =
+                    activeType === item.type && activeDate === item.date
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          `${BRIEFING_PAGE_PATH}?type=${item.type}&date=${item.date}`
+                        )
+                      }
+                      className={cn(
+                        "relative flex w-36 shrink-0 items-start gap-2 rounded-xl border bg-white px-2 py-2 text-left shadow-sm transition-colors duration-200",
+                        isActive
+                          ? "border-point shadow-point/40"
+                          : "border-neutral-200"
+                      )}
+                    >
+                      <Badge
+                        className={cn(
+                          "absolute -top-2 right-2 text-[9px] transition-colors duration-200",
+                          isActive
+                            ? "bg-point text-white"
+                            : "border border-neutral-200 bg-white text-neutral-400"
+                        )}
+                      >
+                        {item.badgeLabel}
+                      </Badge>
+                      <div
+                        className={cn(
+                          "flex w-8 shrink-0 flex-col items-center justify-center rounded-lg py-1 text-[9px] font-medium transition-colors duration-200",
+                          isActive
+                            ? "bg-point text-white"
+                            : "bg-neutral-100 text-neutral-500"
+                        )}
+                      >
+                        <span className="opacity-80">{item.month}</span>
+                        <strong className="text-[15px] leading-4 font-bold">
+                          {item.dateLabel}
+                        </strong>
+                        <span className="opacity-80">{item.unitLabel}</span>
+                      </div>
+                      <p className="line-clamp-2 min-w-0 flex-1 text-[11px] font-semibold">
+                        {item.title}
+                      </p>
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+        </>
+      )}
+    </nav>
+  )
+}
+
+/** 브리핑 페이지의 main 콘텐츠 안에서 직접 마운트하는 모바일 전용 상단 바. */
+export function ReportSidebarMobileNav() {
+  return (
+    <Suspense fallback={null}>
+      <ReportSidebarMobileNavContent />
+    </Suspense>
+  )
+}
+
+function ReportSidebarDesktopContent() {
+  const pathname = usePathname()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const {
+    MAX_YEAR_MONTH,
+    yearMonth,
+    setYearMonth,
+    weeks,
+    isLoading,
+    openGroupId,
+    setOpenGroupId,
+  } = useReportSidebarState()
+
+  const activeType = searchParams.get("type")
+  const activeDate = searchParams.get("date")
+
   if (pathname !== TIMELINE_PAGE_PATH && pathname !== BRIEFING_PAGE_PATH) {
     return null
   }
@@ -99,7 +295,9 @@ function ReportSidebarContent() {
               type="button"
               aria-label="이전 달"
               disabled={compareYearMonth(yearMonth, MIN_YEAR_MONTH) <= 0}
-              onClick={() => setYearMonth((current) => shiftMonth(current, -1))}
+              onClick={() =>
+                setYearMonth((current) => shiftMonth(current, -1))
+              }
               className="cursor-pointer rounded-md p-1 text-neutral-400 transition-colors duration-200 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft size="16" />
@@ -108,7 +306,9 @@ function ReportSidebarContent() {
               type="button"
               aria-label="다음 달"
               disabled={compareYearMonth(yearMonth, MAX_YEAR_MONTH) >= 0}
-              onClick={() => setYearMonth((current) => shiftMonth(current, 1))}
+              onClick={() =>
+                setYearMonth((current) => shiftMonth(current, 1))
+              }
               className="cursor-pointer rounded-md p-1 text-neutral-400 transition-colors duration-200 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronRight size="16" />
@@ -250,10 +450,11 @@ function ReportSidebarContent() {
   )
 }
 
+/** 데스크톱 전용 사이드바(타임라인·브리핑 공통). (main)/layout.tsx에서 전역으로 마운트한다. */
 export default function ReportSidebar() {
   return (
     <Suspense fallback={null}>
-      <ReportSidebarContent />
+      <ReportSidebarDesktopContent />
     </Suspense>
   )
 }
