@@ -70,7 +70,7 @@ export default function PheromoneTemperatureCard() {
               }}
             />
           </div>
-          <div className="relative flex text-[11px] text-neutral-400">
+          <div className="relative flex justify-between text-[10px] text-neutral-400 md:text-[11px]">
             {pheromoneScale.map((point) => (
               <span
                 key={point.value}
@@ -80,8 +80,8 @@ export default function PheromoneTemperatureCard() {
                 }}
               >
                 {point.value}
-                {point.value === pheromoneScale.at(-1)?.value ? "+" : ""} (
-                {point.label})
+                {point.value === pheromoneScale.at(-1)?.value ? "+" : ""}
+                <span className="hidden md:inline"> ({point.label})</span>
               </span>
             ))}
           </div>

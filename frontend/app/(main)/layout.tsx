@@ -17,7 +17,7 @@ export default function MainLayout({
     <>
       <div className="flex w-full">
         <main
-          className={`${isMatch ? "w-[calc(100%-540px)]" : "mx-auto w-full 2xl:max-w-300"}`}
+          className={`${isMatch ? "w-full md:w-[calc(100%-540px)]" : "mx-auto w-full 2xl:max-w-300"}`}
         >
           {children}
         </main>
