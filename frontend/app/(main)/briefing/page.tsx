@@ -131,7 +131,7 @@ function BriefingPageContent() {
 
         {!isLoading && !isEmpty && content && (
           <div className="flex items-start gap-6">
-            <section className="flex min-w-0 flex-1 flex-col gap-6 rounded-xl bg-ant-bg px-3 py-5">
+            <section className="flex min-w-0 flex-1 flex-col gap-6 rounded-xl bg-ant-bg px-3 py-5 md:px-5">
               <BriefingArticleHeader content={content} />
 
               <BriefingImage url={content.mainImageUrl} alt={content.title} />
