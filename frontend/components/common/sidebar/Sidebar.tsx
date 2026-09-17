@@ -57,7 +57,9 @@ export default function Sidebar() {
             <div className="text-right text-[12px]">
               <p>다음 일정</p>
               <p className="pt-0.75">{nextItem ? nextItem.title : "-"}</p>
-              <p className="font-semibold text-point">{remainingLabel ?? "-"}</p>
+              <p className="font-semibold text-point">
+                {remainingLabel ?? "-"}
+              </p>
             </div>
           </div>
         </div>
