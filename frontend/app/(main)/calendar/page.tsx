@@ -228,7 +228,7 @@ export default function CalendarPage() {
 
         <div className="flex min-w-0 flex-col-reverse gap-3 lg:flex-row">
           {/* 왼쪽: 필터 + 월간/주간 뷰 */}
-          <main className="flex min-w-0 flex-1 flex-col gap-3 rounded-xl border bg-card px-3 py-4 shadow-sm sm:pb-5 lg:px-5">
+          <main className="flex h-max min-w-0 flex-1 flex-col gap-3 rounded-xl border bg-card px-3 py-4 shadow-sm sm:pb-5 lg:px-5">
             {/* 필터 — 웹에서는 스크롤해도 상단에 붙어서 따라옴. 데스크톱에서는 탭/토글과 같은 줄 가운데에 현재 월도 같이 표시(주별·월별 공통) */}
             <div className="rounded-2xl lg:sticky lg:top-18.75 lg:z-10 lg:-mx-5 lg:bg-card lg:px-5 lg:pt-4 lg:pb-3">
               <FilterBar

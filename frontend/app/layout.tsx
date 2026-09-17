@@ -33,9 +33,7 @@ export default function RootLayout({
           <Header />
           <div className="flex">
             <Sidebar />
-            <main className="w-full min-w-0 px-4 py-10 md:px-12.5">
-              {children}
-            </main>
+            <main className="w-full min-w-0 px-4 md:px-0">{children}</main>
           </div>
           <Footer
             title="본 서비스가 제공하는 정보는 투자 판단을 돕기 위한 참고 자료이며, 특정 종목의 매수·매도를 권유하거나 투자를 조언하는 것이 아닙니다. 투자에 대한 최종 결정과 책임은 투자자 본인에게 있습니다."
