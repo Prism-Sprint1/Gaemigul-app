@@ -90,22 +90,27 @@
 ### 3.1 전체 데이터 흐름
 
 [외부 API/데이터 소스]
+
 ├─ 한국투자증권 API (국내 주식 시세) — 어댑터 구현
 ├─ 네이버 뉴스 Search API (종목/섹터 뉴스) — 어댑터 구현
 └─ FRED 증시 API (증시 일정/발표) — 연동중, 조사된 확정 일정(FOMC/금통위)으로 시딩
 │
 ▼
+
 [데이터 수집·정제 계층] domain/*/services (collector, sentiment, indicator_collector 등)
 │
 ▼
+
 [RDB 적재 (SQLAlchemy ORM, 기본 SQLite / Supabase 연동 예정)]
 │
 ▼
+
 [FastAPI 백엔드]
 ├─ 도메인별 API 라우터 (timeline, calendar, heatmap, news, insights)
 └─ 규칙 기반 인사이트 생성 로직 (LLM API 연동 시 문장 생성부만 교체 가능한 구조)
 │
 ▼
+
 [대시보드 (프론트엔드)]
 메인 페이지 / 캘린더 페이지 / 히트맵 페이지
 
@@ -147,6 +152,7 @@ DB는 Supabase 연동중이며 기본값은 SQLite입니다.
 
 **백엔드 (`backend/src/backend`)**
 core/ config, database, pipeline(수집+인사이트 오케스트레이션), scheduler, routers
+
 domain/
 ├─ timeline/ 헤더 지표, 시간대별 타임라인, 일간·주간 AI 보고서
 ├─ calendar/ 증시 캘린더 (FOMC/금통위/실적시즌)
@@ -157,6 +163,7 @@ domain/
 
 **프런트엔드**
 app/ layout, page (메인/캘린더/히트맵)
+
 components/
 ├─ layout/ Sidebar, HeaderTicker
 ├─ term.tsx 용어 호버 설명
