@@ -1,8 +1,9 @@
 # main.py
-# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바·VIX·슬롯·보고서), CORS, 라우터 등록.
+# FastAPI 앱 진입점. 로그 설정, 스케줄러(지표 바·market 데이터·슬롯·보고서), CORS, 라우터 등록.
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -13,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.core.config import get_settings
 from backend.core.logging_config import setup_logging
 from backend.domain.market.routers.market import router as market_router
-from backend.domain.market.services import vix_service
+from backend.domain.market.services import exchange_rate_service, investor_flow_service, sentiment_service, trading_value_service, vix_service
 from backend.domain.timeline.routers.timeline import router as timeline_router
 from backend.domain.timeline.services import market_indicator_service, report_service, timeline_service
 
@@ -34,6 +35,9 @@ async def lifespan(app: FastAPI):
 
     _register_indicator_job()
     _register_vix_job()
+    _register_sentiment_job()
+    _register_exchange_rate_job()
+    _register_trading_value_job()
     _register_slot_jobs()
     _register_report_job()
 
@@ -75,6 +79,67 @@ def _register_vix_job() -> None:
         vix_service.refresh,
         CronTrigger(minute="0,30"),
         id="market_vix",
+        max_instances=1,
+        coalesce=True,
+    )
+
+
+# 투자자 수급과 개미굴 시장심리지수는 같은 KIS 수급 원본을 공유한다.
+# 서버 시작 시 한 번, 평일 국내장 09:00~15:30에 30분마다 갱신한다.
+def _refresh_market_session() -> None:
+    investor_raw = None
+    try:
+        investor_raw = investor_flow_service.refresh()
+    except Exception as error:
+        logger.warning("투자자 수급 갱신 실패 - %s: %s", type(error).__name__, error)
+
+    try:
+        sentiment_service.refresh(investor_raw)
+    except Exception as error:
+        logger.warning("개미굴 시장심리지수 갱신 실패 - %s: %s", type(error).__name__, error)
+
+
+def _register_sentiment_job() -> None:
+    _refresh_market_session()
+
+    _scheduler.add_job(
+        _refresh_market_session,
+        CronTrigger(day_of_week="mon-fri", hour="9-15", minute="0,30"),
+        id="market_session",
+        max_instances=1,
+        coalesce=True,
+    )
+
+
+# 원/달러 환율은 24시간 매시 00분·30분에 실제값을 DB에 적재하고 세 기간 캐시를 갱신한다.
+# 초기 실행은 스케줄러 시작 직후 수행해 서버 시작 자체를 막지 않는다.
+def _register_exchange_rate_job() -> None:
+    if not get_settings().database_url:
+        logger.warning("원/달러 환율 차트 비활성화 - DATABASE_URL이 .env에 없습니다.")
+        return
+
+    _scheduler.add_job(
+        exchange_rate_service.refresh,
+        CronTrigger(minute="0,30"),
+        id="market_exchange_rate",
+        max_instances=1,
+        coalesce=True,
+        next_run_time=datetime.now(ZoneInfo("Asia/Seoul")),
+    )
+
+
+# 시간대별 거래대금은 서버 시작 시 최근 완성 거래일을 읽고, 평일 15:34에 오늘 완성본으로 교체한다.
+# 타임라인 수집과 같은 분에 실행하되 KIS 호출 집중을 피하려고 거래대금은 30초 뒤에 시작한다.
+def _register_trading_value_job() -> None:
+    try:
+        trading_value_service.refresh()
+    except Exception as error:
+        logger.warning("시간대별 거래대금 초기 갱신 실패 - %s: %s", type(error).__name__, error)
+
+    _scheduler.add_job(
+        trading_value_service.refresh,
+        CronTrigger(day_of_week="mon-fri", hour=15, minute=34, second=30),
+        id="market_trading_value",
         max_instances=1,
         coalesce=True,
     )
