@@ -4,6 +4,7 @@
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 
 # .env의 키 이름(대소문자 무관)과 필드 이름이 같으면 자동으로 채워진다
@@ -17,14 +18,11 @@ class Settings(BaseSettings):
     kis_app_secret: str | None = None
     kis_base_url: str = "https://openapi.koreainvestment.com:9443"
 
-    # 네이버 클라우드 플랫폼(NCP) 뉴스 검색 키 (developers.naver.com 키와 다름) (timeline 뉴스)
-    naver_api_key_id: str | None = None
-    naver_api_key: str | None = None
+    # 히트맵 수집 설정. 키가 없어도 HTTP 서버는 실행되며 수집만 실패한다.
+    heatmap_enabled: bool = True
+    heatmap_requests_per_second: float = Field(default=5.0, gt=0, le=20)
+    heatmap_session_overrides: dict[str, dict[str, str]] = Field(default_factory=dict)
 
-    # 제미나이 API (timeline 브리핑·해설·보고서, calendar)
-    gemini_api_key: str | None = None
-
-    # Supabase Postgres 연결 문자열. "postgresql+asyncpg://"로 시작해야 한다
     database_url: str | None = None
 
     # Cloudflare Workers AI 이미지 생성 (timeline 보고서 이미지)
