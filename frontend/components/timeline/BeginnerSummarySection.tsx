@@ -29,7 +29,7 @@ export default function BeginnerSummarySection({
         {summary.points.map((point, index) => (
           <div
             key={point.id}
-            className="relative flex flex-col gap-2 overflow-hidden rounded-lg border border-neutral-200 bg-white p-4 before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-decrease before:content-['']"
+            className="relative flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-4 before:absolute before:inset-x-0 before:top-0 before:h-1 before:rounded-t-2xl before:bg-decrease before:content-['']"
           >
             <div className="flex items-center gap-2">
               <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-decrease/10 text-[10px] font-bold text-decrease">

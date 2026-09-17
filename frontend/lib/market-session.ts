@@ -54,3 +54,17 @@ export function isAfterDomesticClose(minutes: number): boolean {
   const close = timeToMinutes(marketSessionSchedule.domesticClose)
   return minutes >= close || minutes < open
 }
+
+/**
+ * 시간대별 거래대금/투자자 매매동향 데이터의 갱신 기준 시각(HH:mm).
+ * 백엔드가 국장 마감(15:30) 데이터를 15:35에 적재하므로, 그보다 더 안전하게 15:40 이후에 당일
+ * 데이터를 노출한다. 그 전에는 전일 데이터를 보여준다.
+ */
+export const INTRADAY_DATA_REFRESH_TIME = "15:40"
+
+/** 오늘자 인트라데이 데이터 갱신 기준(15:40)을 이미 지났는지 여부. */
+export function isAfterIntradayDataRefresh(minutes: number): boolean {
+  const open = timeToMinutes(marketSessionSchedule.domesticOpen)
+  const refresh = timeToMinutes(INTRADAY_DATA_REFRESH_TIME)
+  return minutes >= refresh || minutes < open
+}

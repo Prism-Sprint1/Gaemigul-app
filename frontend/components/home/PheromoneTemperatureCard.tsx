@@ -32,7 +32,7 @@ export default function PheromoneTemperatureCard() {
 
   if (!vix) {
     return (
-      <div className="flex flex-col gap-4 py-0">
+      <div className="flex flex-col gap-2 py-0">
         <Skeleton className="h-6 w-40" />
         <Skeleton className="h-2 w-full rounded-full" />
         <Skeleton className="h-4 w-full" />
@@ -96,11 +96,7 @@ export default function PheromoneTemperatureCard() {
             <span
               className={`inline-flex items-center gap-0.5 ${isDown ? "text-decrease" : "text-increase"}`}
             >
-              {isDown ? (
-                <TrendingDown size={12} />
-              ) : (
-                <TrendingUp size={12} />
-              )}
+              {isDown ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
               {Math.abs(vix.change_value).toFixed(2)}
             </span>
             )

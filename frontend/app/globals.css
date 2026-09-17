@@ -146,16 +146,11 @@
 @keyframes chat-in {
   0% {
     opacity: 0;
-    filter: blur(8px);
-    transform: translateY(16px) scale(0.94);
-  }
-  60% {
-    filter: blur(1px);
+    transform: translateY(24px);
   }
   100% {
     opacity: 1;
-    filter: blur(0);
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 

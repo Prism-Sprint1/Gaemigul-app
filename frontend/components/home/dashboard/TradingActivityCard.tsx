@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { BarChart3 } from "lucide-react"
+import { format, subDays } from "date-fns"
+import { ko } from "date-fns/locale/ko"
 import {
   Bar,
   BarChart,
   Cell,
+  LabelList,
   ReferenceLine,
   XAxis,
   YAxis,
@@ -18,7 +21,7 @@ import {
   type ChartConfig,
 } from "@/components/ui"
 import { investorFlow, tradingValueDistribution } from "@/lib/constant/home"
-import { isAfterDomesticClose } from "@/lib/market-session"
+import { isAfterIntradayDataRefresh } from "@/lib/market-session"
 import DashboardCard from "./DashboardCard"
 
 const volumeChartConfig = {
@@ -34,39 +37,53 @@ const flowChartConfig = {
   },
 } satisfies ChartConfig
 
-function useIsAfterDomesticClose() {
-  const [isAfterClose, setIsAfterClose] = useState<boolean | null>(null)
+function useIntradayDataBasis() {
+  const [basisDate, setBasisDate] = useState<Date | null>(null)
 
   useEffect(() => {
     const update = () => {
       const now = new Date()
-      setIsAfterClose(isAfterDomesticClose(now.getHours() * 60 + now.getMinutes()))
+      const isAfterRefresh = isAfterIntradayDataRefresh(
+        now.getHours() * 60 + now.getMinutes()
+      )
+      setBasisDate(isAfterRefresh ? now : subDays(now, 1))
     }
     update()
     const timer = setInterval(update, 30_000)
     return () => clearInterval(timer)
   }, [])
 
-  return isAfterClose
+  return basisDate
 }
 
 export default function TradingActivityCard() {
-  const isAfterClose = useIsAfterDomesticClose()
-  const basisLabel =
-    isAfterClose === null
-      ? ""
-      : isAfterClose
-        ? "오늘 15:30 장마감 기준"
-        : "전일 15:30 마감 기준"
+  const basisDate = useIntradayDataBasis()
+  const basisDateLabel = basisDate ? format(basisDate, "M월d일(EEE)", { locale: ko }) : ""
+  const basisLabel = basisDate
+    ? `${format(basisDate, "M월d일", { locale: ko })} 15:30 장마감 기준`
+    : ""
 
   return (
     <DashboardCard
       icon={<BarChart3 size={16} className="text-point" />}
-      title="시간대별 거래대금 분포"
-      action={<span className="text-[11px] text-neutral-400">단위: 억 원</span>}
+      title={
+        <>
+          시간대별 거래대금 분포
+          <span className="text-[11px] font-normal text-neutral-400">
+            {basisDateLabel}
+          </span>
+        </>
+      }
+      action={
+        <span className="text-[11px] text-neutral-400">단위: 억 원</span>
+      }
     >
-      <ChartContainer config={volumeChartConfig} className="aspect-auto h-40 w-full">
-        <BarChart data={tradingValueDistribution} margin={{ top: 4, left: 0, right: 0, bottom: 0 }}>
+      <ChartContainer config={volumeChartConfig} className="aspect-auto h-32 w-full">
+        <BarChart
+          accessibilityLayer={false}
+          data={tradingValueDistribution}
+          margin={{ top: 4, left: 0, right: 0, bottom: 0 }}
+        >
           <XAxis
             dataKey="time"
             tickLine={false}
@@ -85,8 +102,9 @@ export default function TradingActivityCard() {
           <h4 className="text-sm font-bold">투자자별 매매동향</h4>
           <span className="text-[11px] text-neutral-400">{basisLabel}</span>
         </div>
-        <ChartContainer config={flowChartConfig} className="aspect-auto h-32 w-full">
+        <ChartContainer config={flowChartConfig} className="aspect-auto h-28 w-full">
           <BarChart
+            accessibilityLayer={false}
             data={investorFlow}
             layout="vertical"
             margin={{ top: 0, left: 8, right: 24, bottom: 0 }}
@@ -120,6 +138,28 @@ export default function TradingActivityCard() {
                   }
                 />
               ))}
+              <LabelList
+                dataKey="value"
+                content={({ x, y, width, height, value }) => {
+                  const numValue = Number(value)
+                  const cx = Number(x) + Number(width) / 2
+                  const cy = Number(y) + Number(height) / 2
+                  const label = `${numValue > 0 ? "+" : ""}${numValue.toLocaleString()}`
+                  return (
+                    <text
+                      x={cx}
+                      y={cy}
+                      fill="#ffffff"
+                      fontSize={12}
+                      fontWeight={600}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                    >
+                      {label}
+                    </text>
+                  )
+                }}
+              />
             </Bar>
           </BarChart>
         </ChartContainer>

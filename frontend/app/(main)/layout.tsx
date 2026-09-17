@@ -18,7 +18,9 @@ export default function MainLayout({
       <Header />
       <div className="flex w-full">
         <Sidebar />
-        <main className={`${isMatch ? "w-[calc(100%-540px)]" : "w-full"}`}>
+        <main
+          className={`${isMatch ? "w-[calc(100%-540px)]" : "mx-auto w-full 2xl:max-w-300"}`}
+        >
           {children}
         </main>
         <ReportSidebar />

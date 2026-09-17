@@ -65,19 +65,6 @@ export function getPheromoneLevel(vixValue: number): PheromoneLevel {
   )
 }
 
-export interface TodayAntTerm {
-  term: string
-  hanja: string
-  example: string
-}
-
-export const todayAntTerm: TodayAntTerm = {
-  term: "PER (주가수익비율)",
-  hanja: "Price Earning Ratio",
-  example:
-    "연간 1억을 버는 치킨집의 권리금이 10억이라면 PER은 10배! 투자금을 회수하는 데 걸리는 햇수예요.",
-}
-
 export interface HotSectorDummy {
   name: string
   reason: string
@@ -126,39 +113,74 @@ export const marketSessionSchedule: MarketSessionSchedule = {
   usRegularEnd: "05:00",
 }
 
-// ── 개미굴 심리지수 ──────────────────────────────────────────
+// ── 페로몬 신호 강도 ──────────────────────────────────────────
 
-export interface AntColonySentimentDummy {
+export interface PheromoneSignalDummy {
   value: number
-  description: string
 }
 
-export const antColonySentiment: AntColonySentimentDummy = {
+export const pheromoneSignalStrength: PheromoneSignalDummy = {
   value: 68,
-  description: "개미굴 전반적으로 적극적인 매수 심리가 우세해요.",
 }
 
-export interface SentimentLevel {
+export interface PheromoneSignalLevel {
+  /** 와이파이 신호 막대 중 채워지는 개수(1~5) */
+  bars: number
   label: string
-  color: string
+  description: string
   /** 이 등급으로 판정되는 상한값(미포함). 마지막 구간은 Infinity. */
   max: number
 }
 
-export const sentimentLevels: SentimentLevel[] = [
-  { label: "극단적 공포", color: "#4A90D9", max: 25 },
-  { label: "공포", color: "#6FCF97", max: 45 },
-  { label: "중립", color: "#9CA3AF", max: 55 },
-  { label: "탐욕", color: "#F0A63E", max: 75 },
-  { label: "극단적 탐욕", color: "#FF2A2A", max: Infinity },
+/** 값(0~100) → 채워지는 막대 개수·라벨·설명 문구 매핑 */
+export const pheromoneSignalLevels: PheromoneSignalLevel[] = [
+  {
+    bars: 1,
+    label: "신호 약함",
+    description: "지금 개미들 사이에 신호가 약하게 퍼지고 있어요",
+    max: 20,
+  },
+  {
+    bars: 2,
+    label: "신호 감지됨",
+    description: "지금 개미들 사이에 신호가 감지되고 있어요",
+    max: 40,
+  },
+  {
+    bars: 3,
+    label: "신호 보통",
+    description: "지금 개미들 사이에 신호가 보통 수준으로 퍼지고 있어요",
+    max: 60,
+  },
+  {
+    bars: 4,
+    label: "신호 강함",
+    description: "지금 개미들 사이에 신호가 강하게 퍼지고 있어요",
+    max: 80,
+  },
+  {
+    bars: 5,
+    label: "신호 매우 강함",
+    description: "지금 개미들 사이에 신호가 매우 강하게 퍼지고 있어요",
+    max: Infinity,
+  },
 ]
 
-export function getSentimentLevel(value: number): SentimentLevel {
+export function getPheromoneSignalLevel(value: number): PheromoneSignalLevel {
   return (
-    sentimentLevels.find((level) => value < level.max) ??
-    sentimentLevels[sentimentLevels.length - 1]
+    pheromoneSignalLevels.find((level) => value < level.max) ??
+    pheromoneSignalLevels[pheromoneSignalLevels.length - 1]
   )
 }
+
+/** 채워진 막대 개수(1~5)에 대응하는 브랜드 레드 톤 — 신호가 강할수록 진해진다. */
+export const pheromoneSignalBarColors = [
+  "#FFD4D4",
+  "#FFA8A8",
+  "#FF7A7A",
+  "#FF4A4A",
+  "#FF2A2A",
+]
 
 // ── 시간대별 공통 축(09:00 ~ 15:30, 30분 간격) ────────────────────
 
@@ -186,21 +208,46 @@ export interface ExchangeRatePoint {
   value: number
 }
 
+export type UsdKrwRange = "day" | "week5" | "month"
+
+export const usdKrwRangeLabels: Record<UsdKrwRange, string> = {
+  day: "하루",
+  week5: "5일",
+  month: "월별",
+}
+
 export interface UsdKrwTrendDummy {
   current: number
   change: number
   changeRate: number
-  series: ExchangeRatePoint[]
+  seriesByRange: Record<UsdKrwRange, ExchangeRatePoint[]>
 }
 
 export const usdKrwTrend: UsdKrwTrendDummy = {
   current: 1391.5,
   change: 4.2,
   changeRate: 0.3,
-  series: [
-    1387.3, 1388.1, 1386.9, 1389.4, 1390.2, 1388.8, 1389.9, 1390.6, 1392.1,
-    1391.4, 1393.2, 1392.5, 1390.8, 1391.5,
-  ].map((value, index) => ({ time: intradayTimeLabels[index], value })),
+  seriesByRange: {
+    day: [
+      1387.3, 1388.1, 1386.9, 1389.4, 1390.2, 1388.8, 1389.9, 1390.6, 1392.1,
+      1391.4, 1393.2, 1392.5, 1390.8, 1391.5,
+    ].map((value, index) => ({ time: intradayTimeLabels[index], value })),
+    week5: [
+      ["9/12", 1382.4],
+      ["9/15", 1385.7],
+      ["9/16", 1388.9],
+      ["9/17", 1390.1],
+      ["9/18", 1391.5],
+    ].map(([time, value]) => ({ time: time as string, value: value as number })),
+    month: [
+      ["4월", 1362.8],
+      ["5월", 1371.2],
+      ["6월", 1358.6],
+      ["7월", 1369.4],
+      ["8월", 1378.9],
+      ["9월", 1391.5],
+    ].map(([time, value]) => ({ time: time as string, value: value as number })),
+  },
 }
 
 // ── 시간대별 거래대금 분포 (단위: 억 원) ───────────────────────────
@@ -227,18 +274,3 @@ export const investorFlow: InvestorFlowItem[] = [
   { investor: "기관", value: -320 },
 ]
 
-// ── 오늘의 비축 캘린더 일정 ─────────────────────────────────────
-
-export interface CalendarScheduleItem {
-  time: string
-  title: string
-  tag: string
-}
-
-export const todayCalendarSchedule: CalendarScheduleItem[] = [
-  { time: "09:00", title: "국내 증시 개장", tag: "국장" },
-  { time: "10:30", title: "8월 산업생산 발표", tag: "지표" },
-  { time: "15:30", title: "국내 증시 마감 · 동시호가", tag: "국장" },
-  { time: "21:30", title: "미국 소비자물가지수(CPI) 발표", tag: "미장" },
-  { time: "23:00", title: "미국 국채 3년물 입찰", tag: "채권" },
-]

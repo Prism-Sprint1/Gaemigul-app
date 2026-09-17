@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils"
 
 interface DashboardCardProps {
   icon: React.ReactNode
-  title: string
+  title: React.ReactNode
   action?: React.ReactNode
   children: React.ReactNode
   className?: string
@@ -18,7 +18,7 @@ export default function DashboardCard({
   return (
     <div
       className={cn(
-        "flex flex-col gap-4 rounded-2xl border border-line-bg bg-white p-5 shadow-sm",
+        "flex flex-col gap-4 rounded-lg border border-line-bg bg-white p-5 shadow-sm",
         className
       )}
     >

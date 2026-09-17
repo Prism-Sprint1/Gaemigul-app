@@ -1,9 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { format, subMinutes } from "date-fns"
-import { Bell, Bug, MoreVertical } from "lucide-react"
+import { Bug } from "lucide-react"
 
 import { Button } from "@/components/ui"
 import { calendarHighlight, hotSector } from "@/lib/constant/home"
@@ -27,8 +27,15 @@ interface WhisperMessage {
 
 interface WhisperGroup {
   id: string
-  dividerMinutesAgo: number
+  dividerLabel: string
   messages: WhisperMessage[]
+}
+
+/** 오늘 날짜의 특정 시:분으로 고정된 Date. 캘린더/장운영처럼 매일 같은 시각에 뜨는 알림에 쓴다. */
+function todayAt(hours: number, minutes: number): Date {
+  const date = new Date()
+  date.setHours(hours, minutes, 0, 0)
+  return date
 }
 
 function useNow() {
@@ -103,7 +110,7 @@ function MessageBubble({
         )}
         <div className="flex items-end gap-2">
           <div className="flex min-w-0 max-w-[85%] flex-col gap-2.5 rounded-2xl rounded-tl-sm bg-white p-4 shadow-sm">
-            <p className="text-sm leading-relaxed text-neutral-700">
+            <p className="text-xs leading-relaxed text-neutral-700">
               {message.content}
             </p>
             <div className="border-t border-neutral-100 pt-2.5">
@@ -111,7 +118,7 @@ function MessageBubble({
                 render={<Link href={message.linkHref} />}
                 nativeButton={false}
                 variant="secondary"
-                className={`w-fit ${CHIP_TONE_CLASSES[message.tone]}`}
+                className={`w-fit text-xs ${CHIP_TONE_CLASSES[message.tone]}`}
               >
                 {message.linkLabel} →
               </Button>
@@ -129,14 +136,17 @@ function MessageBubble({
 export default function WhisperBriefingSection() {
   const now = useNow()
 
+  const relativeDividerLabel = (minutesAgo: number) =>
+    now ? `오늘 ${format(subMinutes(now, minutesAgo), "HH:mm")}` : "오늘 --:--"
+
   const groups: WhisperGroup[] = [
     {
       id: "calendar",
-      dividerMinutesAgo: 30,
+      dividerLabel: `오늘 ${format(todayAt(7, 30), "HH:mm")}`,
       messages: [
         {
           id: "calendar",
-          relativeLabel: "30분 전",
+          relativeLabel: "07:30",
           tone: "info",
           linkHref: "/calendar",
           linkLabel: "비축 캘린더 일정 확인하기",
@@ -153,8 +163,26 @@ export default function WhisperBriefingSection() {
       ],
     },
     {
+      id: "market-open",
+      dividerLabel: `오늘 ${format(todayAt(9, 0), "HH:mm")}`,
+      messages: [
+        {
+          id: "market-open",
+          relativeLabel: "09:00",
+          tone: "accent",
+          linkHref: "/timeline",
+          linkLabel: "실시간 페로몬 바로가기",
+          content: (
+            <>
+              애기 개미님, 국장이 열려 있어요! 오늘 하루도 화이팅이에요 🐜
+            </>
+          ),
+        },
+      ],
+    },
+    {
       id: "sector-and-live",
-      dividerMinutesAgo: 10,
+      dividerLabel: relativeDividerLabel(10),
       messages: [
         {
           id: "sector",
@@ -194,9 +222,13 @@ export default function WhisperBriefingSection() {
     0
   )
   const visibleCount = useSequentialReveal(totalMessages)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  const dividerLabel = (minutesAgo: number) =>
-    now ? `오늘 ${format(subMinutes(now, minutesAgo), "HH:mm")}` : "오늘 --:--"
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container) return
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
+  }, [visibleCount])
 
   let renderedCount = 0
 
@@ -221,20 +253,15 @@ export default function WhisperBriefingSection() {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-sm" className="text-neutral-400">
-            <Bell size={16} />
-          </Button>
-          <Button variant="ghost" size="icon-sm" className="text-neutral-400">
-            <MoreVertical size={16} />
-          </Button>
-        </div>
       </div>
 
-      <div className="flex flex-col gap-4 bg-ant-bg px-4 py-5">
+      <div
+        ref={scrollRef}
+        className="flex max-h-125 flex-col gap-4 overflow-y-auto bg-ant-bg px-4 py-5"
+      >
         {groups.map((group) => (
           <div key={group.id} className="flex flex-col gap-4">
-            <TimeDivider label={dividerLabel(group.dividerMinutesAgo)} />
+            <TimeDivider label={group.dividerLabel} />
             {group.messages.map((message, index) => {
               const order = renderedCount
               renderedCount += 1
