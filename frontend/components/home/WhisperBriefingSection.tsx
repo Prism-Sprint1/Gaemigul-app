@@ -5,9 +5,10 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
-import { Button, Skeleton } from "@/components/ui"
+import { Button, Separator, Skeleton } from "@/components/ui"
 import { getTimelineDay } from "@/lib/api/timeline"
 import type { ApiTimelineSlot } from "@/lib/types/TimelineType"
+import { ArrowRight } from "lucide-react"
 
 type ChipTone = "neutral" | "info" | "accent"
 
@@ -37,7 +38,10 @@ interface WhisperGroup {
 }
 
 /** 슬롯 하나(제목·부제)를 채팅 말풍선 1~2개로 변환한다. 부제가 있으면 헤드라인 바로 다음 말풍선으로 이어붙인다. */
-function slotToGroup(slot: ApiTimelineSlot, index: number): WhisperGroup | null {
+function slotToGroup(
+  slot: ApiTimelineSlot,
+  index: number
+): WhisperGroup | null {
   if (!slot.briefing_headline) return null
 
   const tone = TONE_ORDER[index % TONE_ORDER.length]
@@ -156,12 +160,12 @@ function MessageBubble({
 
   return (
     <div
-      className={`flex gap-3 ${visible ? "animate-chat-in" : "opacity-0"}`}
+      className={`flex gap-2 ${visible ? "animate-chat-in" : "opacity-0"}`}
       style={visible ? { animationDelay: `${delayMs}ms` } : undefined}
     >
       <div className="w-9 shrink-0">
         {showHeader && (
-          <div className="relative size-9 overflow-hidden rounded-full bg-point3/50">
+          <div className="relative size-9 overflow-hidden rounded-full">
             <Image
               src="/images/profile.png"
               alt="불개미 대장"
@@ -179,22 +183,22 @@ function MessageBubble({
         )}
         <div className="flex items-end gap-2">
           <div
-            className={`flex max-w-[85%] min-w-0 flex-col gap-2.5 rounded-2xl bg-white p-4 shadow-sm ${showHeader ? "rounded-tl-xs" : "rounded-tl-lg"}`}
+            className={`flex max-w-[85%] min-w-0 flex-col gap-2.5 rounded-2xl bg-white p-3 shadow-sm ${showHeader ? "rounded-tl-xs" : "rounded-tl-lg"}`}
           >
-            <p className="text-xs leading-relaxed text-neutral-700">
+            <p className="text-justify text-xs leading-relaxed font-medium text-neutral-700">
               {message.content}
             </p>
-            <div className="border-t border-neutral-100 pt-2.5">
-              <Button
-                render={<Link href={message.linkHref} />}
-                nativeButton={false}
-                variant="secondary"
-                onClick={handleClick}
-                className={`w-fit text-xs ${CHIP_TONE_CLASSES[message.tone]}`}
-              >
-                {message.linkLabel} →
-              </Button>
-            </div>
+            <Separator className="opacity-50" />
+            <Button
+              render={<Link href={message.linkHref} />}
+              nativeButton={false}
+              variant="secondary"
+              onClick={handleClick}
+              className={`w-fit text-[11px] ${CHIP_TONE_CLASSES[message.tone]}`}
+            >
+              {message.linkLabel}
+              <ArrowRight className="h-3! w-3!" />
+            </Button>
           </div>
           <span className="shrink-0 text-[11px] text-neutral-400">
             {message.relativeLabel}
@@ -209,8 +213,9 @@ export default function WhisperBriefingSection() {
   const { slots, loadError } = useTodayTimeline()
 
   const groups: WhisperGroup[] =
-    slots?.map(slotToGroup).filter((group): group is WhisperGroup => group !== null) ??
-    []
+    slots
+      ?.map(slotToGroup)
+      .filter((group): group is WhisperGroup => group !== null) ?? []
 
   const totalMessages = groups.reduce(
     (sum, group) => sum + group.messages.length,
@@ -230,20 +235,20 @@ export default function WhisperBriefingSection() {
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between gap-3 border-b border-neutral-100 bg-white px-4 py-3.5">
-        <div className="flex items-center gap-3">
-          <div className="relative size-11 shrink-0 bg-point3/50">
+        <div className="flex w-full items-center gap-2">
+          <div className="relative size-9 shrink-0">
             <Image
               src="/images/profile.png"
               alt="불개미 대장"
               fill
-              className="rounded-xl object-cover"
+              className="rounded-full object-cover"
             />
-            <span className="absolute -right-0.75 -bottom-0.75 size-3 rounded-full border-2 border-white bg-emerald-500" />
+            <span className="absolute -right-px -bottom-0.5 size-3 rounded-full border-2 border-white bg-emerald-500" />
           </div>
-          <div className="flex flex-col gap-0.5">
-            <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex w-full flex-col">
+            <div className="flex flex-wrap items-center justify-between">
               <span className="text-sm font-bold">불개미 대장</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-point/10 px-2 py-0.5 text-[11px] font-medium text-point">
+              <span className="inline-flex items-center gap-1 rounded-full bg-point/10 px-2 py-0.5 text-[10px] font-medium text-point">
                 <span className="size-1.5 rounded-full bg-point" />
                 실시간 브리핑 중
               </span>

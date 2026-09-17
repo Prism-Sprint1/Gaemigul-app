@@ -210,7 +210,7 @@ export default function TradingActivityCard() {
                               {valueLabel}
                             </span>
                             <span
-                              className="h-4 shrink-0 rounded-sm transition-all duration-300"
+                              className="h-4 shrink-0 rounded-l-sm transition-all duration-300"
                               style={{ width: barWidth, backgroundColor: color }}
                             />
                           </>
@@ -221,7 +221,7 @@ export default function TradingActivityCard() {
                         {isPositive && (
                           <>
                             <span
-                              className="h-4 shrink-0 rounded-sm transition-all duration-300"
+                              className="h-4 shrink-0 rounded-r-sm transition-all duration-300"
                               style={{ width: barWidth, backgroundColor: color }}
                             />
                             <span
