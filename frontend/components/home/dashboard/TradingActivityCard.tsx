@@ -195,37 +195,40 @@ export default function TradingActivityCard() {
                     (MAX_FLOW_BAR_WIDTH - MIN_FLOW_BAR_WIDTH)
                 const valueLabel = `${isPositive ? "+" : ""}${item.value.toLocaleString()}억 원`
                 return (
-                  <div key={item.investor} className="flex items-center gap-2">
-                    <span className="w-11 shrink-0 text-xs font-semibold text-neutral-600">
+                  <div
+                    key={item.investor}
+                    className="flex flex-col gap-1 md:flex-row md:items-center md:gap-2"
+                  >
+                    <span className="text-xs font-semibold text-neutral-600 md:w-11 md:shrink-0">
                       {item.investor}
                     </span>
-                    <div className="flex flex-1 items-center">
-                      <div className="flex w-1/2 items-center justify-end gap-1.5">
+                    <div className="flex min-w-0 w-full items-center md:flex-1">
+                      <div className="flex min-w-0 w-1/2 items-center justify-end gap-1.5">
                         {!isPositive && (
                           <>
                             <span
-                              className="text-xs font-semibold whitespace-nowrap"
+                              className="shrink-0 text-xs font-semibold whitespace-nowrap"
                               style={{ color }}
                             >
                               {valueLabel}
                             </span>
                             <span
-                              className="h-4 shrink-0 rounded-l-sm transition-all duration-300"
+                              className="h-4 min-w-5 shrink rounded-l-sm transition-all duration-300"
                               style={{ width: barWidth, backgroundColor: color }}
                             />
                           </>
                         )}
                       </div>
                       <span className="h-5 w-px shrink-0 bg-neutral-300" />
-                      <div className="flex w-1/2 items-center justify-start gap-1.5">
+                      <div className="flex min-w-0 w-1/2 items-center justify-start gap-1.5">
                         {isPositive && (
                           <>
                             <span
-                              className="h-4 shrink-0 rounded-r-sm transition-all duration-300"
+                              className="h-4 min-w-5 shrink rounded-r-sm transition-all duration-300"
                               style={{ width: barWidth, backgroundColor: color }}
                             />
                             <span
-                              className="text-xs font-semibold whitespace-nowrap"
+                              className="shrink-0 text-xs font-semibold whitespace-nowrap"
                               style={{ color }}
                             >
                               {valueLabel}

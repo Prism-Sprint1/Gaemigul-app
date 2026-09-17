@@ -43,7 +43,7 @@ export default function TodayAntTermCard() {
   if (!antTerm) return null
 
   return (
-    <div className="flex items-center gap-3 border-t border-neutral-100 bg-white px-4 py-3.5">
+    <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3.5 xl:rounded-none xl:border-t xl:border-neutral-100">
       <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-point3/60 text-point2">
         <BookOpen size={18} />
       </div>

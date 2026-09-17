@@ -7,8 +7,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import { Button, Separator, Skeleton } from "@/components/ui"
 import { getTimelineDay } from "@/lib/api/timeline"
+import { cn } from "@/lib/utils"
 import type { ApiTimelineSlot } from "@/lib/types/TimelineType"
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, MessageCircle, X } from "lucide-react"
 
 type ChipTone = "neutral" | "info" | "accent"
 
@@ -210,6 +211,8 @@ function MessageBubble({
 }
 
 export default function WhisperBriefingSection() {
+  // 모바일 전용 상태. xl 이상(데스크톱)에서는 항상 인라인으로 펼쳐져 있어 쓰이지 않는다.
+  const [isOpen, setIsOpen] = useState(false)
   const { slots, loadError } = useTodayTimeline()
 
   const groups: WhisperGroup[] =
@@ -233,79 +236,122 @@ export default function WhisperBriefingSection() {
   let renderedCount = 0
 
   return (
-    <div className="flex flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-neutral-100 bg-white px-4 py-3.5">
-        <div className="flex w-full items-center gap-2">
-          <div className="relative size-9 shrink-0">
-            <Image
-              src="/images/profile.png"
-              alt="불개미 대장"
-              fill
-              className="rounded-full object-cover"
-            />
-            <span className="absolute -right-px -bottom-0.5 size-3 rounded-full border-2 border-white bg-emerald-500" />
-          </div>
-          <div className="flex w-full flex-col">
-            <div className="flex flex-wrap items-center justify-between">
-              <span className="text-sm font-bold">불개미 대장</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-point/10 px-2 py-0.5 text-[10px] font-medium text-point">
-                <span className="size-1.5 rounded-full bg-point" />
-                실시간 브리핑 중
+    <>
+      {/* 모바일 전용 배경: 챗이 열려 있을 때 탭하면 닫힌다. 데스크톱에는 영향 없음. */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm xl:hidden"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      <div
+        className={cn(
+          "flex flex-col overflow-hidden",
+          isOpen
+            ? "fixed inset-x-4 bottom-24 z-50 h-[70vh] rounded-2xl border border-line-bg bg-white shadow-xl"
+            : "hidden",
+          "xl:static xl:z-auto xl:flex xl:h-auto xl:w-auto xl:rounded-none xl:border-none xl:bg-transparent xl:shadow-none"
+        )}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-neutral-100 bg-white px-4 py-3.5">
+          <div className="flex w-full items-center gap-2">
+            <div className="relative size-9 shrink-0">
+              <Image
+                src="/images/profile.png"
+                alt="불개미 대장"
+                fill
+                className="rounded-full object-cover"
+              />
+              <span className="absolute -right-px -bottom-0.5 size-3 rounded-full border-2 border-white bg-emerald-500" />
+            </div>
+            <div className="flex w-full flex-col">
+              <div className="flex flex-wrap items-center justify-between">
+                <span className="text-sm font-bold">불개미 대장</span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-point/10 px-2 py-0.5 text-[10px] font-medium text-point">
+                  <span className="size-1.5 rounded-full bg-point" />
+                  실시간 브리핑 중
+                </span>
+              </div>
+              <span className="text-xs text-neutral-400">
+                장중 핵심 시그널 귓속말 피드
               </span>
             </div>
-            <span className="text-xs text-neutral-400">
-              장중 핵심 시그널 귓속말 피드
-            </span>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="flex size-7 shrink-0 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 xl:hidden"
+            aria-label="대장 챗 닫기"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div
+          ref={scrollRef}
+          className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-ant-bg px-4 py-5 xl:max-h-125 xl:flex-none"
+        >
+          {slots === null && !loadError ? (
+            <div className="flex flex-col gap-4">
+              <Skeleton className="mx-auto h-5 w-24 rounded-full" />
+              <div className="flex gap-3">
+                <Skeleton className="size-9 shrink-0 rounded-full" />
+                <Skeleton className="h-16 w-2/3 rounded-2xl" />
+              </div>
+              <div className="flex gap-3">
+                <div className="w-9 shrink-0" />
+                <Skeleton className="h-12 w-1/2 rounded-2xl" />
+              </div>
+            </div>
+          ) : loadError && groups.length === 0 ? (
+            <p className="py-6 text-center text-xs text-neutral-400">
+              브리핑을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
+            </p>
+          ) : groups.length === 0 ? (
+            <p className="py-6 text-center text-xs text-neutral-400">
+              아직 브리핑이 준비되지 않았어요. 07:30에 첫 소식을 전해드릴게요!
+            </p>
+          ) : (
+            groups.map((group) => (
+              <div key={group.id} className="flex flex-col gap-4">
+                <TimeDivider label={group.dividerLabel} />
+                {group.messages.map((message, index) => {
+                  // 맨 마지막(가장 최근) 말풍선부터 fadeUp되도록 노출 순서를 뒤집는다.
+                  const order = totalMessages - 1 - renderedCount
+                  renderedCount += 1
+                  return (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      showHeader={index === 0}
+                      visible={visibleCount > order}
+                      delayMs={0}
+                    />
+                  )
+                })}
+              </div>
+            ))
+          )}
         </div>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="flex max-h-125 flex-col gap-4 overflow-y-auto bg-ant-bg px-4 py-5"
+      {/* 모바일 전용 플로팅 버튼: 챗을 열고 닫는다. 데스크톱에서는 항상 인라인으로 보여서 필요 없다. */}
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-label={isOpen ? "대장 챗 닫기" : "대장 챗 열기"}
+        className="fixed right-3 bottom-4 z-50 flex size-14 items-center justify-center rounded-full bg-point text-white shadow-lg transition-transform active:scale-95 xl:hidden"
       >
-        {slots === null && !loadError ? (
-          <div className="flex flex-col gap-4">
-            <Skeleton className="mx-auto h-5 w-24 rounded-full" />
-            <div className="flex gap-3">
-              <Skeleton className="size-9 shrink-0 rounded-full" />
-              <Skeleton className="h-16 w-2/3 rounded-2xl" />
-            </div>
-            <div className="flex gap-3">
-              <div className="w-9 shrink-0" />
-              <Skeleton className="h-12 w-1/2 rounded-2xl" />
-            </div>
-          </div>
-        ) : loadError && groups.length === 0 ? (
-          <p className="py-6 text-center text-xs text-neutral-400">
-            브리핑을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
-          </p>
-        ) : groups.length === 0 ? (
-          <p className="py-6 text-center text-xs text-neutral-400">
-            아직 브리핑이 준비되지 않았어요. 07:30에 첫 소식을 전해드릴게요!
-          </p>
+        {isOpen ? (
+          <X size={24} />
         ) : (
-          groups.map((group) => (
-            <div key={group.id} className="flex flex-col gap-4">
-              <TimeDivider label={group.dividerLabel} />
-              {group.messages.map((message, index) => {
-                // 맨 마지막(가장 최근) 말풍선부터 fadeUp되도록 노출 순서를 뒤집는다.
-                const order = totalMessages - 1 - renderedCount
-                renderedCount += 1
-                return (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    showHeader={index === 0}
-                    visible={visibleCount > order}
-                    delayMs={0}
-                  />
-                )
-              })}
-            </div>
-          ))
+          <>
+            <MessageCircle size={24} />
+            <span className="absolute top-0 right-0 size-3 rounded-full border-2 border-white bg-emerald-500" />
+          </>
         )}
-      </div>
-    </div>
+      </button>
+    </>
   )
 }
