@@ -1,67 +1,111 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { BarChart3 } from "lucide-react"
-import { format, subDays } from "date-fns"
+import { format } from "date-fns"
 import { ko } from "date-fns/locale/ko"
-import {
-  Bar,
-  BarChart,
-  Cell,
-  LabelList,
-  ReferenceLine,
-  XAxis,
-  YAxis,
-} from "recharts"
+import { Bar, BarChart, XAxis, YAxis } from "recharts"
 
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  Skeleton,
   type ChartConfig,
 } from "@/components/ui"
-import { investorFlow, tradingValueDistribution } from "@/lib/constant/home"
-import { isAfterIntradayDataRefresh } from "@/lib/market-session"
+import {
+  getInvestorFlow,
+  getTradingValueDistribution,
+  type InvestorFlowResponse,
+  type TradingValueDistributionResponse,
+} from "@/lib/api/market"
+import { useIndicatorSchedule } from "@/hooks/use-indicator-schedule"
 import DashboardCard from "./DashboardCard"
 
 const volumeChartConfig = {
-  value: {
+  amount: {
     label: "거래대금",
     color: "var(--color-point)",
   },
 } satisfies ChartConfig
 
-const flowChartConfig = {
-  value: {
-    label: "순매수",
-  },
-} satisfies ChartConfig
+const MIN_FLOW_BAR_WIDTH = 20
+const MAX_FLOW_BAR_WIDTH = 100
 
-function useIntradayDataBasis() {
-  const [basisDate, setBasisDate] = useState<Date | null>(null)
+interface InvestorFlowChartItem {
+  investor: string
+  value: number
+}
 
-  useEffect(() => {
-    const update = () => {
-      const now = new Date()
-      const isAfterRefresh = isAfterIntradayDataRefresh(
-        now.getHours() * 60 + now.getMinutes()
-      )
-      setBasisDate(isAfterRefresh ? now : subDays(now, 1))
-    }
-    update()
-    const timer = setInterval(update, 30_000)
-    return () => clearInterval(timer)
-  }, [])
-
-  return basisDate
+function toInvestorFlowChartItems(
+  flow: InvestorFlowResponse
+): InvestorFlowChartItem[] {
+  // KIS 원본 단위(백만원) → 화면 표기 단위(억 원)
+  const toEok = (amount: number) => Math.round(amount / 100)
+  return [
+    { investor: "개인", value: toEok(flow.individual) },
+    { investor: "외국인", value: toEok(flow.foreign) },
+    { investor: "기관", value: toEok(flow.institution) },
+  ]
 }
 
 export default function TradingActivityCard() {
-  const basisDate = useIntradayDataBasis()
-  const basisDateLabel = basisDate ? format(basisDate, "M월d일(EEE)", { locale: ko }) : ""
-  const basisLabel = basisDate
-    ? `${format(basisDate, "M월d일", { locale: ko })} 15:30 장마감 기준`
+  const [tradingValue, setTradingValue] =
+    useState<TradingValueDistributionResponse | null>(null)
+  const [investorFlow, setInvestorFlow] = useState<InvestorFlowResponse | null>(
+    null
+  )
+  const [loadError, setLoadError] = useState(false)
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [tradingValueData, investorFlowData] = await Promise.all([
+        getTradingValueDistribution(),
+        getInvestorFlow(),
+      ])
+      setTradingValue(tradingValueData)
+      setInvestorFlow(investorFlowData)
+      setLoadError(false)
+    } catch (error) {
+      console.error("[TradingActivityCard] 데이터 로드 실패", error)
+      setLoadError(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  useIndicatorSchedule(fetchData)
+
+  const basisDateLabel = tradingValue
+    ? format(new Date(tradingValue.market_date), "M월d일(EEE)", {
+        locale: ko,
+      })
     : ""
+  const basisLabel = tradingValue
+    ? `${format(new Date(tradingValue.market_date), "M월d일", { locale: ko })} 15:30 장마감 기준`
+    : ""
+
+  const tradingValuePoints =
+    tradingValue?.points.map((point) => ({
+      time: point.time_slot,
+      amount: Math.round(point.amount / 100),
+    })) ?? []
+
+  const investorFlowItems = investorFlow
+    ? toInvestorFlowChartItems(investorFlow)
+    : []
+  const maxFlowValue = Math.max(
+    1,
+    ...investorFlowItems.map((flow) => Math.abs(flow.value))
+  )
+
+  const isLoading = !tradingValue && !investorFlow && !loadError
+  const isEmpty =
+    !loadError &&
+    ((tradingValue !== null && tradingValuePoints.length === 0) ||
+      (investorFlow !== null && investorFlowItems.length === 0))
 
   return (
     <DashboardCard
@@ -69,101 +113,134 @@ export default function TradingActivityCard() {
       title={
         <>
           시간대별 거래대금 분포
-          <span className="text-[11px] font-normal text-neutral-400">
-            {basisDateLabel}
-          </span>
+          {basisDateLabel && (
+            <span className="text-[11px] font-normal text-neutral-400">
+              {basisDateLabel}
+            </span>
+          )}
         </>
       }
       action={
-        <span className="text-[11px] text-neutral-400">단위: 억 원</span>
+        tradingValue && (
+          <span className="text-[11px] text-neutral-400">단위: 억 원</span>
+        )
       }
     >
-      <ChartContainer config={volumeChartConfig} className="aspect-auto h-32 w-full">
-        <BarChart
-          accessibilityLayer={false}
-          data={tradingValueDistribution}
-          margin={{ top: 4, left: 0, right: 0, bottom: 0 }}
-        >
-          <XAxis
-            dataKey="time"
-            tickLine={false}
-            axisLine={false}
-            interval={2}
-            tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
-          />
-          <YAxis hide />
-          <ChartTooltip cursor={{ fill: "var(--color-muted)" }} content={<ChartTooltipContent />} />
-          <Bar dataKey="value" fill="var(--color-point)" radius={[4, 4, 0, 0]} opacity={0.85} />
-        </BarChart>
-      </ChartContainer>
-
-      <div className="flex flex-col gap-2 border-t border-neutral-100 pt-4">
-        <div className="flex items-center justify-between gap-2">
-          <h4 className="text-sm font-bold">투자자별 매매동향</h4>
-          <span className="text-[11px] text-neutral-400">{basisLabel}</span>
+      {loadError && !tradingValue && !investorFlow ? (
+        <p className="py-8 text-center text-sm text-neutral-400">
+          거래 데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
+        </p>
+      ) : isLoading ? (
+        <div className="flex flex-col gap-6">
+          <Skeleton className="h-32 w-full" />
+          <div className="flex flex-col gap-2 border-t border-neutral-100 pt-4">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-28 w-full" />
+          </div>
         </div>
-        <ChartContainer config={flowChartConfig} className="aspect-auto h-28 w-full">
-          <BarChart
-            accessibilityLayer={false}
-            data={investorFlow}
-            layout="vertical"
-            margin={{ top: 0, left: 8, right: 24, bottom: 0 }}
+      ) : isEmpty ? (
+        <p className="py-8 text-center text-sm text-neutral-400">
+          아직 표시할 거래 데이터가 없어요.
+        </p>
+      ) : (
+        <>
+          <ChartContainer
+            config={volumeChartConfig}
+            className="aspect-auto h-32 w-full"
           >
-            <XAxis type="number" hide />
-            <YAxis
-              type="category"
-              dataKey="investor"
-              tickLine={false}
-              axisLine={false}
-              width={44}
-              tick={{ fontSize: 12, fill: "var(--color-foreground)" }}
-            />
-            <ReferenceLine x={0} stroke="var(--color-border)" />
-            <ChartTooltip
-              cursor={{ fill: "var(--color-muted)" }}
-              content={
-                <ChartTooltipContent
-                  formatter={(value) => `${Number(value).toLocaleString()}억 원`}
-                />
-              }
-            />
-            <Bar dataKey="value" radius={4} barSize={18}>
-              {investorFlow.map((item) => (
-                <Cell
-                  key={item.investor}
-                  fill={
-                    item.value < 0
-                      ? "var(--color-decrease)"
-                      : "var(--color-increase)"
-                  }
-                />
-              ))}
-              <LabelList
-                dataKey="value"
-                content={({ x, y, width, height, value }) => {
-                  const numValue = Number(value)
-                  const cx = Number(x) + Number(width) / 2
-                  const cy = Number(y) + Number(height) / 2
-                  const label = `${numValue > 0 ? "+" : ""}${numValue.toLocaleString()}`
-                  return (
-                    <text
-                      x={cx}
-                      y={cy}
-                      fill="#ffffff"
-                      fontSize={12}
-                      fontWeight={600}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                    >
-                      {label}
-                    </text>
-                  )
-                }}
+            <BarChart
+              accessibilityLayer={false}
+              data={tradingValuePoints}
+              margin={{ top: 4, left: 0, right: 0, bottom: 0 }}
+            >
+              <XAxis
+                dataKey="time"
+                tickLine={false}
+                axisLine={false}
+                interval={2}
+                tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
               />
-            </Bar>
-          </BarChart>
-        </ChartContainer>
-      </div>
+              <YAxis hide />
+              <ChartTooltip
+                cursor={{ fill: "var(--color-muted)" }}
+                content={<ChartTooltipContent />}
+              />
+              <Bar
+                dataKey="amount"
+                fill="var(--color-point)"
+                radius={[4, 4, 0, 0]}
+                opacity={0.85}
+              />
+            </BarChart>
+          </ChartContainer>
+
+          <div className="flex flex-col gap-2 border-t border-neutral-100 pt-4">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-bold">투자자별 매매동향</h4>
+              <span className="text-[11px] text-neutral-400">
+                {basisLabel}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2.5 py-1">
+              {investorFlowItems.map((item) => {
+                const isPositive = item.value >= 0
+                const color = isPositive
+                  ? "var(--color-increase)"
+                  : "var(--color-decrease)"
+                // min-width를 바닥값으로 두면 값이 다른데도 같은 길이로 보이므로,
+                // [0, maxFlowValue] 비율을 [최소, 최대] 폭 구간으로 매핑해 크기 차이를 유지한다.
+                const barWidth =
+                  MIN_FLOW_BAR_WIDTH +
+                  (Math.abs(item.value) / maxFlowValue) *
+                    (MAX_FLOW_BAR_WIDTH - MIN_FLOW_BAR_WIDTH)
+                const valueLabel = `${isPositive ? "+" : ""}${item.value.toLocaleString()}억 원`
+                return (
+                  <div key={item.investor} className="flex items-center gap-2">
+                    <span className="w-11 shrink-0 text-xs font-semibold text-neutral-600">
+                      {item.investor}
+                    </span>
+                    <div className="flex flex-1 items-center">
+                      <div className="flex w-1/2 items-center justify-end gap-1.5">
+                        {!isPositive && (
+                          <>
+                            <span
+                              className="text-xs font-semibold whitespace-nowrap"
+                              style={{ color }}
+                            >
+                              {valueLabel}
+                            </span>
+                            <span
+                              className="h-4 shrink-0 rounded-sm transition-all duration-300"
+                              style={{ width: barWidth, backgroundColor: color }}
+                            />
+                          </>
+                        )}
+                      </div>
+                      <span className="h-5 w-px shrink-0 bg-neutral-300" />
+                      <div className="flex w-1/2 items-center justify-start gap-1.5">
+                        {isPositive && (
+                          <>
+                            <span
+                              className="h-4 shrink-0 rounded-sm transition-all duration-300"
+                              style={{ width: barWidth, backgroundColor: color }}
+                            />
+                            <span
+                              className="text-xs font-semibold whitespace-nowrap"
+                              style={{ color }}
+                            >
+                              {valueLabel}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </DashboardCard>
   )
 }

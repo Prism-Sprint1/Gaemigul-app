@@ -1,14 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { HelpCircle, Radio } from "lucide-react"
 
+import { Skeleton } from "@/components/ui"
 import { cn } from "@/lib/utils"
+import { getSentiment, type SentimentResponse } from "@/lib/api/market"
 import {
   getPheromoneSignalLevel,
   pheromoneSignalBarColors,
-  pheromoneSignalStrength,
 } from "@/lib/constant/home"
+import { useIndicatorSchedule } from "@/hooks/use-indicator-schedule"
 import DashboardCard from "./DashboardCard"
 
 const SIGNAL_BAR_HEIGHTS = [12, 20, 28, 36, 44]
@@ -82,9 +84,25 @@ function SignalInfoButton() {
 }
 
 export default function PheromoneSignalCard() {
-  const { value } = pheromoneSignalStrength
-  const level = getPheromoneSignalLevel(value)
-  const color = pheromoneSignalBarColors[level.bars - 1]
+  const [sentiment, setSentiment] = useState<SentimentResponse | null>(null)
+  const [loadError, setLoadError] = useState(false)
+
+  const fetchSentiment = useCallback(async () => {
+    try {
+      const data = await getSentiment()
+      setSentiment(data)
+      setLoadError(false)
+    } catch (error) {
+      console.error("[getSentiment] 실패", error)
+      setLoadError(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchSentiment()
+  }, [fetchSentiment])
+
+  useIndicatorSchedule(fetchSentiment)
 
   return (
     <DashboardCard
@@ -93,18 +111,38 @@ export default function PheromoneSignalCard() {
       action={<SignalInfoButton />}
       className="h-full w-full"
     >
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 py-1">
-        <SignalBars filledCount={level.bars} color={color} />
-        <p className="flex items-baseline gap-1.5">
-          <span className="text-3xl font-bold" style={{ color }}>
-            {value}
-          </span>
-          <span className="text-sm font-semibold text-neutral-500">
-            {level.label}
-          </span>
-        </p>
-        <p className="text-xs text-neutral-500">{level.description}</p>
-      </div>
+      {!sentiment && loadError ? (
+        <div className="flex flex-1 items-center justify-center py-6">
+          <p className="text-center text-xs text-neutral-400">
+            신호 데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
+          </p>
+        </div>
+      ) : !sentiment ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-1">
+          <Skeleton className="h-11 w-full max-w-40" />
+          <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-4 w-full" />
+        </div>
+      ) : (
+        (() => {
+          const level = getPheromoneSignalLevel(sentiment.score)
+          const color = pheromoneSignalBarColors[level.bars - 1]
+          return (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 py-1">
+              <SignalBars filledCount={level.bars} color={color} />
+              <p className="flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold" style={{ color }}>
+                  {Math.round(sentiment.score)}
+                </span>
+                <span className="text-sm font-semibold text-neutral-500">
+                  {level.label}
+                </span>
+              </p>
+              <p className="text-xs text-neutral-500">{level.description}</p>
+            </div>
+          )
+        })()
+      )}
     </DashboardCard>
   )
 }

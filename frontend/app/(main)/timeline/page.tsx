@@ -76,6 +76,36 @@ export default function TimelinePage() {
     return map
   }, [slots])
 
+  // 사이드바·대장 챗에서 /timeline#슬롯키로 넘어올 때, Next 라우터의 해시 스크롤은 페이지
+  // 진입 직후 한 번만 시도되는데 그 시점엔 슬롯 데이터가 비동기로 아직 로딩 중이라 섹션이
+  // DOM에 없어 실패한다. 대상 요소가 나타날 때까지 최대 3초간 짧은 간격으로 재시도한다.
+  useEffect(() => {
+    const hash = window.location.hash
+    if (!hash) return
+    const id = hash.slice(1)
+
+    let cancelled = false
+    let timerId: number | undefined
+
+    const attemptScroll = (retriesLeft: number) => {
+      if (cancelled) return
+      const target = document.getElementById(id)
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" })
+        return
+      }
+      if (retriesLeft <= 0) return
+      timerId = window.setTimeout(() => attemptScroll(retriesLeft - 1), 150)
+    }
+
+    attemptScroll(20)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timerId)
+    }
+  }, [])
+
   return (
     <div className="flex w-full flex-col gap-6 px-6 py-4">
       <PageTitle

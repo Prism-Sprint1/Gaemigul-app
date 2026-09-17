@@ -1,12 +1,13 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useRef, useState, type ReactNode } from "react"
-import { format, subMinutes } from "date-fns"
-import { Bug } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
-import { Button } from "@/components/ui"
-import { calendarHighlight, hotSector } from "@/lib/constant/home"
+import { Button, Skeleton } from "@/components/ui"
+import { getTimelineDay } from "@/lib/api/timeline"
+import type { ApiTimelineSlot } from "@/lib/types/TimelineType"
 
 type ChipTone = "neutral" | "info" | "accent"
 
@@ -16,6 +17,8 @@ const CHIP_TONE_CLASSES: Record<ChipTone, string> = {
   accent: "bg-point3/60 text-point2 hover:bg-point3",
 }
 
+const TONE_ORDER: ChipTone[] = ["accent", "info", "neutral"]
+
 interface WhisperMessage {
   id: string
   relativeLabel: string
@@ -23,6 +26,8 @@ interface WhisperMessage {
   linkHref: string
   linkLabel: string
   tone: ChipTone
+  /** 이동 대상 타임라인 섹션의 앵커 id(슬롯 키). 같은 페이지에 있을 때 스크롤로만 이동시키는 데 쓴다. */
+  anchorId: string
 }
 
 interface WhisperGroup {
@@ -31,23 +36,65 @@ interface WhisperGroup {
   messages: WhisperMessage[]
 }
 
-/** 오늘 날짜의 특정 시:분으로 고정된 Date. 캘린더/장운영처럼 매일 같은 시각에 뜨는 알림에 쓴다. */
-function todayAt(hours: number, minutes: number): Date {
-  const date = new Date()
-  date.setHours(hours, minutes, 0, 0)
-  return date
+/** 슬롯 하나(제목·부제)를 채팅 말풍선 1~2개로 변환한다. 부제가 있으면 헤드라인 바로 다음 말풍선으로 이어붙인다. */
+function slotToGroup(slot: ApiTimelineSlot, index: number): WhisperGroup | null {
+  if (!slot.briefing_headline) return null
+
+  const tone = TONE_ORDER[index % TONE_ORDER.length]
+  const linkHref = `/timeline#${slot.slot_key}`
+  const messages: WhisperMessage[] = [
+    {
+      id: `${slot.slot_key}-headline`,
+      relativeLabel: slot.time_slot,
+      tone,
+      linkHref,
+      anchorId: slot.slot_key,
+      linkLabel: `${slot.title} 자세히 보기`,
+      content: <>{slot.briefing_headline}</>,
+    },
+  ]
+
+  if (slot.briefing_subtitle) {
+    messages.push({
+      id: `${slot.slot_key}-subtitle`,
+      relativeLabel: slot.time_slot,
+      tone,
+      linkHref,
+      anchorId: slot.slot_key,
+      linkLabel: `${slot.title} 자세히 보기`,
+      content: <>{slot.briefing_subtitle}</>,
+    })
+  }
+
+  return {
+    id: slot.slot_key,
+    dividerLabel: `오늘 ${slot.time_slot}`,
+    messages,
+  }
 }
 
-function useNow() {
-  const [now, setNow] = useState<Date | null>(null)
+function useTodayTimeline() {
+  const [slots, setSlots] = useState<ApiTimelineSlot[] | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
-  useEffect(() => {
-    setNow(new Date())
-    const timer = setInterval(() => setNow(new Date()), 30_000)
-    return () => clearInterval(timer)
+  const fetchTimeline = useCallback(async () => {
+    try {
+      const data = await getTimelineDay()
+      setSlots(data)
+      setLoadError(false)
+    } catch (error) {
+      console.error("[getTimelineDay] 실패", error)
+      setLoadError(true)
+    }
   }, [])
 
-  return now
+  useEffect(() => {
+    fetchTimeline()
+    const timer = setInterval(fetchTimeline, 60_000)
+    return () => clearInterval(timer)
+  }, [fetchTimeline])
+
+  return { slots, loadError }
 }
 
 const WHISPER_REVEAL_INTERVAL_MS = 450
@@ -79,6 +126,8 @@ function TimeDivider({ label }: { label: string }) {
   )
 }
 
+const TIMELINE_PAGE_PATH = "/timeline"
+
 function MessageBubble({
   message,
   showHeader,
@@ -90,6 +139,21 @@ function MessageBubble({
   visible: boolean
   delayMs: number
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const handleClick = (event: React.MouseEvent) => {
+    // 이미 타임라인 페이지라면 새로 이동하지 않고 해당 섹션으로 바로 스크롤한다.
+    if (pathname === TIMELINE_PAGE_PATH) {
+      event.preventDefault()
+      document.getElementById(message.anchorId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      })
+      router.replace(message.linkHref, { scroll: false })
+    }
+  }
+
   return (
     <div
       className={`flex gap-3 ${visible ? "animate-chat-in" : "opacity-0"}`}
@@ -97,8 +161,13 @@ function MessageBubble({
     >
       <div className="w-9 shrink-0">
         {showHeader && (
-          <div className="flex size-9 items-center justify-center rounded-lg border-2 border-point bg-point3/50">
-            <Bug size={18} className="text-point" />
+          <div className="relative size-9 overflow-hidden rounded-full bg-point3/50">
+            <Image
+              src="/images/profile.png"
+              alt="불개미 대장"
+              fill
+              className="object-cover"
+            />
           </div>
         )}
       </div>
@@ -109,7 +178,9 @@ function MessageBubble({
           </span>
         )}
         <div className="flex items-end gap-2">
-          <div className="flex min-w-0 max-w-[85%] flex-col gap-2.5 rounded-2xl rounded-tl-sm bg-white p-4 shadow-sm">
+          <div
+            className={`flex max-w-[85%] min-w-0 flex-col gap-2.5 rounded-2xl bg-white p-4 shadow-sm ${showHeader ? "rounded-tl-xs" : "rounded-tl-lg"}`}
+          >
             <p className="text-xs leading-relaxed text-neutral-700">
               {message.content}
             </p>
@@ -118,6 +189,7 @@ function MessageBubble({
                 render={<Link href={message.linkHref} />}
                 nativeButton={false}
                 variant="secondary"
+                onClick={handleClick}
                 className={`w-fit text-xs ${CHIP_TONE_CLASSES[message.tone]}`}
               >
                 {message.linkLabel} →
@@ -134,88 +206,11 @@ function MessageBubble({
 }
 
 export default function WhisperBriefingSection() {
-  const now = useNow()
+  const { slots, loadError } = useTodayTimeline()
 
-  const relativeDividerLabel = (minutesAgo: number) =>
-    now ? `오늘 ${format(subMinutes(now, minutesAgo), "HH:mm")}` : "오늘 --:--"
-
-  const groups: WhisperGroup[] = [
-    {
-      id: "calendar",
-      dividerLabel: `오늘 ${format(todayAt(7, 30), "HH:mm")}`,
-      messages: [
-        {
-          id: "calendar",
-          relativeLabel: "07:30",
-          tone: "info",
-          linkHref: "/calendar",
-          linkLabel: "비축 캘린더 일정 확인하기",
-          content: (
-            <>
-              애기 개미님, 오늘 {calendarHighlight.time}에{" "}
-              <strong className="font-semibold text-blue-600">
-                {calendarHighlight.title}
-              </strong>
-              가 있어요! 캘린더를 꼭 챙겨보세요 📅
-            </>
-          ),
-        },
-      ],
-    },
-    {
-      id: "market-open",
-      dividerLabel: `오늘 ${format(todayAt(9, 0), "HH:mm")}`,
-      messages: [
-        {
-          id: "market-open",
-          relativeLabel: "09:00",
-          tone: "accent",
-          linkHref: "/timeline",
-          linkLabel: "실시간 페로몬 바로가기",
-          content: (
-            <>
-              애기 개미님, 국장이 열려 있어요! 오늘 하루도 화이팅이에요 🐜
-            </>
-          ),
-        },
-      ],
-    },
-    {
-      id: "sector-and-live",
-      dividerLabel: relativeDividerLabel(10),
-      messages: [
-        {
-          id: "sector",
-          relativeLabel: "10분 전",
-          tone: "accent",
-          linkHref: "/heatmap",
-          linkLabel: "단물 지도에서 확인하기",
-          content: (
-            <>
-              애기 개미님, 오늘{" "}
-              <strong className="font-semibold text-point">
-                {hotSector.name}
-              </strong>{" "}
-              섹터가 아주 뜨거워요! 🔥 {hotSector.reason}
-            </>
-          ),
-        },
-        {
-          id: "live",
-          relativeLabel: "방금 전",
-          tone: "neutral",
-          linkHref: "/timeline",
-          linkLabel: "실시간 페로몬 바로가기",
-          content: (
-            <>
-              애기 개미님, 실시간 페로몬 신호가 계속 갱신되고 있으니 놓치지
-              말고 확인해 보세요.
-            </>
-          ),
-        },
-      ],
-    },
-  ]
+  const groups: WhisperGroup[] =
+    slots?.map(slotToGroup).filter((group): group is WhisperGroup => group !== null) ??
+    []
 
   const totalMessages = groups.reduce(
     (sum, group) => sum + group.messages.length,
@@ -236,9 +231,14 @@ export default function WhisperBriefingSection() {
     <div className="flex flex-col">
       <div className="flex items-center justify-between gap-3 border-b border-neutral-100 bg-white px-4 py-3.5">
         <div className="flex items-center gap-3">
-          <div className="relative flex size-11 shrink-0 items-center justify-center rounded-xl bg-point3/50">
-            <Bug size={22} className="text-point" />
-            <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-white bg-emerald-500" />
+          <div className="relative size-11 shrink-0 bg-point3/50">
+            <Image
+              src="/images/profile.png"
+              alt="불개미 대장"
+              fill
+              className="rounded-xl object-cover"
+            />
+            <span className="absolute -right-0.75 -bottom-0.75 size-3 rounded-full border-2 border-white bg-emerald-500" />
           </div>
           <div className="flex flex-col gap-0.5">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -259,24 +259,47 @@ export default function WhisperBriefingSection() {
         ref={scrollRef}
         className="flex max-h-125 flex-col gap-4 overflow-y-auto bg-ant-bg px-4 py-5"
       >
-        {groups.map((group) => (
-          <div key={group.id} className="flex flex-col gap-4">
-            <TimeDivider label={group.dividerLabel} />
-            {group.messages.map((message, index) => {
-              const order = renderedCount
-              renderedCount += 1
-              return (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  showHeader={index === 0}
-                  visible={visibleCount > order}
-                  delayMs={0}
-                />
-              )
-            })}
+        {slots === null && !loadError ? (
+          <div className="flex flex-col gap-4">
+            <Skeleton className="mx-auto h-5 w-24 rounded-full" />
+            <div className="flex gap-3">
+              <Skeleton className="size-9 shrink-0 rounded-full" />
+              <Skeleton className="h-16 w-2/3 rounded-2xl" />
+            </div>
+            <div className="flex gap-3">
+              <div className="w-9 shrink-0" />
+              <Skeleton className="h-12 w-1/2 rounded-2xl" />
+            </div>
           </div>
-        ))}
+        ) : loadError && groups.length === 0 ? (
+          <p className="py-6 text-center text-xs text-neutral-400">
+            브리핑을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
+          </p>
+        ) : groups.length === 0 ? (
+          <p className="py-6 text-center text-xs text-neutral-400">
+            아직 브리핑이 준비되지 않았어요. 07:30에 첫 소식을 전해드릴게요!
+          </p>
+        ) : (
+          groups.map((group) => (
+            <div key={group.id} className="flex flex-col gap-4">
+              <TimeDivider label={group.dividerLabel} />
+              {group.messages.map((message, index) => {
+                // 맨 마지막(가장 최근) 말풍선부터 fadeUp되도록 노출 순서를 뒤집는다.
+                const order = totalMessages - 1 - renderedCount
+                renderedCount += 1
+                return (
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    showHeader={index === 0}
+                    visible={visibleCount > order}
+                    delayMs={0}
+                  />
+                )
+              })}
+            </div>
+          ))
+        )}
       </div>
     </div>
   )
