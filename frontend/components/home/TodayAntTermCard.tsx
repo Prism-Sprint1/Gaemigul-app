@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { BookOpen } from "lucide-react"
 
 import { Badge } from "@/components/ui"
 import { getTimelineGlossary } from "@/lib/api/timeline"
@@ -44,9 +43,6 @@ export default function TodayAntTermCard() {
 
   return (
     <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3.5 xl:rounded-none xl:border-t xl:border-neutral-100">
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-point3/60 text-point2">
-        <BookOpen size={18} />
-      </div>
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge className="bg-point text-[11px] text-white">

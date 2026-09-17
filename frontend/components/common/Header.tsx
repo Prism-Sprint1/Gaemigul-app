@@ -55,7 +55,7 @@ export default function Header() {
             {remaining}
           </strong>
           <p className="flex items-center gap-1 text-[10px] text-neutral-500">
-            <Info size="14" />
+            <Info size="11" />
             지수 데이터는 정시 기준 30분마다 갱신됩니다.
           </p>
         </div>
@@ -64,7 +64,7 @@ export default function Header() {
       {/* 모바일 헤더: 좌측 로고 / 우측 TIMER + 햄버거 메뉴, 같은 높이로 정렬 */}
       <div className="flex w-full items-center justify-between px-4 pt-4 pb-3 md:hidden">
         <Link href={"/"} className="flex items-center">
-          <Image src={Logo} alt="개미굴 로고" className="h-9 w-auto" />
+          <Image src={Logo} alt="개미굴 로고" className="h-7 w-auto" />
         </Link>
         <div className="flex items-center gap-3">
           <strong className="flex items-center gap-1 text-[16px] text-point">
