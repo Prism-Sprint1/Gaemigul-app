@@ -16,7 +16,7 @@ export default function MarketStatGrid({ groups }: MarketStatGridProps) {
           <span className="text-xs font-medium text-neutral-400">
             {group.groupLabel}
           </span>
-          <div className="flex min-w-0 flex-wrap gap-3">
+          <div className="flex min-w-0 flex-wrap gap-3 md:flex-nowrap">
             {group.stats.map((stat) => (
               <div
                 key={`${group.groupLabel}-${stat.label}`}

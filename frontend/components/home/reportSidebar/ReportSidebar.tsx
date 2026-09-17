@@ -295,9 +295,7 @@ function ReportSidebarDesktopContent() {
               type="button"
               aria-label="이전 달"
               disabled={compareYearMonth(yearMonth, MIN_YEAR_MONTH) <= 0}
-              onClick={() =>
-                setYearMonth((current) => shiftMonth(current, -1))
-              }
+              onClick={() => setYearMonth((current) => shiftMonth(current, -1))}
               className="cursor-pointer rounded-md p-1 text-neutral-400 transition-colors duration-200 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft size="16" />
@@ -306,9 +304,7 @@ function ReportSidebarDesktopContent() {
               type="button"
               aria-label="다음 달"
               disabled={compareYearMonth(yearMonth, MAX_YEAR_MONTH) >= 0}
-              onClick={() =>
-                setYearMonth((current) => shiftMonth(current, 1))
-              }
+              onClick={() => setYearMonth((current) => shiftMonth(current, 1))}
               className="cursor-pointer rounded-md p-1 text-neutral-400 transition-colors duration-200 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronRight size="16" />
@@ -341,7 +337,7 @@ function ReportSidebarDesktopContent() {
             return (
               <div
                 key={group.id}
-                className="border-b border-neutral-100 last:border-b-0"
+                className="h-full border-b border-neutral-100 last:border-b-0"
               >
                 <button
                   type="button"
@@ -370,7 +366,7 @@ function ReportSidebarDesktopContent() {
 
                 <div
                   className={cn(
-                    "grid transition-all duration-300 ease-in-out",
+                    "grid h-full transition-all duration-300 ease-in-out",
                     isOpen
                       ? "grid-rows-[1fr] bg-[#f4f4f5] opacity-100"
                       : "grid-rows-[0fr] opacity-0"
@@ -378,7 +374,7 @@ function ReportSidebarDesktopContent() {
                 >
                   <ul
                     className={cn(
-                      "flex flex-col gap-2.5 overflow-hidden px-5 transition-all duration-300",
+                      "flex flex-col gap-3 overflow-hidden px-5 transition-all duration-300",
                       isOpen ? "py-3" : "py-0"
                     )}
                   >

@@ -10,10 +10,12 @@ import Logo from "@/public/images/logo.svg"
 import Marquee from "../marquee/marquee"
 import { Info, Menu } from "lucide-react"
 
+import { useIndicatorSchedule } from "@/hooks/use-indicator-schedule"
 import { useMobileSidebar } from "./sidebar"
 
 export default function Header() {
   const { toggle } = useMobileSidebar()
+  const { remaining } = useIndicatorSchedule()
   const headerRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -47,10 +49,10 @@ export default function Header() {
           </div>
         </Link>
         <Marquee></Marquee>
-        <div className="flex min-w-67.5 flex-col justify-center gap-0.5 px-3">
+        <div className="flex min-w-67.5 flex-col justify-center gap-0.5 px-5">
           <strong className="flex items-center gap-1 text-[18px] text-point">
             <Badge className="bg-point text-[12px] text-white">TIMER</Badge>
-            25:24
+            {remaining}
           </strong>
           <p className="flex items-center gap-1 text-[10px] text-neutral-500">
             <Info size="14" />
@@ -67,7 +69,7 @@ export default function Header() {
         <div className="flex items-center gap-3">
           <strong className="flex items-center gap-1 text-[16px] text-point">
             <Badge className="bg-point text-[12px] text-white">TIMER</Badge>
-            25:24
+            {remaining}
           </strong>
           <button
             type="button"

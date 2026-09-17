@@ -106,7 +106,7 @@ export default function TimelineSectionsNav({
 
   return (
     <nav
-      className="sticky z-20 -mx-5 flex gap-2 overflow-x-auto border-b border-neutral-100 bg-background/90 px-5 py-3 backdrop-blur-sm md:mx-0 md:rounded-2xl md:border md:border-neutral-100 md:px-3 md:shadow-sm"
+      className="sticky z-20 -mx-5 flex gap-2 overflow-x-auto border-b border-neutral-100 bg-background/90 px-5 py-3 backdrop-blur-sm md:mx-0 md:hidden md:rounded-2xl md:border md:border-neutral-100 md:px-3 md:shadow-sm"
       style={{ top: "var(--header-height, 75px)" }}
     >
       {items.map((item) => {

@@ -34,7 +34,7 @@ export default function Sidebar() {
       <aside
         className={cn(
           "fixed inset-y-0 right-0 z-50 w-67.5 translate-x-full bg-white transition-transform duration-300",
-          "md:static md:z-auto md:w-auto md:max-w-67.5 md:translate-x-0",
+          "md:sticky md:top-18.75 md:z-auto md:h-[calc(100vh-75px)] md:w-auto md:max-w-67.5 md:translate-x-0 md:overflow-hidden",
           isOpen && "translate-x-0"
         )}
       >
@@ -66,7 +66,7 @@ export default function Sidebar() {
         <Separator className="w-full md:hidden" />
         <SidebarNav />
         <Separator className="w-full" />
-        <div className="hidden md:block">
+        <div className="hidden h-[calc(100%-240px)] md:block">
           <TimelineTimer />
         </div>
         <div className="hidden bg-point3/60 p-3 px-5 md:block">
