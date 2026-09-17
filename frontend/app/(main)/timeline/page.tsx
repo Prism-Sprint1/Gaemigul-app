@@ -5,7 +5,11 @@ import { format, isSameDay, startOfDay } from "date-fns"
 
 import { PageTitle } from "@/components/common"
 import { useTimelineSchedule } from "@/components/common/timeline"
-import { TimelineDateHeader, TimelineSection } from "@/components/timeline"
+import {
+  TimelineDateHeader,
+  TimelineSection,
+  TimelineSectionsNav,
+} from "@/components/timeline"
 import { getTimelineDay, getTimelineGlossary } from "@/lib/api/timeline"
 import { mapSlotToContent } from "@/lib/timeline-mapper"
 import type { ApiTimelineSlot } from "@/lib/types/TimelineType"
@@ -107,11 +111,13 @@ export default function TimelinePage() {
   }, [])
 
   return (
-    <div className="flex w-full flex-col gap-6 px-6 py-4">
+    <div className="flex w-full flex-col gap-6 px-0 py-0 md:px-6 md:py-4">
       <PageTitle
         title="개미들을 위한 실시간 시장 신호"
         description="시장의 급박한 변화와 핵심 뉴스 요약을 페로몬 흔적처럼 빠르게 따라갑니다."
       />
+
+      <TimelineSectionsNav items={items} />
 
       <TimelineDateHeader
         selectedDate={selectedDate}

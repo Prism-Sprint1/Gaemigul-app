@@ -17,7 +17,9 @@ export function WeekPlan({
     <div className="rounded-xl border bg-primary/5 p-3 sm:p-4">
       <div className="mb-2 flex items-center justify-start gap-1.5 truncate text-left text-xs font-semibold whitespace-nowrap text-primary">
         <span className="shrink-0">{isEmpty ? "🍃" : "✨"}</span>
-        {isEmpty ? "이번 주는 예정된 일정이 없어요" : "이번 주엔 이런 일정이 있어요"}
+        {isEmpty
+          ? "이번 주는 예정된 일정이 없어요"
+          : "이번 주엔 이런 일정이 있어요"}
       </div>
       {isEmpty ? (
         <p className="text-[11px] text-muted-foreground">
@@ -31,7 +33,7 @@ export function WeekPlan({
               <button
                 type="button"
                 onClick={() => onOpenItem(n)}
-                className="flex w-full cursor-pointer flex-col gap-0.5 rounded-lg border bg-card p-2 text-left transition-colors hover:bg-muted/40"
+                className="flex w-full cursor-pointer flex-col gap-0.5 rounded-lg border bg-card p-2 text-left transition-colors hover:border-primary/20 hover:bg-primary/5"
               >
                 <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
                   <span

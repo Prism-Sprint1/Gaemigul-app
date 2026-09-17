@@ -50,7 +50,7 @@ export default function CalendarPage() {
   const [month, setMonth] = useState<Date>(() => startOfMonth(today))
   const [selectedDate, setSelectedDate] = useState<Date>(today)
   // 앱(모바일)은 주별 고정이라 기본값도 주별로 시작
-  const [viewMode, setViewMode] = useState<ViewMode>("week")
+  const [viewMode, setViewMode] = useState<ViewMode>("month")
   // 상단 탭(전체/경제지표/실적) — 바뀌면 아래 서브 카테고리 선택은 초기화
   const [groupFilter, setGroupFilter] = useState<GroupFilter>("all")
   // 서브 카테고리 다중 선택(현재 탭이 갖는 카테고리 중에서만 선택 가능)
@@ -345,21 +345,37 @@ export default function CalendarPage() {
                 setSelectedDate(today)
               }}
             />
-            {loading ? (
-              <BeginnerLessonTeaserSkeleton />
-            ) : (
-              <BeginnerLessonTeaser
-                data={weeklyLesson}
-                tags={weeklyLessonTags}
-                onOpen={() => setBeginnerLessonOpen(true)}
-              />
-            )}
-            {loading ? (
-              <WeekPlanSkeleton />
-            ) : (
-              <WeekPlan items={weekNews} onOpenItem={openWeekSummaryItem} />
-            )}
+            <div className="hidden lg:block">
+              {loading ? (
+                <BeginnerLessonTeaserSkeleton />
+              ) : (
+                <BeginnerLessonTeaser
+                  data={weeklyLesson}
+                  tags={weeklyLessonTags}
+                  onOpen={() => setBeginnerLessonOpen(true)}
+                />
+              )}
+            </div>
+            <div className="order-2 lg:order-0">
+              {loading ? (
+                <WeekPlanSkeleton />
+              ) : (
+                <WeekPlan items={weekNews} onOpenItem={openWeekSummaryItem} />
+              )}
+            </div>
           </aside>
+        </div>
+
+        <div className="lg:hidden">
+          {loading ? (
+            <BeginnerLessonTeaserSkeleton />
+          ) : (
+            <BeginnerLessonTeaser
+              data={weeklyLesson}
+              tags={weeklyLessonTags}
+              onOpen={() => setBeginnerLessonOpen(true)}
+            />
+          )}
         </div>
       </div>
 
