@@ -31,7 +31,7 @@ export default function TimelineSection({
       <TimelineSectionHeader title={item.title} time={item.time} />
 
       {isOpen && content ? (
-        <div className="flex w-full flex-col gap-10 rounded-none border-b border-line-bg bg-neutral-50 p-5">
+        <div className="flex w-full flex-col gap-10 rounded-none border-b border-line-bg bg-neutral-50 px-3 py-5">
           {content.marketStats && (
             <MarketStatGrid groups={content.marketStats} />
           )}
