@@ -50,14 +50,16 @@ export function MonthGrid({
           ))}
         </div>
 
-        <div className="grid grid-cols-6 gap-px overflow-hidden bg-border">
+        <div className="grid grid-cols-6 gap-px overflow-hidden bg-muted">
           {weeks.flat().map((d) => {
             const inMonth = isSameMonth(d, month)
             // 그리드에 걸치는 전달/다음달 여분 날짜는 일정을 표시하지 않는다
             const dayNews = inMonth
               ? news
                   .filter((n) => isSameDay(n.publishedAt, d))
-                  .sort((a, b) => a.publishedAt.getTime() - b.publishedAt.getTime())
+                  .sort(
+                    (a, b) => a.publishedAt.getTime() - b.publishedAt.getTime()
+                  )
               : []
             const holiday = holidays.find((h) => isSameDay(h.date, d))
             const holidayRows = holiday ? 1 : 0
@@ -76,11 +78,7 @@ export function MonthGrid({
                 key={+d}
                 className={cn(
                   "flex min-h-24 flex-col gap-0.5 p-1 sm:min-h-28 sm:p-1.5",
-                  isSelected
-                    ? "bg-blue-50"
-                    : inMonth
-                      ? "bg-card"
-                      : "bg-muted/30"
+                  isSelected ? "bg-blue-50" : inMonth ? "bg-card" : "bg-muted/5"
                 )}
               >
                 <button
@@ -107,11 +105,7 @@ export function MonthGrid({
                     </span>
                   )}
                   {visibleNews.map((n) => (
-                    <EventRow
-                      key={n.id}
-                      item={n}
-                      onClick={() => openItem(n)}
-                    />
+                    <EventRow key={n.id} item={n} onClick={() => openItem(n)} />
                   ))}
                   {hiddenCount > 0 && (
                     <button
