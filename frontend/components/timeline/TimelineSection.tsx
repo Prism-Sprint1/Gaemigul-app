@@ -24,8 +24,10 @@ export default function TimelineSection({
   const isPending = item.status === "next" || item.status === "upcoming"
 
   return (
-    // scroll-mt는 상단 고정 헤더(h-18.75 = 75px)에 섹션 타이틀이 가려지지 않도록 여유를 둔다.
-    <section id={item.id} className="flex w-full scroll-mt-24 flex-col gap-5">
+    <section
+      id={item.id}
+      className="flex w-full scroll-mt-[calc(var(--header-height,75px)+64px)] flex-col gap-5"
+    >
       <TimelineSectionHeader title={item.title} time={item.time} />
 
       {isOpen && content ? (

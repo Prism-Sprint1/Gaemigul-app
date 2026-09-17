@@ -15,9 +15,7 @@ export default function MainLayout({
 
   return (
     <>
-      <Header />
       <div className="flex w-full">
-        <Sidebar />
         <main
           className={`${isMatch ? "w-[calc(100%-540px)]" : "mx-auto w-full 2xl:max-w-300"}`}
         >
@@ -25,7 +23,6 @@ export default function MainLayout({
         </main>
         <ReportSidebar />
       </div>
-      <Footer />
     </>
   )
 }

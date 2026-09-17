@@ -4,7 +4,12 @@ import { cn } from "@/lib/utils"
 import { addMonths, format, isSameDay, isSameMonth, subMonths } from "date-fns"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useMemo } from "react"
-import { getMonthGridWeeks, navBtn, WEEKDAY_LABELS, type ViewMode } from "@/lib/calendar"
+import {
+  getMonthGridWeeks,
+  navBtn,
+  WEEKDAY_LABELS,
+  type ViewMode,
+} from "@/lib/calendar"
 
 export function MiniCalendar({
   month,
@@ -88,7 +93,7 @@ export function MiniCalendar({
                     onClick={() => onSelectDate(d)}
                     className={cn(
                       "mx-auto flex size-7 cursor-pointer items-center justify-center rounded-full tabular-nums transition-colors",
-                      !inMonth && "text-muted-foreground/40",
+                      !inMonth && "text-muted-foreground/25",
                       inMonth &&
                         !isToday &&
                         !isSelected &&

@@ -33,7 +33,7 @@ export function BeginnerLessonDialog({
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40" />
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
         <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-90 -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-card shadow-lg sm:max-w-160">
           {open && data && (
             <LessonBody lesson={data.lesson} matchedEvent={data.matchedEvent} />
@@ -74,7 +74,7 @@ function LessonBody({ lesson, matchedEvent }: LessonData) {
   return (
     <>
       <div className="flex items-center justify-between border-b p-4">
-        <Dialog.Title className="text-lg font-bold leading-snug">
+        <Dialog.Title className="text-lg leading-snug font-bold">
           {lesson.hookTitle}
         </Dialog.Title>
         <Dialog.Close
@@ -144,7 +144,7 @@ function LessonBody({ lesson, matchedEvent }: LessonData) {
                     "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left transition-colors",
                     isSelected &&
                       status === "idle" &&
-                      "bg-amber-100 font-semibold text-amber-900 ring-1 ring-inset ring-amber-400 dark:bg-amber-400/15 dark:text-amber-200",
+                      "bg-amber-100 font-semibold text-amber-900 ring-1 ring-amber-400 ring-inset dark:bg-amber-400/15 dark:text-amber-200",
                     isWrongPick && "bg-red-500/15 font-medium text-red-700",
                     isCorrectPick &&
                       "bg-emerald-500/15 font-medium text-emerald-700",
@@ -165,7 +165,7 @@ function LessonBody({ lesson, matchedEvent }: LessonData) {
               type="button"
               disabled={!selectedId}
               onClick={checkAnswer}
-              className="mt-3 w-full cursor-pointer rounded-md bg-amber-500 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="mt-3 w-full cursor-pointer rounded-md bg-red-500 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
             >
               정답 확인
             </button>
@@ -221,7 +221,7 @@ function Section({
       className={cn(
         "first:pt-0",
         highlight
-          ? "mt-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 dark:border-amber-400/40 dark:bg-amber-400/10"
+          ? "mt-3 rounded-xl border-2 border-black bg-white p-4"
           : "py-3"
       )}
     >

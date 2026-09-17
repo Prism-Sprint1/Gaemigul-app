@@ -12,9 +12,9 @@ export default function MarketStatGrid({ groups }: MarketStatGridProps) {
   const totalStats = groups.reduce((sum, group) => sum + group.stats.length, 0)
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <div
-        className="grid gap-3"
+        className="grid min-w-0 gap-3 overflow-x-hidden"
         style={{ gridTemplateColumns: `repeat(${totalStats}, minmax(7rem, 1fr))` }}
       >
         {groups.map((group) => (
@@ -28,7 +28,7 @@ export default function MarketStatGrid({ groups }: MarketStatGridProps) {
         ))}
       </div>
       <div
-        className="grid gap-3 overflow-x-auto"
+        className="grid min-w-0 gap-3 overflow-x-auto"
         style={{ gridTemplateColumns: `repeat(${totalStats}, minmax(7rem, 1fr))` }}
       >
         {groups.flatMap((group) =>

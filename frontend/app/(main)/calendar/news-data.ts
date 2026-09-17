@@ -56,11 +56,11 @@ export const CAT: Record<
     badge: string // 연한 배지(범례·서브 필터 등)에 쓰는 배경+글자색 클래스
   }
 > = {
-  macro: { label: '매크로', dot: 'bg-red-500', card: 'border-l-red-500 bg-red-500/[0.07]', badge: 'bg-red-50 text-red-600' }, // prettier-ignore
-  rate: { label: '금리', dot: 'bg-violet-500', card: 'border-l-violet-500 bg-violet-500/[0.07]', badge: 'bg-violet-50 text-violet-600' }, // prettier-ignore
-  dividend: { label: '배당', dot: 'bg-amber-500', card: 'border-l-amber-500 bg-amber-500/[0.07]', badge: 'bg-amber-50 text-amber-700' }, // prettier-ignore
-  earnings: { label: '기업실적', dot: 'bg-emerald-500', card: 'border-l-emerald-500 bg-emerald-500/[0.07]', badge: 'bg-emerald-50 text-emerald-600' }, // prettier-ignore
-  optionExpiry: { label: '옵션만기', dot: 'bg-cyan-500', card: 'border-l-cyan-500 bg-cyan-500/[0.07]', badge: 'bg-cyan-50 text-cyan-600' }, // prettier-ignore
+  macro: { label: '매크로', dot: 'bg-red-500', card: 'before:content-[""] before:bg-red-500 before:w-0.5 before:h-full before:absolute before:top-0 before:left-0', badge: 'bg-red-50 text-red-600' }, // prettier-ignore
+  rate: { label: '금리', dot: 'bg-violet-500', card: 'before:content-[""] before:bg-violet-500 before:w-0.5 before:h-full before:absolute before:top-0 before:left-0', badge: 'bg-violet-50 text-violet-600' }, // prettier-ignore
+  dividend: { label: '배당', dot: 'bg-amber-500', card: 'before:content-[""] before:bg-amber-500 before:w-0.5 before:h-full before:absolute before:top-0 before:left-0', badge: 'bg-amber-50 text-amber-700' }, // prettier-ignore
+  earnings: { label: '기업실적', dot: 'bg-emerald-500', card: 'before:content-[""] before:bg-emerald-500 before:w-0.5 before:h-full before:absolute before:top-0 before:left-0', badge: 'bg-emerald-50 text-emerald-600' }, // prettier-ignore
+  optionExpiry: { label: '옵션만기', dot: 'bg-cyan-500', card: 'before:content-[""] before:bg-cyan-500 before:w-0.5 before:h-full before:absolute before:top-0 before:left-0', badge: 'bg-cyan-50 text-cyan-600' }, // prettier-ignore
 }
 
 export const CATS = Object.keys(CAT) as Category[]
