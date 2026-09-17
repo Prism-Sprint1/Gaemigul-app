@@ -159,9 +159,13 @@ core/ config, database, pipeline(수집+인사이트 오케스트레이션), sch
 
 domain/
 ├─ timeline/ 헤더 지표, 시간대별 타임라인, 일간·주간 AI 보고서
+
 ├─ calendar/ 증시 캘린더 (FOMC/금통위/실적시즌)
+
 ├─ heatmap/ 섹터/테마 히트맵
+
 ├─ news/ 금융 뉴스 수집 + 감성분석
+
 └─ insights/ 규칙 기반 인사이트 생성
 (각 도메인: models / routers / schemas / services)
 
@@ -169,9 +173,13 @@ domain/
 app/ layout, page (메인/캘린더/히트맵)
 
 components/
+
 ├─ layout/ Sidebar, HeaderTicker
+
 ├─ term.tsx 용어 호버 설명
+
 └─ ui/ shadcn/ui 컴포넌트
+
 lib/ api.ts(백엔드 클라이언트), glossary.ts, utils.ts
 
 - 원격 저장소: `https://github.com/Prism-Sprint1/Gaemigul-app.git`
