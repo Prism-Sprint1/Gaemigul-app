@@ -8,3 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment variables (API keys/secrets)
+.env
+.env.*
+!.env.example
+
+# Locally cached API tokens
+.cache/
+
+# macOS
+.DS_Store

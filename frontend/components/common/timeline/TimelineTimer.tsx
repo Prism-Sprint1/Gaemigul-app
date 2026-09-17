@@ -11,7 +11,7 @@ export default function TimelineTimer() {
 
   return (
     <>
-      <div className="flex w-full items-end justify-between px-5 py-3">
+      <div className="flex w-full items-end justify-between bg-white px-5 py-3">
         {/* 타임라인 타이머 */}
         <div className="flex flex-col gap-0.5">
           <span className="text-[12px]">현재 시간</span>
