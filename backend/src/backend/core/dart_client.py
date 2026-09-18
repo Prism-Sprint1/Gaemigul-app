@@ -235,7 +235,16 @@ def get_key_accounts(corp_code: str, bsns_year: str, reprt_code: str = "11011") 
                     raw = row.get("thstrm_amount")
                     if not raw:
                         return None
-                    return int(raw.replace(",", ""))
+                    # DART는 값이 없는 계정을 콤마 없는 대시 한 글자("-")로 표기하는 경우가
+                    # 있다(69번 항목 - 한전기술 실측으로 확인) - 숫자로 못 바꾸면 임의로
+                    # 0 등을 만들지 않고 확인 안 된 값(None)으로 처리한다.
+                    cleaned = raw.replace(",", "").strip()
+                    if not cleaned or cleaned == "-":
+                        return None
+                    try:
+                        return int(cleaned)
+                    except ValueError:
+                        return None
         return None
 
     return {

@@ -580,26 +580,44 @@ async def ingest_fomc_year(year: int) -> list[CalendarEvent]:
 #   나중에 확정되는 fnlttSinglAcnt.json(단일회사 주요계정)에서 가져온다 - 조사 시점에는 이미
 #   정기보고서가 제출된 뒤라 세 값 다 확인 가능하다. 그래서 title/summary는 "잠정실적 발표일"과
 #   "그 분기의 확정 실적 수치"를 같이 담는다.
-_DART_QUARTER_REPORT_CODE: dict[int, tuple[str, str]] = {
-    1: ("11011", "4분기(연간)"),  # 1월 공시 = 전년도 4분기/연간 잠정실적
-    4: ("11013", "1분기"),
-    7: ("11012", "2분기"),
-    10: ("11014", "3분기"),
-}
+# (분기 종료월, 종료일, reprt_code, 분기 라벨) - 전부 12월 결산 가정(68번 항목에서 코스피
+# 100대 기업 실측 결과 12월 결산이 아니라서 실패한 사례는 0건, 전부 같은 원인이었음).
+_QUARTER_ENDS: list[tuple[int, int, str, str]] = [
+    (3, 31, "11013", "1분기"),
+    (6, 30, "11012", "2분기"),
+    (9, 30, "11014", "3분기"),
+    (12, 31, "11011", "4분기(연간)"),
+]
+# 분기 종료일로부터 1차 잠정실적 공시까지 걸리는 최대 지연일. 삼성전자/SK하이닉스/현대차는
+# 7~9일이지만(3단계 사전조사), 68번 항목에서 코스피 100대 기업 실측 결과 최대 44일(예:
+# 한국금융지주 Q1 종료 3/31 -> 공시 5/14)까지 걸리는 회사가 많았다. 분기 간격(약 91~92일)보다
+# 충분히 작게 잡아야 바로 다음 분기의 초고속 공시와 겹치지 않는다(91일 미만이면 안전).
+_MAX_DISCLOSURE_LAG_DAYS = 90
 
 
-# 1차 잠정실적 공시의 rcept_dt(발표월)로 그 공시가 어느 분기 실적인지, fnlttSinglAcnt 조회에
-# 쓸 reprt_code가 무엇인지 판단한다. 삼성전자(12월 결산)가 매년 1/4/7/10월에만 1차 공시를 내는
-# 패턴을 3단계 사전조사에서 실제 데이터로 확인했다 - 그 외 월에 나온 공시는 이 패턴을 벗어난
-# 것이므로 임의로 추정하지 않고 에러를 낸다.
+# 1차 잠정실적 공시의 rcept_dt로 그 공시가 어느 분기 실적인지, fnlttSinglAcnt 조회에 쓸
+# reprt_code가 무엇인지 판단한다. "발표월이 1/4/7/10월인가"가 아니라 "가장 최근에 끝난 분기
+# 종료일로부터 며칠 지났는가"로 판단한다(68번 항목 - 회사마다 공시 속도가 다르다는 게 실측으로
+# 확인됨). 어느 분기 종료일로부터도 _MAX_DISCLOSURE_LAG_DAYS 이내가 아니면 1차 잠정실적
+# 공시로 보이지 않는 것이므로 임의로 추정하지 않고 에러를 낸다.
 def _dart_quarter_period(rcept_dt: str) -> tuple[str, str, str]:
-    year = int(rcept_dt[:4])
-    month = int(rcept_dt[4:6])
-    if month not in _DART_QUARTER_REPORT_CODE:
-        raise ValueError(f"1차 잠정실적 공시로 보이지 않는 발표월입니다: {rcept_dt}")
+    rcept_date = datetime.strptime(rcept_dt, "%Y%m%d").date()
 
-    report_code, quarter_label = _DART_QUARTER_REPORT_CODE[month]
-    bsns_year = year - 1 if month == 1 else year
+    candidates: list[tuple[int, int, str, str]] = []
+    for year in (rcept_date.year, rcept_date.year - 1):
+        for month, day, report_code, quarter_label in _QUARTER_ENDS:
+            quarter_end = date(year, month, day)
+            if quarter_end >= rcept_date:
+                continue
+            lag_days = (rcept_date - quarter_end).days
+            if lag_days > _MAX_DISCLOSURE_LAG_DAYS:
+                continue
+            candidates.append((lag_days, year, report_code, quarter_label))
+
+    if not candidates:
+        raise ValueError(f"1차 잠정실적 공시로 보이지 않는 발표일입니다: {rcept_dt}")
+
+    lag_days, bsns_year, report_code, quarter_label = min(candidates, key=lambda c: c[0])
     return str(bsns_year), report_code, f"{bsns_year}년 {quarter_label}"
 
 
@@ -1274,3 +1292,31 @@ async def ingest_bonus_issues_from_kis(stock_codes: list[str], f_dt: str, t_dt: 
         await session.commit()
 
     return events
+
+
+# 코스피 시가총액 상위 100개 기업 - scripts/seed_kospi100_earnings.py(68번 항목)에서
+# ingest_preliminary_earnings_from_dart()에 넘길 기업 목록을 만들 때 쓴다. 선정 기준:
+# kis_client.get_stock_master("kospi")(코스피 보통주 전종목, market_cap 필드 포함)를
+# 시가총액 내림차순 정렬한 뒤 상위 100개 - 호출 시점 스냅샷이라 기준일은 실행 시각이다.
+def get_kospi_top100_companies() -> list[dict]:
+    stocks = kis_client.get_stock_master("kospi")
+    ranked = sorted(stocks, key=lambda s: s["market_cap"], reverse=True)
+    return [
+        {"stock_code": s["code"], "corp_name": s["name"], "market_cap": s["market_cap"]}
+        for s in ranked[:100]
+    ]
+
+
+# 종목코드 목록을 DART corp_code로 매핑한다. get_corp_codes()는 캐싱이 없어 호출마다 전체
+# 상장/비상장사 zip을 새로 받으므로, 100개를 매핑할 때도 딱 한 번만 호출한다.
+def map_dart_corp_codes(companies: list[dict]) -> tuple[list[dict], list[dict]]:
+    corp_codes = dart_client.get_corp_codes()
+    mapped: list[dict] = []
+    failed: list[dict] = []
+    for company in companies:
+        corp = dart_client.find_corp_by_stock_code(corp_codes, company["stock_code"])
+        if corp is None:
+            failed.append(company)
+            continue
+        mapped.append({**company, "corp_code": corp["corp_code"]})
+    return mapped, failed
