@@ -13,6 +13,7 @@ from threading import Lock
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from backend.core import kis_client
 from backend.core.database import get_session_factory
@@ -93,22 +94,16 @@ def _payload(
 
 # 30분 칸 값을 저장한다 (같은 칸이 있으면 값만 바꾼다). 같은 트랜잭션에서 _RETENTION_DAYS보다 오래된 행을 지운다
 #   sampled_at  30분 칸 시각 (시간대 없는 한국 시간)
+# INSERT ... ON CONFLICT로 한 번에 넣는다. 조회 후 넣는 방식은 서버가 두 대 이상일 때
+# 같은 칸을 동시에 넣다가 UNIQUE 제약 위반으로 그 회차 갱신이 통째로 실패한다 (9/18 07:00 실제 발생)
 async def _save_snapshot(sampled_at: datetime, value: float) -> None:
     session_factory = get_session_factory()
     async with session_factory() as session:
-        existing = await session.scalar(
-            select(ExchangeRateSnapshot).where(ExchangeRateSnapshot.sampled_at == sampled_at)
+        await session.execute(
+            pg_insert(ExchangeRateSnapshot)
+            .values(sampled_at=sampled_at, value=value, created_at=datetime.now(_KST).replace(tzinfo=None))
+            .on_conflict_do_update(index_elements=[ExchangeRateSnapshot.sampled_at], set_={"value": value})
         )
-        if existing is None:
-            session.add(
-                ExchangeRateSnapshot(
-                    sampled_at=sampled_at,
-                    value=value,
-                    created_at=datetime.now(_KST).replace(tzinfo=None),
-                )
-            )
-        else:
-            existing.value = value
         # 정확히 경계 시각인 행은 남긴다
         await session.execute(
             delete(ExchangeRateSnapshot).where(

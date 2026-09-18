@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Supabase Postgres 연결 문자열. "postgresql+asyncpg://"로 시작해야 한다
     database_url: str | None = None
 
+    # 관리용 POST(수집·보고서 생성) 호출 키. 요청 헤더 X-Admin-Key와 비교한다
+    # 비워 두면 그 POST들은 503으로 막힌다 (배포 주소가 공개돼도 아무나 못 부르게)
+    admin_api_key: str | None = None
+
     # Pollinations 이미지 생성 (timeline 보고서 이미지). 키(sk_)는 서버에서만 쓴다. 모델 id를 바꾸면 화풍·비용이 바뀐다
     pollinations_api_key: str | None = None
     pollinations_image_model: str = "z-image-turbo"

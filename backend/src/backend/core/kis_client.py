@@ -13,10 +13,15 @@ from pathlib import Path
 
 import httpx
 
+from backend.core import kis_token_store
 from backend.core.config import get_settings
 
-# 토큰 캐시 파일 위치: backend/.cache/kis_token.json (git에 올리지 않는다)
+# 토큰 보관 순서: 이 프로세스 메모리 -> DB(kis_token_store, 전 기기 공용) -> 이 컴퓨터의 파일
+# DATABASE_URL이 없거나 DB를 못 읽을 때만 파일을 쓴다. 파일 위치: backend/.cache/kis_token.json (git에 올리지 않는다)
 _TOKEN_CACHE_PATH = Path(__file__).resolve().parents[3] / ".cache" / "kis_token.json"
+
+# 이 프로세스가 마지막으로 확인한 토큰 (토큰, 만료 시각 epoch). 호출마다 DB를 읽지 않으려고 둔다
+_MEMORY_TOKEN: tuple[str, float] | None = None
 
 # KIS API별 주소(_ENDPOINT)와 거래 ID(_TR_ID). 아래 조회 함수들이 이 두 값으로 요청을 보낸다
 #   ENDPOINT  kis_base_url 뒤에 붙는 경로
@@ -36,8 +41,6 @@ _VOLUME_RANK_ENDPOINT = "/uapi/domestic-stock/v1/quotations/volume-rank"
 _VOLUME_RANK_TR_ID = "FHPST01710000"
 _HOLIDAY_ENDPOINT = "/uapi/domestic-stock/v1/quotations/chk-holiday"
 _HOLIDAY_TR_ID = "CTCA0903R"
-_EXPECTED_RANK_ENDPOINT = "/uapi/domestic-stock/v1/ranking/exp-trans-updown"
-_EXPECTED_RANK_TR_ID = "FHPST01820000"
 _INVESTOR_DAILY_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-investor-daily-by-market"
 _INVESTOR_DAILY_TR_ID = "FHPTJ04040000"
 _INDEX_DAILY_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-index-daily-price"
@@ -62,35 +65,64 @@ _TIMEOUT_SECONDS = 10.0
 # 토큰이 만료된 순간 여러 작업이 동시에 발급하지 않게 한 번에 하나만 캐시 확인·발급을 한다
 _TOKEN_LOCK = threading.Lock()
 
+# DB에서 읽은 토큰을 다시 확인하기까지 메모리에 두는 시간(초). 짧게 두면 다른 기기가 새로 발급한 토큰을 빨리 따라간다
+_MEMORY_TOKEN_SECONDS = 600.0
 
-# 캐시된 토큰 (없거나 만료됐으면 None). 중간에 끊긴 쓰기·옛 형식 캐시도 None으로 보고 새로 발급한다
-def _read_cached_token() -> str | None:
+
+# 파일에 저장된 토큰 (없거나 만료됐으면 None). 중간에 끊긴 쓰기·옛 형식 캐시도 None으로 본다
+def _read_token_file(now: float) -> tuple[str, float] | None:
     if not _TOKEN_CACHE_PATH.exists():
         return None
 
     try:
         cached = json.loads(_TOKEN_CACHE_PATH.read_text(encoding="utf-8"))
-        if cached["expires_at"] > time.time():
-            return cached["access_token"]
+        if cached["expires_at"] > now:
+            return cached["access_token"], cached["expires_at"]
     except (OSError, ValueError, KeyError, TypeError):
         return None
     return None
 
 
-# 발급받은 토큰을 파일에 저장한다. 임시 파일에 쓴 뒤 바꿔치기해서 읽는 쪽이 반쯤 쓴 파일을 보지 않게 한다
-def _write_cached_token(access_token: str, expires_in: int) -> None:
+# 토큰을 파일에 저장한다. 임시 파일에 쓴 뒤 바꿔치기해서 읽는 쪽이 반쯤 쓴 파일을 보지 않게 한다
+def _write_token_file(access_token: str, expires_at: float) -> None:
     _TOKEN_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
     temporary = _TOKEN_CACHE_PATH.with_suffix(".tmp")
-    temporary.write_text(
-        json.dumps(
-            {
-                "access_token": access_token,
-                "expires_at": time.time() + expires_in - 60,  # 만료 60초 전부터는 새로 발급
-            }
-        ),
-        encoding="utf-8",
-    )
+    temporary.write_text(json.dumps({"access_token": access_token, "expires_at": expires_at}), encoding="utf-8")
     temporary.replace(_TOKEN_CACHE_PATH)
+
+
+# 유효한 토큰을 메모리 -> DB -> 파일 순으로 찾는다. 셋 다 없으면 None
+def _read_cached_token() -> str | None:
+    global _MEMORY_TOKEN
+    now = time.time()
+
+    if _MEMORY_TOKEN and _MEMORY_TOKEN[1] > now:
+        return _MEMORY_TOKEN[0]
+
+    shared = kis_token_store.read(now)
+    if shared:
+        token, expires_at = shared
+        # 메모리 유효기간은 짧게 둬서, 다른 기기가 새로 발급하면 10분 안에 따라가게 한다
+        _MEMORY_TOKEN = (token, min(expires_at, now + _MEMORY_TOKEN_SECONDS))
+        # DB가 멈춰도 이 컴퓨터가 재발급하지 않도록 파일에도 같은 값을 남긴다 (값이 다를 때만 쓴다)
+        if _read_token_file(now) != (token, expires_at):
+            _write_token_file(token, expires_at)
+        return token
+
+    cached = _read_token_file(now)
+    if cached:
+        _MEMORY_TOKEN = cached
+        return cached[0]
+    return None
+
+
+# 발급받은 토큰을 메모리·DB·파일에 저장한다 (DB 저장이 실패해도 파일로 이어 쓴다)
+def _write_cached_token(access_token: str, expires_in: int) -> None:
+    global _MEMORY_TOKEN
+    expires_at = time.time() + expires_in - 60  # 만료 60초 전부터는 새로 발급
+    _MEMORY_TOKEN = (access_token, expires_at)
+    kis_token_store.write(access_token, expires_at)
+    _write_token_file(access_token, expires_at)
 
 
 # 키 설정을 확인하고 설정값을 돌려준다. 키가 없으면 RuntimeError
@@ -292,31 +324,6 @@ def get_holiday_calendar(base_date: str) -> dict:
         f"{settings.kis_base_url}{_HOLIDAY_ENDPOINT}",
         headers=_headers(settings, _HOLIDAY_TR_ID),
         params={"BASS_DT": base_date, "CTX_AREA_NK": "", "CTX_AREA_FK": ""},
-    )
-
-
-# KRX 동시호가 예상체결 순위 - 08:30 급상승 종목의 대체 수단 (top_gainer_service.SOURCE_BY_SLOT이 "expected"일 때)
-# market_open_code: "0" 장전예상(08:30~09:00) / "1" 장마감예상(15:20~15:30)
-# rank_sort_code: 0 상승률 / 1 상승폭 / 2 보합 / 3 하락률 / 4 하락폭 / 5 체결량 / 6 거래대금
-# 장전예상 값은 그날 하루 종일 조회된다 (놓친 08:30 슬롯을 나중에 채울 수 있다)
-# 응답 output: hts_kor_isnm(종목명) / prdy_ctrt(등락률) / stck_prpr(예상체결가)
-def get_expected_ranking(market_open_code: str = "0", rank_sort_code: str = "0", market_code: str = "0000") -> dict:
-    settings = _checked_settings()
-    return _get_with_retry(
-        f"{settings.kis_base_url}{_EXPECTED_RANK_ENDPOINT}",
-        headers=_headers(settings, _EXPECTED_RANK_TR_ID),
-        params={
-            "fid_rank_sort_cls_code": rank_sort_code,
-            "fid_cond_mrkt_div_code": "J",
-            "fid_cond_scr_div_code": "20182",
-            "fid_input_iscd": market_code,
-            "fid_div_cls_code": "0",
-            "fid_aply_rang_prc_1": "",
-            "fid_vol_cnt": "",
-            "fid_pbmn": "",
-            "fid_blng_cls_code": "0",
-            "fid_mkop_cls_code": market_open_code,
-        },
     )
 
 
