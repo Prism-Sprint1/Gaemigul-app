@@ -9,6 +9,9 @@
 #   slot_0730 ~ slot_2000  타임라인 슬롯 8개      timeline_service.SLOT_COLLECT_TIMES
 #   timeline_reports       일간·주간 보고서       매일 20:10 (휴장일 판단은 작업 안에서, 주간은 일간 직후)
 #   heatmap                히트맵                 매분 30초 확인, 정규장 10분 간격 갱신 (HEATMAP_ENABLED)
+#   calendar_fomc          FOMC 일정             매시 00·30분 (서버 시작 직후 1회)
+#   calendar_fred          미국 경제지표(FRED)    6시간마다 (서버 시작 직후 1회)
+#   calendar_dart          주요 기업 잠정실적      매일 00:10 (서버 시작 직후 1회)
 # KIS 키가 없으면 전부 등록하지 않는다. 시작 직후 1회 실행은 next_run_time으로 한다 (서버 시작을 막지 않도록)
 
 import logging
@@ -25,6 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.core.config import get_settings
 from backend.core.logging_config import setup_logging
 from backend.domain.calendar.routers.calendar import router as calendar_router
+from backend.domain.calendar.services import calendar as calendar_service
 from backend.domain.heatmap.routers.heatmap import router as heatmap_router
 from backend.domain.heatmap.services import heatmap
 from backend.domain.market.routers.market import router as market_router
@@ -67,6 +71,8 @@ async def lifespan(app: FastAPI):
         _register_heatmap_job()
     else:
         logger.warning("KIS 키가 없어 시세 수집을 시작하지 않습니다. 저장된 데이터와 API는 사용할 수 있습니다.")
+    # 캘린더 재수집은 FRED·DART·Fed 사이트를 주로 써서 KIS 키와 따로 등록한다
+    _register_calendar_jobs()
 
     jobs = _scheduler.get_jobs()
     if jobs:
@@ -220,6 +226,64 @@ def _register_heatmap_job() -> None:
         id="heatmap",
         next_run_time=datetime.now(_KST),
     )
+
+
+
+# 캘린더 재수집 작업 (FOMC·FRED·DART). 발표 뒤 수치 정정(revision)을 따라가려고 주기적으로 다시 받아 upsert한다
+# async 작업이라 서버와 같은 이벤트 루프에서 돈다 (다른 루프에서 돌면 DB 커넥션 풀이 깨진다). 실패하면 마지막 수집값을 유지한다
+async def _refresh_fomc() -> None:
+    try:
+        await calendar_service.ingest_fomc_year(datetime.now(_KST).year)
+    except Exception:
+        logger.exception("FOMC 캘린더 갱신 실패: 마지막 수집값을 유지합니다.")
+
+
+# FRED 경제지표. 지표 하나가 실패해도 나머지는 계속한다
+_FRED_INDICATORS = ("CPI", "PPI", "GDP", "PAYEMS", "UNRATE", "PCE")
+
+
+async def _refresh_fred_indicators() -> None:
+    year = datetime.now(_KST).year
+    for indicator in _FRED_INDICATORS:
+        try:
+            await calendar_service.ingest_year_from_fred(indicator, year)
+        except Exception:
+            logger.exception("FRED %s 갱신 실패: 마지막 수집값을 유지합니다.", indicator)
+
+
+# DART 잠정실적 대상 기업. corp_code는 dart_client.get_corp_codes()로 실제 조회해 확인한 값
+_DART_MAJOR_COMPANIES = (
+    {"corp_code": "00126380", "corp_name": "삼성전자", "stock_code": "005930"},
+    {"corp_code": "00164779", "corp_name": "SK하이닉스", "stock_code": "000660"},
+    {"corp_code": "00164742", "corp_name": "현대차", "stock_code": "005380"},
+)
+
+
+async def _refresh_dart_earnings() -> None:
+    today = datetime.now(_KST)
+    start_date = f"{today.year - 1}0101"
+    end_date = today.strftime("%Y%m%d")
+    for company in _DART_MAJOR_COMPANIES:
+        try:
+            await calendar_service.ingest_preliminary_earnings_from_dart(
+                company["corp_code"], company["stock_code"], company["corp_name"], start_date, end_date
+            )
+        except Exception:
+            logger.exception("DART %s 실적 갱신 실패: 마지막 수집값을 유지합니다.", company["corp_name"])
+
+
+# 캘린더 작업 등록. DATABASE_URL이 없으면 등록하지 않는다. 주기는 CronTrigger 값을 바꾼다
+def _register_calendar_jobs() -> None:
+    if not get_settings().database_url:
+        logger.warning("캘린더 재수집 비활성화 - DATABASE_URL이 .env에 없습니다.")
+        return
+
+    for job_id, func, trigger in (
+        ("calendar_fomc", _refresh_fomc, CronTrigger(minute="0,30", timezone=_KST)),
+        ("calendar_fred", _refresh_fred_indicators, CronTrigger(hour="*/6", minute=0, timezone=_KST)),  # 월간 지표라 하루 4번
+        ("calendar_dart", _refresh_dart_earnings, CronTrigger(hour=0, minute=10, timezone=_KST)),  # 분기 실적이라 하루 1번
+    ):
+        _scheduler.add_job(func, trigger, id=job_id, next_run_time=datetime.now(_KST))
 
 
 app = FastAPI(lifespan=lifespan)

@@ -45,7 +45,7 @@ Calendar UI
 
 새로운 프레임워크나 라이브러리를 임의로 추가하지 않는다.
 
-기존 Router / Service / Schema 구조가 있다면 그대로 활용한다.
+기존 Router / Service / Schema / Model 구조가 있다면 그대로 활용한다.
 
 작업 전에 반드시 현재 프로젝트를 분석한다.
 
@@ -56,11 +56,12 @@ Calendar UI
 3. Router
 4. Service
 5. Schema
-6. Supabase 연결 코드
-7. `.env`
-8. Next.js 구조
-9. 기존 Calendar 컴포넌트
-10. 기존 API 호출 방식
+6. Model
+7. Supabase 연결 코드
+8. `.env`
+9. Next.js 구조
+10. 기존 Calendar 컴포넌트
+11. 기존 API 호출 방식
 
 기존 Calendar UI가 있다면 새로 만들지 않는다.
 
@@ -72,7 +73,7 @@ Calendar UI
 
 이번 단계에서는 다음 순서로 구현한다.
 
-```text
+````text
 1. 현재 프로젝트 분석
 2. FRED API 연결 확인
 3. CalendarEvent Schema 정리
@@ -85,7 +86,7 @@ Calendar UI
 10. Calendar에 CPI 표시
 11. CPI 성공 후 PPI 추가
 12. 이후 GDP / 고용 / 실업률 / 금리 추가
-```
+
 
 처음부터 모든 지표를 구현하지 않는다.
 
@@ -99,7 +100,7 @@ Supabase 테이블 이름:
 
 ```text
 calendar_events
-```
+````
 
 중요:
 

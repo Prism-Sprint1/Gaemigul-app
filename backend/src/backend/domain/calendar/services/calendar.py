@@ -7,10 +7,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import asyncio
+from datetime import date, datetime, timedelta
 from datetime import time as dt_time
+from time import sleep
 from zoneinfo import ZoneInfo
 
+import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -235,7 +238,7 @@ async def _ingest_from_fred(indicator: str) -> CalendarEvent:
 # - 아직 발표 안 된 달: FRED release calendar에 예정 발표일이 있는 경우에만 SCHEDULED(actual=null)
 #   생성. 예정 발표일 자체가 FRED에 없는 달은 만들지 않는다(임의 날짜 생성 금지).
 # - previous는 그 시점까지 실제로 존재하는 가장 최근 관측값(과거 실측치이므로 임의 생성 아님)
-async def ingest_year_from_fred(indicator: str, year: int) -> list[CalendarEvent]:
+def _build_fred_year_events(indicator: str, year: int) -> list[CalendarEvent]:
     series_id = _SERIES_IDS[indicator]
     quarterly = _FREQUENCY.get(indicator) == "quarterly"
     # 분기별이면 대상 기간의 첫 달이 1/4/7/10월뿐이다 - 나머지 달로 임의 생성하지 않는다
@@ -325,6 +328,16 @@ async def ingest_year_from_fred(indicator: str, year: int) -> list[CalendarEvent
         )
         events.append(event)
 
+    return events
+
+
+# _build_fred_year_events는 FRED를 동기 httpx로 여러 번 호출한다(get_series_observations를
+# 월/분기마다, 후보 발표일마다 반복 호출). 이 함수도 ingest_fomc_year와 같은 이유로
+# AsyncIOScheduler의 메인 이벤트 루프 코루틴으로 도니, 데이터 수집(순수 동기)만
+# asyncio.to_thread로 스레드에 넘기고 DB 쓰기는 메인 루프에 남긴다.
+async def ingest_year_from_fred(indicator: str, year: int) -> list[CalendarEvent]:
+    events = await asyncio.to_thread(_build_fred_year_events, indicator, year)
+
     async with get_session_factory()() as session:
         for event in events:
             await _upsert_event(session, event)
@@ -360,6 +373,9 @@ _FOMC_EVENT_TITLES: dict[str, str] = {
     "FOMC_MINUTES": "미국 FOMC 의사록 공개",
 }
 
+# FOMC_STATEMENT 발표 전(SCHEDULED)에만 쓰는 문구 - 발표 후에는 _fomc_statement_summary()가
+# 실제 결과로 채운 문장으로 교체한다(62번 항목에서는 이 구분이 없어서 발표가 지난 뒤에도
+# "~발표하는 날입니다"라는 미래형 문구가 그대로 남아있는 문제가 있었다, 2026-09-17 발견).
 _FOMC_EVENT_SUMMARIES: dict[str, str] = {
     "FOMC_STATEMENT": (
         "FOMC(연방공개시장위원회)가 정례회의를 마치고 미국의 기준금리 목표범위를 발표하는 날입니다. "
@@ -388,8 +404,127 @@ def _fomc_status(published_at: str, released_time: str) -> str:
     return "RELEASED" if datetime.now(_KST) >= announced_at else "SCHEDULED"
 
 
-def _fomc_event(event_date: str, event_type: str) -> CalendarEvent:
+# FOMC가 실제로 결정하는 값 - 연방기금금리 "목표범위"(단일 수치가 아니라 상/하단 범위).
+# FRED에 이 범위를 그대로 주는 공식 시계열(DFEDTARU=상단/DFEDTARL=하단, 일별)이 있어서 그걸
+# 그대로 쓴다 - FOMC 회의 자체를 다루는 API가 없다는 이전 제약(fed_client.py 참고)은
+# "회의 일정"에 대한 것이었지 "결정된 금리 값"에 대한 게 아니었다. as_of_date 이전(포함)
+# 가장 최근 관측치를 쓴다 - 그 날짜에 정확히 관측치가 없어도(휴일 등) 직전 값으로 대체되며,
+# as_of_date가 미래라 관측치 자체가 없으면 None을 그대로 반환한다(임의 추정 금지).
+# FOMC 회의가 연 8회라 한 연도치를 채우는 동안 이 함수가 짧은 시간에 여러 번 연달아 호출되는데,
+# 그럴 때 FRED가 간헐적으로 ReadTimeout을 준다(실제로 겪음 - 단일 호출은 항상 빠르게 성공하고,
+# 연속 호출일 때만 가끔 실패함). 최대 3번까지 짧은 대기 후 재시도한다 - 그래도 실패하면 값을
+# 지어내지 않고 그대로 예외를 전파한다(무한 재시도나 값 추정으로 감추지 않음).
+def _fetch_observation(series_id: str, as_of_date: str) -> list[dict]:
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            return fred_client.get_series_observations(
+                series_id, limit=1, sort_order="desc", observation_end=as_of_date
+            )
+        except httpx.TimeoutException as exc:
+            last_error = exc
+            sleep(1.5 * (attempt + 1))
+    assert last_error is not None
+    raise last_error
+
+
+def _fomc_rate_range(as_of_date: str) -> str | None:
+    upper = _fetch_observation("DFEDTARU", as_of_date)
+    lower = _fetch_observation("DFEDTARL", as_of_date)
+    if not upper or not lower:
+        return None
+    upper_value, lower_value = upper[0]["value"], lower[0]["value"]
+    if upper_value == "." or lower_value == ".":
+        return None
+    return f"{lower_value}~{upper_value}%"
+
+
+# FRED DFEDTARU/DFEDTARL은 실제 발표보다 며칠 늦게 갱신될 때가 있다 - 2026-09-16 회의가
+# 실제로 그랬다: 다음날 오전까지도 FRED는 "3.5~3.75%"(변동 없음)로 남아있었는데, 실제로는
+# 연준 공식 발표문(federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm,
+# 2026-09-17 직접 확인)에서 25bp 인상(3.75~4.00%), 찬성 12명/반대 0명(만장일치)으로
+# 결정된 것이 확인됐다. FRED가 아직 못 따라온 회의만 여기에 공식 발표문 기준으로 수동
+# 기록해서 우선 적용한다 - _BOK_RATE_DECISION_DATES(한국은행 결정일)와 같은 성격의
+# "실시간 API가 아직 못 주는 값을 공식 1차 출처로 직접 확인해서 채우는" 예외 표다.
+# FRED가 나중에 값을 따라잡아도 여기 적힌 값과 같아지므로 결과는 그대로다.
+_FOMC_RATE_OVERRIDES: dict[str, dict[str, str]] = {
+    "2026-09-16": {
+        "rate_range": "3.75~4.00%",
+        "vote_result": "찬성 12명, 반대 0명(만장일치)",
+    },
+}
+
+
+# FOMC_STATEMENT(금리결정 성명서)에만 previous/actual을 채운다 - SEP/MINUTES는 그 자체로
+# 금리를 "결정"하는 이벤트가 아니라 계속 None으로 둔다(기존 방침 유지).
+# previous: 이번 회의 시작 전날 기준 목표범위(회의 개최 여부와 무관하게 항상 조회 가능).
+# actual: 이번 회의가 이미 끝났을 때만(status=RELEASED) 회의 마지막 날 기준으로 조회한다 -
+# 아직 안 끝난 회의에 대해 미래 결정을 추정하지 않는다는 원칙 그대로. _FOMC_RATE_OVERRIDES에
+# 수동 확인된 값이 있으면 FRED보다 그 값을 우선한다.
+def _fomc_statement_rates(meeting_start: str, meeting_end: str, status: str) -> tuple[str | None, str | None]:
+    day_before_meeting = (date.fromisoformat(meeting_start) - timedelta(days=1)).isoformat()
+    previous = _fomc_rate_range(day_before_meeting)
+    if status != "RELEASED":
+        return previous, None
+    override = _FOMC_RATE_OVERRIDES.get(meeting_end)
+    actual = override["rate_range"] if override else _fomc_rate_range(meeting_end)
+    return previous, actual
+
+
+# "하단~상단%" 형식 문자열 두 개를 비교해서 방향(인상/인하/동결)과 상단 기준 변화폭(bp)을
+# 계산한다. 상/하단은 항상 같은 폭(보통 25bp 단위)으로 같이 움직이므로 상단만 비교해도
+# 충분하다 - previous/actual 둘 다 이미 검증된 값이라 이 계산 자체는 추정이 아니다.
+def _fomc_rate_change(previous: str, actual: str) -> tuple[str, int]:
+    previous_upper = float(previous.split("~")[1].rstrip("%"))
+    actual_upper = float(actual.split("~")[1].rstrip("%"))
+    diff_bp = round((actual_upper - previous_upper) * 100)
+    if diff_bp > 0:
+        return "인상", diff_bp
+    if diff_bp < 0:
+        return "인하", abs(diff_bp)
+    return "동결", 0
+
+
+_FOMC_STATEMENT_SUMMARY_RELEASED_TEMPLATE = (
+    "FOMC(연방공개시장위원회)가 정례회의를 마치고 미국의 기준금리 목표범위를 {previous}에서 "
+    "{actual}로 {direction}했습니다{bp_suffix}. 이 결정은 미국 국채금리·환율은 물론 한국을 "
+    "포함한 전 세계 증시에도 영향을 줄 수 있습니다.{vote_sentence}"
+)
+
+
+# 발표 전(SCHEDULED)엔 고정 안내 문구, 발표 후(RELEASED)엔 실제 결과로 채운 문구를 만든다.
+# actual이 없으면(아직 FRED/override 어느 쪽에서도 확인 안 됨) status와 무관하게 안전하게
+# 발표 전 문구로 대체한다 - 확인 안 된 값으로 "발표했습니다"라고 단정하지 않는다.
+def _fomc_statement_summary(previous: str | None, actual: str | None, meeting_end: str) -> str:
+    if actual is None or previous is None:
+        return _FOMC_EVENT_SUMMARIES["FOMC_STATEMENT"]
+    direction, bp = _fomc_rate_change(previous, actual)
+    bp_suffix = f"({bp}bp {direction})" if bp > 0 else ""
+    vote_result = _FOMC_RATE_OVERRIDES.get(meeting_end, {}).get("vote_result")
+    vote_sentence = f" 이번 결정은 {vote_result}로 이뤄졌습니다." if vote_result else ""
+    return _FOMC_STATEMENT_SUMMARY_RELEASED_TEMPLATE.format(
+        previous=previous, actual=actual, direction=direction, bp_suffix=bp_suffix, vote_sentence=vote_sentence
+    )
+
+
+def _fomc_event(
+    meeting_start: str, event_date: str, event_type: str
+) -> CalendarEvent:
     published_at, released_time = _to_kst(event_date, "FOMC")
+    status = _fomc_status(published_at, released_time)
+
+    previous, actual = (
+        _fomc_statement_rates(meeting_start, event_date, status)
+        if event_type == "FOMC_STATEMENT"
+        else (None, None)
+    )
+
+    summary = (
+        _fomc_statement_summary(previous, actual, event_date)
+        if event_type == "FOMC_STATEMENT"
+        else _FOMC_EVENT_SUMMARIES[event_type]
+    )
+
     return CalendarEvent(
         id=f"fomc-{event_date}-{event_type}",
         publishedAt=published_at,
@@ -397,24 +532,36 @@ def _fomc_event(event_date: str, event_type: str) -> CalendarEvent:
         region="미국",
         category="macro",
         title=_FOMC_EVENT_TITLES[event_type],
-        summary=_FOMC_EVENT_SUMMARIES[event_type],
-        previous=None,
-        actual=None,
-        status=_fomc_status(published_at, released_time),
+        summary=summary,
+        previous=previous,
+        actual=actual,
+        status=status,
     )
 
 
 # core/fed_client.py의 정적 회의 일정에서 지정한 연도의 STATEMENT(전체)/SEP(해당 회의만)/
 # MINUTES(공식 공개일이 확인된 회의만)를 CalendarEvent로 변환해 upsert한다.
-# FRED/KIS ingest 함수들과 달리 외부 API 호출이 없다 - fed_client의 정적 표가 유일한 데이터 소스다.
-async def ingest_fomc_year(year: int) -> list[CalendarEvent]:
+# 회의 일정 자체는 여전히 fed_client의 정적 표가 유일한 소스이지만, STATEMENT의 실제 금리
+# 값(previous/actual)은 FRED DFEDTARU/DFEDTARL을 실시간 조회한다(_fomc_statement_rates).
+def _build_fomc_events(year: int) -> list[CalendarEvent]:
     events: list[CalendarEvent] = []
     for meeting in fed_client.get_fomc_meetings(year):
-        events.append(_fomc_event(meeting.end_date, "FOMC_STATEMENT"))
+        events.append(_fomc_event(meeting.start_date, meeting.end_date, "FOMC_STATEMENT"))
         if meeting.has_sep:
-            events.append(_fomc_event(meeting.end_date, "FOMC_SEP"))
+            events.append(_fomc_event(meeting.start_date, meeting.end_date, "FOMC_SEP"))
         if meeting.minutes_date is not None:
-            events.append(_fomc_event(meeting.minutes_date, "FOMC_MINUTES"))
+            events.append(_fomc_event(meeting.start_date, meeting.minutes_date, "FOMC_MINUTES"))
+    return events
+
+
+# _fomc_event 내부에서 FRED(DFEDTARU/DFEDTARL)를 동기 httpx로 호출한다(fred_client가
+# httpx.AsyncClient가 아닌 httpx.get을 쓴다 - core 공용 파일이라 이번 범위에서 바꾸지 않는다).
+# 이 함수는 AsyncIOScheduler를 통해 FastAPI 메인 이벤트 루프의 코루틴으로 실행되므로, 동기
+# 블로킹 호출을 그대로 두면 그 시간 동안 루프 전체(다른 API 요청 포함)가 멈춘다. 데이터
+# 수집(순수 동기, DB 접근 없음)만 스레드로 넘기고, DB 쓰기는 지금처럼 메인 루프에 남겨서
+# core/database.py의 세션(get_session_factory)이 항상 같은 루프에서만 쓰이게 유지한다.
+async def ingest_fomc_year(year: int) -> list[CalendarEvent]:
+    events = await asyncio.to_thread(_build_fomc_events, year)
 
     async with get_session_factory()() as session:
         for event in events:
@@ -523,12 +670,22 @@ def _dart_earnings_event(corp_name: str, stock_code: str, disclosure: dict) -> C
 # corp_code/stock_code/corp_name으로 지정한 회사의 1차 잠정실적 공시를 찾아 earnings
 # 이벤트로 upsert한다. 이번 3단계는 삼성전자 1개 기업만 대상으로 한다(30개 기업 확장은 다음
 # 단계 이후 결정 사항).
-async def ingest_preliminary_earnings_from_dart(
+def _build_dart_earnings_events(
     corp_code: str, stock_code: str, corp_name: str, start_date: str, end_date: str
 ) -> list[CalendarEvent]:
     disclosures = dart_client.get_preliminary_earnings(corp_code, start_date, end_date)
+    return [_dart_earnings_event(corp_name, stock_code, d) for d in disclosures]
 
-    events = [_dart_earnings_event(corp_name, stock_code, d) for d in disclosures]
+
+# get_preliminary_earnings/get_key_accounts(_dart_earnings_event 내부)도 동기 httpx 호출이다.
+# 위 두 함수와 같은 이유로, 순수 동기 데이터 수집만 asyncio.to_thread로 넘기고 DB 쓰기는
+# 메인 이벤트 루프에 남긴다.
+async def ingest_preliminary_earnings_from_dart(
+    corp_code: str, stock_code: str, corp_name: str, start_date: str, end_date: str
+) -> list[CalendarEvent]:
+    events = await asyncio.to_thread(
+        _build_dart_earnings_events, corp_code, stock_code, corp_name, start_date, end_date
+    )
 
     async with get_session_factory()() as session:
         for event in events:
@@ -740,7 +897,23 @@ async def get_events_by_month(session: AsyncSession, year: int, month: int) -> l
         ),
         {"start": start, "end": end},
     )
-    return [CalendarEvent(**row) for row in result.mappings().all()]
+    events = [CalendarEvent(**row) for row in result.mappings().all()]
+    return [_refresh_fomc_status(e) for e in events]
+
+
+# FOMC status는 DB에 저장된 값이 시간이 지나도 자동으로 안 바뀐다 - ingest_fomc_year를
+# 다시 실행해야만 갱신되는데(main.py 스케줄러가 주기적으로 재실행함), 그 사이 조회가 들어오면
+# 발표 시각이 지났는데도 SCHEDULED로 보이는 문제가 있었다(2026-09-17 발견). "값"(previous/
+# actual)은 재수집이 필요하지만 "상태"는 현재 시각과 비교만 하면 되므로, 조회 시점에 즉시
+# 재계산해서 DB 갱신을 기다리지 않고도 항상 정확하게 보여준다. 이미 RELEASED로 확정된
+# 이벤트는 다시 계산할 필요가 없다(시간은 거꾸로 흐르지 않는다).
+def _refresh_fomc_status(event: CalendarEvent) -> CalendarEvent:
+    if not event.id.startswith("fomc-") or event.time is None or event.status == "RELEASED":
+        return event
+    recomputed = _fomc_status(event.publishedAt, event.time)
+    if recomputed == event.status:
+        return event
+    return event.model_copy(update={"status": recomputed})
 
 
 # ---------------------------------------------------------------------------

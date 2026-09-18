@@ -14,6 +14,7 @@ wheels/
 .env.*
 !.env.example
 
+
 # Locally cached API tokens
 .cache/
 
@@ -22,3 +23,9 @@ wheels/
 
 # 로그
 logs/
+
+# 실행 완료된 1회성 DB 스키마 마이그레이션 기록 (로컬 보관용, 팀 저장소에는 올리지 않음)
+scripts/add_actual_label_column.py
+scripts/drop_forecast_column.py
+scripts/expand_payems_thousands.py
+scripts/fix_payems_space.py

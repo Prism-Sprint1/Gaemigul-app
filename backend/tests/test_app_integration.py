@@ -65,6 +65,9 @@ class AppIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 (main.heatmap, "refresh_all"),
                 (main.timeline_service, "run_scheduled_collect"),
                 (main.report_service, "run_scheduled_reports"),
+                (main.calendar_service, "ingest_fomc_year"),
+                (main.calendar_service, "ingest_year_from_fred"),
+                (main.calendar_service, "ingest_preliminary_earnings_from_dart"),
             )
         ]
 
@@ -75,10 +78,11 @@ class AppIntegrationTests(unittest.IsolatedAsyncioTestCase):
             expected = {
                 "indicator_bar", "market_vix", "market_session", "market_exchange_rate",
                 "market_trading_value", "heatmap", "timeline_reports",
+                "calendar_fomc", "calendar_fred", "calendar_dart",
                 *(f"slot_{key}" for key in main.timeline_service.SLOT_COLLECT_TIMES),
             }
             self.assertEqual(set(jobs), expected)
-            self.assertEqual(len(jobs), 15)
+            self.assertEqual(len(jobs), 18)
             self.assertTrue(scheduler.running)
             self.initialize.assert_called_once_with()
             for collector in self.collectors:
