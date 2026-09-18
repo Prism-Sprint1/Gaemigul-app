@@ -467,18 +467,17 @@ IMAGE_MOODS = {
 }
 
 # Pollinations는 글자 없는 클레이 장면만 만든다. 한글 제목·라벨은 image_client가 고정 좌표에 합성한다.
+# 화살표 지시는 여기 넣지 않는다 - 메인 장면에만 report_service._image_scene이 붙인다 ("arrow"라는 말만 있어도 섹션1에 화살표를 그린다)
 IMAGE_STYLE = (
     "A photographed physical stop-motion clay miniature, cozy vintage Czech puppet craftsmanship. "
     "Visible fingerprint ridges and hand-shaped imperfections, soft matte clay, real knitted fabric. "
     "Warm beige plaster, brown wood, warm-gray clothing, soft warm studio light, gentle shadows. "
     "Wide 3:1 composition, one continuous richly staged room filling the entire frame edge to edge. "
     "Central seated person and main wall symbol in sharp focus; smaller background props softly focused. "
-    "Only the explicitly specified props belong in the scene. Neutral beige, taupe, brown and warm gray "
-    "everywhere except the single explicitly specified market-arrow accent. "
-    "Keep the doorway movement arrow small and dark brown. "
+    "Only the explicitly specified props belong in the scene. Neutral beige, taupe, brown and warm gray palette. "
     "The upper 82 pixels must be completely bare uninterrupted plaster wall, edge to edge: no frames, shelves, windows, props, marks or shapes there, because the application overlays a compact title. "
     "Continue the room, wooden floor or workbench texture through the lower 70 pixels edge to edge; keep it visually quiet but never blank or white because keyword plaques are overlaid there. "
-    "Place all important people, arrows and props inside the middle horizontal band without cropping. "
+    "Place all important people and props inside the middle horizontal band without cropping. "
     "Absolutely no text, letters, numbers, signs, labels, logos, watermarks or pseudo-writing anywhere. "
     "No empty margin, no bottom white band, no infographic layout, no split panels."
 )
