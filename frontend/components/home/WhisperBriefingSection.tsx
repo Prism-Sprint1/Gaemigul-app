@@ -226,10 +226,27 @@ export default function WhisperBriefingSection() {
   )
   const visibleCount = useSequentialReveal(totalMessages)
   const scrollRef = useRef<HTMLDivElement>(null)
+  // 하단 근처에 있을 때만 자동 스크롤을 이어간다. 애니메이션 도중 유저가 위로 스크롤하면
+  // 다음 말풍선이 나와도 강제로 하단까지 끌려가지 않게 하기 위함.
+  const shouldAutoScrollRef = useRef(true)
 
   useEffect(() => {
     const container = scrollRef.current
     if (!container) return
+
+    const handleScroll = () => {
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight
+      shouldAutoScrollRef.current = distanceFromBottom < 40
+    }
+
+    container.addEventListener("scroll", handleScroll)
+    return () => container.removeEventListener("scroll", handleScroll)
+  }, [])
+
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container || !shouldAutoScrollRef.current) return
     container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
   }, [visibleCount])
 
