@@ -325,8 +325,20 @@ def _image_market_direction(source_text: str) -> str | None:
 
 
 # 섹션1 이미지의 원인 소재 이름 -> 짧은 한글 명패 문구
-# 금리·유가는 원문에 방향 표현이 있을 때만 "유가 상승"처럼 붙이고, 나머지는 소재명 앞부분만 쓴다 ("철강·금속" -> "철강")
-def _image_prop_label(name: str, source_text: str) -> str:
+# 금리·유가는 방향 표현을 붙인다. 이미지 위 제목(headline)에 표현이 있으면 그 말을 그대로 쓰고("유가 안정"),
+# 없을 때만 본문(source_text)의 상승·하락을 본다 - 제목은 "유가 안정", 명패는 "유가 하락"처럼 한 장 안에서 말이 달라지지 않게
+# 나머지 소재는 소재명 앞부분만 쓴다 ("철강·금속" -> "철강")
+_HEADLINE_TREND = {
+    "금리·연준·중앙은행": r"금리(?:가|는|의)?\s*(인상|인하|동결|상승|하락|안정|급등|급락|우려)",
+    "유가·원유": r"유가(?:가|는|의)?\s*(안정|하락|급락|상승|급등|반등|진정)",
+}
+
+
+def _image_prop_label(name: str, source_text: str, headline: str = "") -> str:
+    if name in _HEADLINE_TREND:
+        match = re.search(_HEADLINE_TREND[name], headline)
+        if match:
+            return f"{name[:2]} {match.group(1)}"
     if name == "금리·연준·중앙은행":
         if "금리 인상 우려" in source_text:
             return "금리 우려"
@@ -351,7 +363,7 @@ def _image_annotations(plan, source_text: str, headline: str, *, role: str = "ma
     if role == "main" and direction:
         labels.append({"down": "코스피 하락", "up": "코스피 상승", "flat": "코스피 보합"}[direction])
     if role != "main":
-        labels.extend(_image_prop_label(name, source_text) for name in names)
+        labels.extend(_image_prop_label(name, source_text, headline) for name in names)
     flow = plan.get("flow")
     if role == "main" and flow in {"외국인 매도", "외국인 매수"}:
         labels.append(flow)
@@ -359,7 +371,7 @@ def _image_annotations(plan, source_text: str, headline: str, *, role: str = "ma
 
 
 # LLM이 고른 이미지 재료 {"symbols": [원인 소재 이름], "flow": 자금 흐름 이름, "mood": 분위기 이름} -> 영어 그림 설명 (글자 없음)
-#   role          "main" = 시장 결과·자금 흐름 장면 (원인 소품 없음, 코스피 방향 화살표) / "section1" = 원인 소품을 살펴보는 장면
+#   role          "main" = 시장 결과·자금 흐름 장면 (원인 소품 없음, 코스피 방향 화살표) / "section1" = 원인 소품을 살펴보는 장면 (화살표를 하나도 넣지 않는다)
 #   layout_index  공간 구성 순번. 날짜 서수를 넘겨 prompts.IMAGE_MAIN_LAYOUTS·IMAGE_SECTION_LAYOUTS를 날짜마다 돌려 쓴다 (연속 거래일에 같은 방이 반복되지 않게)
 # 목록에 없는 이름은 버리고(경고) 기본값을 쓴다. 메인 차트는 상승 빨강 화살표·하락 파랑 화살표·보합 회색 수평 직선
 def _image_scene(plan, label: str, source_text: str = "", *, role: str = "main", layout_index: int = 0) -> str:
@@ -375,7 +387,8 @@ def _image_scene(plan, label: str, source_text: str = "", *, role: str = "main",
     values = {
         "city": layouts[layout_index % len(layouts)],
         "mood": prompts.IMAGE_MOODS.get(mood, prompts.IMAGE_MOODS[_DEFAULT_IMAGE_MOOD]),
-        "flow": prompts.IMAGE_FLOWS.get(flow, prompts.IMAGE_FLOWS[_DEFAULT_IMAGE_FLOW]) if role == "main" else prompts.IMAGE_FLOWS[_DEFAULT_IMAGE_FLOW],
+        # 섹션1에는 자금 흐름 문장을 넣지 않는다 ("없음" 문장에도 arrow라는 말이 있어 화살표가 그려진다)
+        "flow": prompts.IMAGE_FLOWS.get(flow, prompts.IMAGE_FLOWS[_DEFAULT_IMAGE_FLOW]) if role == "main" else "No secondary people or suitcases.",
         "causes": " and ".join(prompts.IMAGE_SYMBOLS[name] for name in scene_names),
     }
     scene = (prompts.IMAGE_SCENE if scene_names else prompts.IMAGE_SCENE_NO_CAUSE).format(**values)
@@ -386,15 +399,21 @@ def _image_scene(plan, label: str, source_text: str = "", *, role: str = "main",
         scene += " On the wall behind the main person, one precisely drawn closed rectangular wooden frame of medium size, about one quarter of the image width with roughly 4:3 proportions, contains exactly ONE thick GRAY sculpted clay arrow pointing straight to the right, perfectly level across the middle of the panel, ending at the right side. All four straight frame borders and all four corners must be fully visible and connected. Keep the entire arrow line and arrowhead inside the cream panel with generous inner padding on every side; it must never touch, overlap, cross or protrude beyond the rectangular border. The arrow has no zigzag, no slope, no rise and no fall. The main person looks calm. This single gray arrow is the only chart accent, with no red or blue anywhere. The panel has a plain cream surface with no grid or writing."
     elif direction == "up":
         scene += " On the wall behind the main person, one precisely drawn closed rectangular wooden frame contains exactly ONE thick RED zigzag arrow ascending from lower left to upper right, ending at the top right. All four straight frame borders and all four corners must be fully visible and connected. Keep the entire arrow line and arrowhead inside the cream panel with generous inner padding on every side; it must never touch, overlap, cross or protrude beyond the rectangular border. The main person looks gently hopeful. This single red arrow is the only saturated color. The panel has a plain cream surface with no grid or writing."
-    else:
+    elif role == "main":
         scene += ' No market chart or colored arrow; keep the entire scene in neutral tones.'
     if role == "main":
-        scene += " Compose this as a wide whole-market overview: the market outcome, central investor, wall arrow and doorway money flow are the visual story."
+        scene += (
+            " Compose this as a wide whole-market overview: the market outcome, central investor, wall arrow and doorway money flow are the visual story."
+            " The market arrow is the only saturated accent; keep any doorway movement arrow small and dark brown."
+        )
     else:
+        # 섹션1은 화살표가 없어야 한다. 이미지 모델은 "no arrow" 같은 부정문에도 화살표를 그리므로 arrow라는 말을 쓰지 않고
+        # 벽·소품을 긍정문으로 묘사한다
         scene += (
             " Compose this as a close cause-explanation workshop, clearly different from a whole-market overview. "
             "Place the main person at the right third, actively examining the economic cause props on a workbench at the left. "
-            "Show the cause props larger and more concrete. No doorway, no secondary investor, no suitcase, no money-flow arrow and no market-direction chart."
+            "Show the cause props larger and more concrete. No doorway, no secondary investor, no suitcase and no chart. "
+            "The walls are completely plain, smooth bare plaster with nothing hanging or painted on them; every prop is a plain solid object with smooth unmarked surfaces."
         )
     if re.search(r"의료[·ㆍ\s]*정밀|의료기기|의료·정밀기기", source_text):
         scene += " A small neutral-gray microscope and caliper on a subordinate shelf represent medical precision instruments."
@@ -403,10 +422,11 @@ def _image_scene(plan, label: str, source_text: str = "", *, role: str = "main",
 
 # 그림 설명으로 이미지를 만들고 한글을 합성해 올린 뒤 공개 URL을 돌려준다 (동기). 실패하면 None (OSError = 한글 합성 중 이미지 읽기 실패)
 # 파일명은 "{종류}/{날짜}/{main|section1}_{종류}_{YYYYMMDD}.jpg"로 고정하고, URL 끝에 ?v=생성시각을 붙인다
+#   날짜는 보고서 작성일(end_date) - 일간은 그날, 주간은 그 주 마지막 거래일(주간 보고서를 만든 날)
 #   같은 경로에 덮어쓰면 CDN 캐시 때문에 한동안 옛 이미지가 보이므로, 버전 쿼리가 바뀌어야 새 이미지가 보인다
-def _make_image(scene: str, report_type: str, start_date: date, name: str, annotations: dict | None = None) -> str | None:
+def _make_image(scene: str, report_type: str, report_date: date, name: str, annotations: dict | None = None) -> str | None:
     if not scene:
-        logger.warning("%s %s %s 이미지 그림 설명이 없어 건너뜁니다.", report_type, start_date, name)
+        logger.warning("%s %s %s 이미지 그림 설명이 없어 건너뜁니다.", report_type, report_date, name)
         return None
     try:
         image = image_client.generate_image(f"{scene}, {prompts.IMAGE_STYLE}")
@@ -414,11 +434,11 @@ def _make_image(scene: str, report_type: str, start_date: date, name: str, annot
             image = image_client.add_korean_labels(image, headline=annotations["headline"], labels=annotations["labels"])
         extension, content_type = image_client.image_format(image)
         generated_at = datetime.now(_KST)
-        path = f"{report_type.lower()}/{start_date}/{name}_{report_type.lower()}_{start_date:%Y%m%d}.{extension}"
+        path = f"{report_type.lower()}/{report_date}/{name}_{report_type.lower()}_{report_date:%Y%m%d}.{extension}"
         public_url = storage_client.upload_file(_IMAGE_BUCKET, path, image, content_type)
         return f"{public_url}?v={generated_at:%Y%m%d%H%M%S%f}"
     except (RuntimeError, KeyError, ValueError, OSError, httpx.HTTPError) as error:
-        logger.warning("%s %s %s 이미지 생성·업로드 실패 - %s: %s", report_type, start_date, name, type(error).__name__, error)
+        logger.warning("%s %s %s 이미지 생성·업로드 실패 - %s: %s", report_type, report_date, name, type(error).__name__, error)
         return None
 
 
@@ -435,8 +455,8 @@ async def _write_report(session: AsyncSession, report: TimelineReport, data: str
     await report_repository.save_report_content(session, report_type, start_date, generated["content"])
 
     # 생성 서비스의 요청 한도를 고려해 두 장을 순차 생성한다
-    main_url = await asyncio.to_thread(_make_image, generated["main_scene"], report_type, start_date, "main", generated["main_annotations"])
-    section1_url = await asyncio.to_thread(_make_image, generated["section1_scene"], report_type, start_date, "section1", generated["section1_annotations"])
+    main_url = await asyncio.to_thread(_make_image, generated["main_scene"], report_type, end_date, "main", generated["main_annotations"])
+    section1_url = await asyncio.to_thread(_make_image, generated["section1_scene"], report_type, end_date, "section1", generated["section1_annotations"])
     return await report_repository.save_report_images(session, report_type, start_date, main_image_url=main_url, section1_image_url=section1_url)
 
 
