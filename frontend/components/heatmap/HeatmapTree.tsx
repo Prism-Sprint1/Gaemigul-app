@@ -1,12 +1,20 @@
 "use client"
 
 import { useEffect, useId, useMemo, useRef, useState } from "react"
-import { ChevronRight, Expand, Search } from "lucide-react"
+import {
+  ArrowLeft,
+  ChevronRight,
+  Expand,
+  LayoutGrid,
+  List,
+  Search,
+  X,
+} from "lucide-react"
 import {
   formatChange,
   formatKoreanAmount,
   heatmapColor,
-  layoutTreemap,
+  layoutMarketCapTreemap,
   selectHeatmapSectors,
 } from "@/lib/heatmap-layout"
 import type { HeatmapSector, HeatmapStock } from "@/lib/types/HeatmapType"
@@ -16,16 +24,23 @@ import HeatmapStockDetail from "./HeatmapStockDetail"
 export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const detailId = useId()
+  const searchId = useId()
+  const sectorId = useId()
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [sectorCode, setSectorCode] = useState<string | null>(null)
   const [activeCode, setActiveCode] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const [view, setView] = useState<"map" | "list">("map")
   const displayedSectors = useMemo(
     () => selectHeatmapSectors(sectors),
     [sectors]
   )
   const currentSector = displayedSectors.find(
     (sector) => sector.code === sectorCode
+  )
+  const visibleSectors = useMemo(
+    () => (currentSector ? [currentSector] : displayedSectors),
+    [currentSector, displayedSectors]
   )
 
   useEffect(() => {
@@ -39,19 +54,18 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
     })
     observer.observe(element)
     return () => observer.disconnect()
-  }, [])
+  }, [view])
 
   const sectorRects = useMemo(
     () =>
-      layoutTreemap(
-        currentSector ? [currentSector] : displayedSectors,
-        (sector) => Math.sqrt(Math.max(0, sector.market_cap)),
+      layoutMarketCapTreemap(
+        visibleSectors,
+        (sector) => sector.market_cap,
         size.width,
         size.height
       ),
-    [currentSector, displayedSectors, size]
+    [visibleSectors, size]
   )
-
   const allStocks = useMemo(
     () =>
       displayedSectors.flatMap((sector) =>
@@ -59,20 +73,40 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
       ),
     [displayedSectors]
   )
+  const visibleStocks = useMemo(
+    () =>
+      visibleSectors.flatMap((sector) =>
+        sector.stocks.map((stock) => ({ sector, stock }))
+      ),
+    [visibleSectors]
+  )
   const selected = allStocks.find(({ stock }) => stock.code === activeCode)
   const query = search.trim().toLocaleLowerCase()
-  const matchedCodes = useMemo(() => {
-    if (!query) return null
-    const codes = new Set<string>()
-    for (const { stock } of allStocks) {
-      if (
-        stock.name.toLocaleLowerCase().includes(query) ||
-        stock.code.includes(query)
-      )
-        codes.add(stock.code)
-    }
-    return codes
-  }, [allStocks, query])
+  const matchedStocks = useMemo(
+    () =>
+      visibleStocks.filter(
+        ({ stock }) =>
+          !query ||
+          stock.name.toLocaleLowerCase().includes(query) ||
+          stock.code.includes(query)
+      ),
+    [visibleStocks, query]
+  )
+  const matchedCodes = useMemo(
+    () =>
+      query ? new Set(matchedStocks.map(({ stock }) => stock.code)) : null,
+    [matchedStocks, query]
+  )
+  const breadth = visibleStocks.reduce(
+    (counts, { stock }) => {
+      if (stock.change_rate === null) counts.missing++
+      else if (stock.change_rate > 0) counts.up++
+      else if (stock.change_rate < 0) counts.down++
+      else counts.flat++
+      return counts
+    },
+    { up: 0, down: 0, flat: 0, missing: 0 }
+  )
 
   function selectSector(code: string | null) {
     setSectorCode(code)
@@ -81,33 +115,45 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
   }
 
   function stockTile(stock: HeatmapStock, width: number, height: number) {
-    const showName = width >= 44 && height >= 25
-    const showChange = width >= 48 && height >= 43
+    const showName = width >= 25 && height >= 21
+    const showChange = width >= 52 && height >= 40
     const fontSize =
-      width >= 125 && height >= 95 ? 17 : width >= 76 && height >= 65 ? 12 : 10
+      width >= 125 && height >= 95
+        ? 17
+        : width >= 76 && height >= 65
+          ? 12
+          : width < 62
+            ? 9
+            : 11
     const selectedTile = activeCode === stock.code
     const dimmed = matchedCodes !== null && !matchedCodes.has(stock.code)
     return (
       <button
         type="button"
-        tabIndex={showName ? 0 : -1}
+        tabIndex={dimmed ? -1 : 0}
         aria-label={`${stock.name}, ${formatChange(stock.change_rate)}, 시가총액 ${formatKoreanAmount(stock.market_cap)}`}
-        title={`${stock.name} · ${formatChange(stock.change_rate)}\n현재가 ${stock.price.toLocaleString("ko-KR")}원\n시가총액 ${stock.market_cap.toLocaleString("ko-KR")}원\n거래량 ${stock.volume.toLocaleString("ko-KR")}주`}
+        title={`${stock.name} · ${formatChange(stock.change_rate)}\n현재가 ${stock.price.toLocaleString("ko-KR")}원\n시가총액 ${stock.market_cap.toLocaleString("ko-KR")}원`}
         aria-describedby={selectedTile ? detailId : undefined}
-        onMouseMove={() => setActiveCode(stock.code)}
+        onMouseEnter={() => setActiveCode(stock.code)}
         onFocus={() => setActiveCode(stock.code)}
         onClick={() => setActiveCode(stock.code)}
-        className="absolute inset-px flex cursor-pointer flex-col items-center justify-center overflow-hidden px-0.5 text-center text-white transition-[filter,opacity] hover:z-10 hover:brightness-110 focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
+        className="absolute inset-px flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[2px] px-1 text-center text-white transition-[filter,opacity] hover:z-10 hover:brightness-110 focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
         style={{
           backgroundColor: heatmapColor(stock.change_rate),
           boxShadow: selectedTile ? "inset 0 0 0 2px white" : undefined,
-          opacity: dimmed ? 0.25 : 1,
+          opacity: dimmed ? 0.18 : 1,
           fontSize,
-          lineHeight: 1.25,
+          lineHeight: 1.35,
         }}
       >
         {showName && (
-          <span className="max-w-full truncate font-semibold">
+          <span
+            className={
+              height >= 54
+                ? "line-clamp-2 max-w-full font-semibold break-all"
+                : "max-w-full truncate font-semibold"
+            }
+          >
             {stock.name}
           </span>
         )}
@@ -122,152 +168,294 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
 
   return (
     <div className="min-w-0">
-      <div className="mb-3 flex flex-wrap justify-between gap-2">
-        <HeatmapStockDetail id={detailId} selected={selected} />
-        <div className="flex flex-col justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-full sm:w-48">
-              <Search className="pointer-events-none absolute top-2 left-2.5 size-3.5 text-neutral-400" />
-              <label className="sr-only" htmlFor="heatmap-search">
-                종목명 또는 종목코드 검색
-              </label>
-              <input
-                id="heatmap-search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") setSearch("")
-                }}
-                placeholder="표시된 기업 검색"
-                autoComplete="off"
-                className="h-8 w-full rounded-sm border border-neutral-200 bg-white pr-2 pl-8 text-xs shadow-sm outline-offset-2 placeholder:text-neutral-400 focus-visible:outline-point"
-              />
-            </div>
-            <label className="sr-only" htmlFor="heatmap-sector">
-              확대할 업종 선택
-            </label>
-            <select
-              id="heatmap-sector"
-              value={currentSector?.code ?? ""}
-              onChange={(event) => selectSector(event.target.value || null)}
-              className="h-8 max-w-44 rounded-md border border-neutral-200 bg-white px-2 text-xs text-neutral-600 outline-offset-2 focus-visible:outline-point"
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <span className="text-slate-500">표시 종목</span>
+          <span className="font-medium text-red-700">
+            상승 <b className="tabular-nums">{breadth.up}</b>
+          </span>
+          <span className="font-medium text-blue-700">
+            하락 <b className="tabular-nums">{breadth.down}</b>
+          </span>
+          <span className="text-slate-500">
+            보합 <b className="tabular-nums">{breadth.flat}</b>
+          </span>
+          {breadth.missing > 0 && (
+            <span className="text-slate-500">미제공 {breadth.missing}</span>
+          )}
+        </div>
+        <div
+          role="group"
+          aria-label="보기 방식"
+          className="flex rounded-lg bg-heatmap-canvas p-1"
+        >
+          {(
+            [
+              { value: "map", label: "지도", Icon: LayoutGrid },
+              { value: "list", label: "목록", Icon: List },
+            ] as const
+          ).map(({ value, label, Icon }) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={view === value}
+              onClick={() => setView(value)}
+              className={`flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-3 text-xs font-semibold outline-offset-2 focus-visible:outline-heatmap-accent ${view === value ? "bg-heatmap-soft text-heatmap-accent shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
             >
-              <option value="">전체</option>
-              {displayedSectors.map((sector) => (
-                <option key={sector.code} value={sector.code}>
-                  {sector.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <HeatmapLegend />
+              <Icon className="size-3.5" aria-hidden="true" />
+              {label}
+            </button>
+          ))}
         </div>
       </div>
-
-      <div
-        ref={containerRef}
-        aria-label={
-          currentSector
-            ? `${currentSector.name} 업종 히트맵`
-            : `주요 ${displayedSectors.length}개 업종 주식 히트맵`
-        }
-        className="relative h-122.5 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800 sm:h-[540px] 2xl:h-[610px]"
-      >
-        {sectorRects.map(({ item: sector, x, y, width, height }) => {
-          const compact = width < 58 || height < 44
-          const headerHeight = compact ? height : 23
-          const stocks = compact
-            ? []
-            : layoutTreemap(
-                sector.stocks,
-                (stock) => Math.sqrt(Math.max(0, stock.market_cap)),
-                Math.max(0, width - 4),
-                Math.max(0, height - headerHeight - 4)
-              )
-          return (
-            <div
-              key={sector.code}
-              className="absolute overflow-hidden border border-slate-800"
-              style={{ left: x, top: y, width, height }}
+      <div className="mb-3 flex flex-wrap gap-2">
+        <div className="relative min-w-40 flex-1">
+          <Search
+            className="pointer-events-none absolute top-3 left-3 size-4 text-slate-400"
+            aria-hidden="true"
+          />
+          <label className="sr-only" htmlFor={searchId}>
+            현재 표시 범위에서 기업명 또는 종목코드 검색
+          </label>
+          <input
+            id={searchId}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setSearch("")
+            }}
+            placeholder="기업명 또는 종목코드 검색"
+            autoComplete="off"
+            className="h-10 w-full rounded-lg border border-heatmap-border bg-white pr-9 pl-9 text-xs outline-offset-2 placeholder:text-slate-400 focus-visible:outline-heatmap-accent"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label="검색어 지우기"
+              className="absolute top-1 right-1 flex size-8 cursor-pointer items-center justify-center rounded text-slate-500 hover:bg-slate-100"
             >
-              <button
-                type="button"
-                onClick={() => selectSector(currentSector ? null : sector.code)}
-                aria-label={`${sector.name}, ${sector.stocks.length}개 종목, ${currentSector ? "주요 업종 보기" : "확대 보기"}`}
-                className="flex w-full cursor-pointer items-center justify-between gap-1 overflow-hidden bg-slate-700 px-1.5 text-left text-[10px] font-semibold text-white hover:bg-slate-600 focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
-                style={{ height: headerHeight }}
-              >
-                <span className="truncate">{sector.name}</span>
-                {width > 90 && (
-                  <Expand className="size-2.5 shrink-0 opacity-60" />
-                )}
-              </button>
-              {stocks.map(
-                ({
-                  item: stock,
-                  x: stockX,
-                  y: stockY,
-                  width: stockWidth,
-                  height: stockHeight,
-                }) => (
-                  <div
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+        <label className="sr-only" htmlFor={sectorId}>
+          확대할 섹터 선택
+        </label>
+        <select
+          id={sectorId}
+          value={currentSector?.code ?? ""}
+          onChange={(event) => selectSector(event.target.value || null)}
+          className="h-10 max-w-full min-w-32 rounded-lg border border-heatmap-border bg-white px-3 text-xs text-slate-700 outline-offset-2 focus-visible:outline-heatmap-accent"
+        >
+          <option value="">전체 섹터</option>
+          {displayedSectors.map((sector) => (
+            <option key={sector.code} value={sector.code}>
+              {sector.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      {currentSector && (
+        <button
+          type="button"
+          onClick={() => selectSector(null)}
+          className="mb-3 flex min-h-8 cursor-pointer items-center gap-1.5 rounded text-xs font-medium text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="size-3.5" /> 전체 지도{" "}
+          <ChevronRight className="size-3" /> {currentSector.name}
+        </button>
+      )}
+      {query && (
+        <div
+          role="status"
+          className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600"
+        >
+          {matchedStocks.length ? (
+            <>
+              <span>
+                현재 범위에서 {matchedStocks.length}개 기업을 찾았습니다.
+              </span>
+              <div className="mt-1 flex max-h-28 flex-wrap gap-1 overflow-y-auto">
+                {matchedStocks.map(({ stock }) => (
+                  <button
                     key={stock.code}
-                    className="absolute"
-                    style={{
-                      left: stockX + 1,
-                      top: stockY + headerHeight + 1,
-                      width: stockWidth,
-                      height: stockHeight,
-                    }}
+                    type="button"
+                    onClick={() => setActiveCode(stock.code)}
+                    className="cursor-pointer rounded border border-heatmap-border bg-white px-2 py-1 hover:border-slate-400"
                   >
-                    {stockTile(stock, stockWidth, stockHeight)}
+                    {stock.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            "일치하는 기업이 없습니다. 검색어 또는 선택한 섹터를 확인해 주세요."
+          )}
+        </div>
+      )}
+      <HeatmapStockDetail id={detailId} selected={selected} />
+      {view === "map" ? (
+        <>
+          <div
+            className="mt-2 overflow-x-auto overscroll-x-contain rounded-xl border border-heatmap-border bg-slate-100 p-1"
+            tabIndex={0}
+            role="region"
+            aria-label="주식 지도, 작은 화면에서는 좌우 스크롤 가능"
+          >
+            <div
+              ref={containerRef}
+              className={`relative w-full ${currentSector ? "h-[440px] min-w-[280px] sm:h-[620px]" : "h-[700px] min-w-[640px]"}`}
+              aria-label={
+                currentSector
+                  ? `${currentSector.name} 섹터 지도`
+                  : "전체 섹터 지도"
+              }
+            >
+              {sectorRects.map(({ item: sector, x, y, width, height }) => {
+                const compact = width < 58 || height < 48
+                const headerHeight = compact ? height : 28
+                const stocks = compact
+                  ? []
+                  : layoutMarketCapTreemap(
+                      sector.stocks,
+                      (stock) => stock.market_cap,
+                      Math.max(0, width - 6),
+                      Math.max(0, height - headerHeight - 6)
+                    )
+                return (
+                  <div
+                    key={sector.code}
+                    className="absolute overflow-hidden rounded-md border-2 border-slate-100 bg-slate-100"
+                    style={{ left: x, top: y, width, height }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        selectSector(currentSector ? null : sector.code)
+                      }
+                      aria-label={`${sector.name}, ${formatChange(sector.change_rate)}, ${currentSector ? "전체 보기" : "확대 보기"}`}
+                      title={`${sector.name} · ${formatChange(sector.change_rate)}`}
+                      className="flex w-full cursor-pointer items-center justify-between gap-1 overflow-hidden px-1.5 text-left text-[11px] font-semibold text-slate-700 hover:bg-slate-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-slate-900"
+                      style={{ height: headerHeight - 2 }}
+                    >
+                      <span className="truncate">{sector.name}</span>
+                      {width > 155 ? (
+                        <span
+                          className={`shrink-0 text-[10px] tabular-nums ${sector.change_rate == null || sector.change_rate === 0 ? "text-slate-500" : sector.change_rate > 0 ? "text-red-700" : "text-blue-700"}`}
+                        >
+                          {formatChange(sector.change_rate)}
+                        </span>
+                      ) : (
+                        width > 85 && (
+                          <Expand
+                            className="size-3 shrink-0 text-slate-400"
+                            aria-hidden="true"
+                          />
+                        )
+                      )}
+                    </button>
+                    {stocks.map(
+                      ({
+                        item: stock,
+                        x: stockX,
+                        y: stockY,
+                        width: stockWidth,
+                        height: stockHeight,
+                      }) => (
+                        <div
+                          key={stock.code}
+                          className="absolute"
+                          style={{
+                            left: stockX + 1,
+                            top: stockY + headerHeight - 2,
+                            width: stockWidth,
+                            height: stockHeight,
+                          }}
+                        >
+                          {stockTile(stock, stockWidth, stockHeight)}
+                        </div>
+                      )
+                    )}
                   </div>
                 )
-              )}
+              })}
             </div>
-          )
-        })}
-      </div>
-
-      {currentSector && (
-        <details className="mt-3 rounded-lg border border-neutral-200 bg-white text-xs">
-          <summary className="cursor-pointer px-3 py-2.5 font-medium text-neutral-600">
-            {currentSector.name} 대표 {currentSector.stocks.length}개 기업 목록
-          </summary>
-          <div className="max-h-56 overflow-auto border-t border-neutral-100 p-1">
-            {[...currentSector.stocks]
-              .sort((a, b) => b.market_cap - a.market_cap)
-              .map((stock) => (
-                <button
+          </div>
+          <div className="mt-2 flex justify-end">
+            <HeatmapLegend />
+          </div>
+        </>
+      ) : (
+        <div className="mt-2 max-h-[700px] overflow-auto rounded-xl border border-heatmap-border">
+          <table className="w-full min-w-[400px] text-left text-xs">
+            <caption className="sr-only">
+              표시 종목 목록. 기업을 선택하면 상단 상세 정보가 바뀝니다.
+            </caption>
+            <thead className="sticky top-0 bg-slate-100 text-slate-600">
+              <tr>
+                <th scope="col" className="px-3 py-3 font-medium">
+                  기업 / 섹터
+                </th>
+                <th scope="col" className="px-3 py-3 text-right font-medium">
+                  등락률
+                </th>
+                <th scope="col" className="px-3 py-3 text-right font-medium">
+                  시가총액
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {matchedStocks.map(({ sector, stock }) => (
+                <tr
                   key={stock.code}
-                  type="button"
-                  onClick={() => setActiveCode(stock.code)}
-                  className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-2 text-left hover:bg-neutral-50 focus-visible:bg-neutral-100"
+                  className={
+                    activeCode === stock.code
+                      ? "bg-slate-100"
+                      : "hover:bg-slate-50"
+                  }
                 >
-                  <span className="min-w-0 flex-1 truncate">
-                    {stock.name}{" "}
-                    <span className="text-[10px] text-neutral-400">
-                      {stock.code}
-                    </span>
-                  </span>
-                  <span
-                    className="tabular-nums"
-                    style={{
-                      color:
-                        stock.change_rate === null || stock.change_rate === 0
-                          ? "#737373"
-                          : stock.change_rate > 0
-                            ? "#e52828"
-                            : "#2563eb",
-                    }}
+                  <th scope="row" className="px-3 py-2 text-left font-normal">
+                    <button
+                      type="button"
+                      onClick={() => setActiveCode(stock.code)}
+                      aria-describedby={
+                        activeCode === stock.code ? detailId : undefined
+                      }
+                      className="min-h-10 cursor-pointer text-left outline-offset-2"
+                    >
+                      <span className="font-semibold text-slate-900">
+                        {stock.name}
+                      </span>
+                      <span className="mt-1 block text-[11px] text-slate-500">
+                        {sector.name} · {stock.code}
+                      </span>
+                    </button>
+                  </th>
+                  <td
+                    className={`px-3 py-2 text-right font-semibold whitespace-nowrap tabular-nums ${stock.change_rate == null || stock.change_rate === 0 ? "text-slate-500" : stock.change_rate > 0 ? "text-red-700" : "text-blue-700"}`}
                   >
                     {formatChange(stock.change_rate)}
-                  </span>
-                  <ChevronRight className="size-3 text-neutral-400" />
-                </button>
+                  </td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap text-slate-600 tabular-nums">
+                    {formatKoreanAmount(stock.market_cap)}
+                  </td>
+                </tr>
               ))}
-          </div>
-        </details>
+            </tbody>
+          </table>
+          {!matchedStocks.length && (
+            <p className="p-8 text-center text-sm text-slate-500">
+              표시할 검색 결과가 없습니다.
+            </p>
+          )}
+        </div>
+      )}
+      {displayedSectors.length < 15 && (
+        <p className="mt-3 text-xs leading-5 text-slate-500">
+          시세가 있는 기업 5개 이상인 섹터만 표시합니다. 현재{" "}
+          {displayedSectors.length}개 섹터를 확인할 수 있습니다.
+        </p>
       )}
     </div>
   )

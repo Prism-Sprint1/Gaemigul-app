@@ -28,6 +28,7 @@ from backend.domain.heatmap.schemas.heatmap import (
     Period,
     TopSector,
 )
+from backend.domain.heatmap.services.related_sectors import related_sectors
 
 _LOGGER = logging.getLogger(__name__)
 _KST = ZoneInfo("Asia/Seoul")
@@ -100,6 +101,7 @@ def initialize() -> None:
                 return
             for value in payload.get("snapshots", []):
                 snapshot = HeatmapResponse.model_validate(value)
+                _refresh_insights(snapshot)
                 _snapshots[(snapshot.market, snapshot.period)] = snapshot
             _masters.update(payload.get("masters", {}))
             if payload.get("universe_version") == 2:
@@ -406,9 +408,27 @@ def _period_start(day: date, period: Period) -> date:
 def _weighted_change(stocks: list[HeatmapStock]) -> float | None:
     # 개별 등락률은 시가총액 가중 평균으로 업종 색상에 사용한다.
     # 기준가가 없는 신규 상장 종목은 수익률 평균에서만 제외한다.
-    available = [stock for stock in stocks if stock.change_rate is not None and stock.market_cap > 0]
+    available = [stock for stock in stocks if stock.change_rate is not None and math.isfinite(stock.change_rate) and math.isfinite(stock.market_cap) and stock.market_cap > 0]
     weight = sum(stock.market_cap for stock in available)
     return sum(stock.change_rate * stock.market_cap for stock in available) / weight if weight else None
+
+
+def _refresh_insights(result: HeatmapResponse) -> None:
+    """이전 거래량 1위 캐시도 현재 정책으로 재계산한다. 네트워크 요청은 없다."""
+    result.top_sector = None
+    result.related_sectors = []
+    for sector in result.sectors:
+        sector.change_rate = _weighted_change(sector.stocks)
+    coverage = result.coverage
+    if not result.sectors or coverage.total_stocks <= 0 or coverage.missing_stocks or coverage.priced_stocks != coverage.total_stocks:
+        return
+    if any(sector.change_rate is None or not math.isfinite(sector.change_rate) for sector in result.sectors):
+        return
+    # 모두 하락한 날에도 가장 높은 등락률을 고른다. 동률은 시가총액, 업종 코드 순이다.
+    winner = min(result.sectors, key=lambda sector: (-sector.change_rate, -sector.market_cap, sector.code))
+    total_volume = sum(sector.volume for sector in result.sectors)
+    result.top_sector = TopSector(code=winner.code, name=winner.name, volume=winner.volume, volume_share=winner.volume / total_volume * 100 if total_volume else 0, change_rate=winner.change_rate)
+    result.related_sectors = related_sectors(result.sectors, winner)
 
 
 def _build_snapshot(market: Market, period: Period, samples: dict, now: datetime) -> HeatmapResponse:
@@ -445,19 +465,16 @@ def _build_snapshot(market: Market, period: Period, samples: dict, now: datetime
     priced = sum(len(sector.stocks) for sector in sectors)
     total = len(_masters[market])
     coverage = Coverage(total_stocks=total, priced_stocks=priced, missing_stocks=total - priced)
-    top = None
-    total_volume = sum(sector.volume for sector in sectors)
-    if total > 0 and coverage.missing_stocks == 0 and total_volume > 0:
-        winner = min(sectors, key=lambda sector: (-sector.volume, sector.code))
-        top = TopSector(code=winner.code, name=winner.name, volume=winner.volume, volume_share=winner.volume / total_volume * 100, change_rate=winner.change_rate)
     message = None
     if coverage.missing_stocks:
-        message = f"{total:,}개 종목 중 {priced:,}개를 준비했습니다. 전체 데이터 확인 후 거래량 1위를 표시합니다."
-    elif not total_volume:
-        message = "집계된 거래량이 아직 없습니다."
+        message = f"{total:,}개 종목 중 {priced:,}개를 준비했습니다. 전체 데이터 확인 후 상승률 1위를 표시합니다."
+    elif any(sector.change_rate is None for sector in sectors):
+        message = "등락률을 계산할 수 없는 업종이 있어 상승률 1위를 아직 표시하지 않습니다."
     elif samples.get("source") == "history":
         message = "장외 초기 수집은 KIS 일봉 기준입니다. 거래량에 시간외 거래가 포함될 수 있습니다."
-    return HeatmapResponse(market=market, period=period, updated_at=samples["updated_at"], as_of_date=samples["date"], coverage=coverage, top_sector=top, sectors=sectors, is_stale=coverage.missing_stocks > 0, message=message)
+    result = HeatmapResponse(market=market, period=period, updated_at=samples["updated_at"], as_of_date=samples["date"], coverage=coverage, sectors=sectors, is_stale=coverage.missing_stocks > 0, message=message)
+    _refresh_insights(result)
+    return result
 
 
 def _publish(market: Market, periods: tuple[Period, ...], samples: dict, now: datetime) -> None:
@@ -558,6 +575,9 @@ def get_heatmap(market: Market = "kospi", period: Period = "day", now: datetime 
     local = _local_now(now)
     with _lock:
         result = _snapshots.get((market, period), HeatmapResponse(market=market, period=period)).model_copy(deep=True)
+        _refresh_insights(result)
+        if result.message and "거래량 1위" in result.message:
+            result.message = result.message.replace("거래량 1위", "상승률 1위")
         result.market_status = _market_status(local)
         result.next_update_at = _next_update(local)
         result.is_refreshing = _refreshing

@@ -60,8 +60,8 @@ class HeatmapTests(unittest.TestCase):
         self.assertEqual(self.stock(day).volume, 30)
         self.assertEqual(self.stock(week).volume, 60)
         self.assertEqual(self.stock(month).volume, 71)
-        self.assertEqual(day.top_sector.code, "0024")
-        self.assertEqual(day.top_sector.volume_share, 70)
+        self.assertEqual(day.top_sector.code, "0013")
+        self.assertEqual(day.top_sector.volume_share, 30)
 
     def test_month_and_week_boundary_on_a_holiday_uses_prior_available_trading_close(self):
         service._histories["000001"].pop("2026-08-31")
@@ -75,7 +75,7 @@ class HeatmapTests(unittest.TestCase):
         response = service._build_snapshot("kospi", "week", self.samples, self.now)
         self.assertIsNone(self.stock(response).change_rate)
         self.assertEqual(self.stock(response).volume, 50)
-        self.assertIsNotNone(response.top_sector)
+        self.assertIsNone(response.top_sector)
 
     def test_missing_quote_cannot_fabricate_a_top_sector(self):
         self.samples["rows"].pop("000002")
@@ -91,7 +91,7 @@ class HeatmapTests(unittest.TestCase):
         response = service.get_heatmap("kospi", "day", self.now)
         self.assertEqual(response.updated_at, self.now.isoformat())
         self.assertTrue(response.is_stale)
-        self.assertEqual(response.top_sector.code, "0024")
+        self.assertEqual(response.top_sector.code, "0013")
 
     def test_market_holiday_special_hours_and_final_capture_delay(self):
         holiday = self.now.replace(day=17)

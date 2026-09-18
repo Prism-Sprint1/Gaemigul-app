@@ -270,6 +270,46 @@ class KISClientTests(unittest.TestCase):
         saved = json.loads(kis._TOKEN_CACHE_PATH.read_text(encoding="utf-8"))
         self.assertGreater(saved["expires_at"], time.time())
 
+    def test_timeline_market_and_calendar_share_throttled_requests_and_failure_checks(self):
+        kis._write_cached_token("cached-test-token", 3600)
+        calls = (
+            lambda: kis.get_domestic_index_price("U", "0001"),
+            lambda: kis.get_index_minute_price("0001"),
+            lambda: kis.get_overseas_index_or_fx_price("X", "FX@KRW"),
+            lambda: kis.get_dividend_schedule("20260901", "20260930"),
+            lambda: kis.get_price("F", "test-contract"),
+        )
+        with patch.object(kis, "_wait_for_request_slot") as slot:
+            for call in calls:
+                self.http.get.side_effect = [
+                    response({"rt_cd": "1", "msg_cd": "EGW00201"}),
+                    response({"rt_cd": "0", "output": {}, "output1": []}),
+                ]
+                with patch.object(kis.time, "sleep"):
+                    call()
+            self.assertEqual(slot.call_count, len(calls) * 2)
+        self.http.post.assert_not_called()
+
+    def test_report_master_download_keeps_bytes_contract_without_authentication(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("kospi_code.mst", b"master record")
+        self.http.get.return_value = httpx.Response(
+            200, content=buffer.getvalue(), request=httpx.Request("GET", "https://kis.invalid")
+        )
+        with patch.object(kis, "_wait_for_request_slot") as slot:
+            self.assertEqual(kis.get_kospi_master(), b"master record")
+        slot.assert_not_called()
+        self.http.post.assert_not_called()
+
+    def test_missing_keys_fail_before_any_http_or_token_request(self):
+        self.settings.kis_app_key = None
+        for query in (lambda: kis.get_domestic_index_price("U", "0001"), lambda: kis.get_stock_quotes(["005930"])):
+            with self.assertRaises(RuntimeError):
+                query()
+        self.http.get.assert_not_called()
+        self.http.post.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -56,7 +56,7 @@ export default function HeatmapFilters({
   const updateDisabled = manualRefreshDisabled || marketClosed
 
   return (
-    <div className="mb-4">
+    <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2.5">
           <Tabs
@@ -65,13 +65,13 @@ export default function HeatmapFilters({
           >
             <TabsList
               aria-label="시장 선택"
-              className="h-auto rounded-sm bg-white p-1 shadow-sm"
+              className="h-auto rounded-xl bg-heatmap-canvas p-1"
             >
               {MARKETS.map((value) => (
                 <TabsTrigger
                   key={value}
                   value={value}
-                  className="min-w-11 rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-neutral-600 data-active:bg-point data-active:text-white data-active:shadow-xs"
+                  className="min-h-9 min-w-12 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 data-active:bg-heatmap-soft data-active:text-heatmap-accent data-active:shadow-sm"
                 >
                   {value.toUpperCase()}
                 </TabsTrigger>
@@ -84,13 +84,13 @@ export default function HeatmapFilters({
           >
             <TabsList
               aria-label="기간 선택"
-              className="h-auto rounded-sm bg-white p-1 shadow-sm"
+              className="h-auto rounded-xl bg-heatmap-canvas p-1"
             >
               {PERIODS.map((value) => (
                 <TabsTrigger
                   key={value}
                   value={value}
-                  className="min-w-11 rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-neutral-600 data-active:bg-point data-active:text-white data-active:shadow-xs"
+                  className="min-h-9 min-w-12 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 data-active:bg-heatmap-soft data-active:text-heatmap-accent data-active:shadow-sm"
                 >
                   {PERIOD_LABELS[value]}
                 </TabsTrigger>
@@ -101,7 +101,7 @@ export default function HeatmapFilters({
         <div className="flex flex-wrap items-center gap-2.5">
           {!marketClosed && remainingMs !== null && (
             <span
-              className="flex items-center gap-1.5 text-[11px] font-semibold text-point tabular-nums"
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 tabular-nums"
               aria-label="다음 자동 갱신까지 남은 시간"
             >
               <Clock3 className="size-3.5" />
@@ -124,25 +124,27 @@ export default function HeatmapFilters({
                 ? "정규장 마감(15:30) 이후에는 업데이트할 수 없습니다."
                 : "수동 업데이트는 1분에 한 번 가능합니다."
             }
-            className="bg-point text-[10px] font-bold text-white tabular-nums hover:bg-point/90 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:opacity-100"
+            className="h-10 rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white tabular-nums hover:bg-slate-700 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"
           >
             {marketClosed || isCoolingDown ? (
               <Lock />
             ) : (
-              <RefreshCw className={isLoading ? "animate-spin" : ""} />
+              <RefreshCw
+                className={isLoading ? "motion-safe:animate-spin" : ""}
+              />
             )}
             {marketClosed
-              ? "UPDATE"
+              ? "장 마감"
               : isCoolingDown
                 ? `${refreshWaitSeconds}초`
-                : "UPDATE"}
+                : "새로고침"}
           </Button>
         </div>
       </div>
       {marketClosed && (
-        <p className="mt-2 text-right text-[10px] leading-relaxed text-neutral-400">
-          정규장 마감(15:30) 이후에는 자동 갱신과 수동 업데이트가 제공되지
-          않습니다. 다음 정규장 시작 후 다시 갱신됩니다.
+        <p className="mt-3 text-xs leading-5 text-slate-500">
+          장 마감 이후에는 마지막 수집 시세를 표시합니다. 다음 정규장에
+          갱신됩니다.
         </p>
       )}
     </div>

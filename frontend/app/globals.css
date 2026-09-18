@@ -13,6 +13,14 @@
   --color-decrease: #2563eb;
   --color-ant-bg: #f9f9fa;
   --color-line-bg: #e5e7eb;
+  --color-heatmap-canvas: #f5f6f8;
+  --color-heatmap-soft: #fff1f2;
+  --color-heatmap-panel: #fafbfc;
+  --color-heatmap-border: #e1e5eb;
+  --color-heatmap-accent: #b52e43;
+  --color-heatmap-accent-hover: #97243a;
+  --shadow-heatmap-card:
+    0 1px 2px rgb(15 23 42 / 0.03), 0 8px 24px -16px rgb(15 23 42 / 0.2);
 }
 
 @theme inline {

@@ -1,11 +1,6 @@
-import { Info } from "lucide-react"
+import { MousePointer2 } from "lucide-react"
 import { formatChange, formatKoreanAmount } from "@/lib/heatmap-layout"
 import type { HeatmapSector, HeatmapStock } from "@/lib/types/HeatmapType"
-
-function changeColor(rate: number | null) {
-  if (rate === null || rate === 0) return "#737373"
-  return rate > 0 ? "#e52828" : "#2563eb"
-}
 
 export default function HeatmapStockDetail({
   id,
@@ -14,27 +9,31 @@ export default function HeatmapStockDetail({
   id: string
   selected: { sector: HeatmapSector; stock: HeatmapStock } | undefined
 }) {
+  const rate = selected?.stock.change_rate
   return (
     <div
       id={id}
-      className="mb-3 min-h-16.25 w-full flex-1 rounded-sm border border-neutral-200 bg-white px-3 py-3 shadow-sm"
+      className="flex min-h-32 items-center rounded-xl border border-heatmap-border bg-heatmap-panel px-4 py-3 sm:min-h-24"
       aria-live="polite"
+      aria-atomic="true"
     >
       {selected ? (
-        <div className="grid grid-cols-2 gap-x-5 gap-y-2 text-xs sm:grid-cols-[1.3fr_1fr_1fr_1fr]">
-          <div>
-            <p className="text-xs text-neutral-400">
+        <div className="grid w-full grid-cols-2 gap-x-4 gap-y-3 text-xs sm:grid-cols-[1.3fr_1fr_1fr_1fr]">
+          <div className="min-w-0">
+            <p className="truncate text-[11px] text-slate-500">
               {selected.sector.name} · {selected.stock.code}
             </p>
-            <strong className="flex items-center gap-1.5 text-sm">
-              <p className="mt-1 truncate font-bold">{selected.stock.name}</p>
-              <p
-                className="mt-0.5 font-semibold tabular-nums"
-                style={{ color: changeColor(selected.stock.change_rate) }}
-              >
-                {formatChange(selected.stock.change_rate)}
-              </p>
-            </strong>
+            <p
+              className="mt-1 truncate text-sm font-bold text-slate-900"
+              title={selected.stock.name}
+            >
+              {selected.stock.name}
+            </p>
+            <p
+              className={`mt-0.5 text-xs font-semibold tabular-nums ${rate == null || rate === 0 ? "text-slate-500" : rate > 0 ? "text-red-700" : "text-blue-700"}`}
+            >
+              {formatChange(rate ?? null)}
+            </p>
           </div>
           <Detail
             label="현재가"
@@ -50,13 +49,18 @@ export default function HeatmapStockDetail({
           />
         </div>
       ) : (
-        <div className="flex gap-2 text-xs leading-relaxed text-neutral-400">
-          <Info className="relative top-1 size-3 shrink-0" />
-          <p>
-            종목을 가리키거나 선택하면 상세 정보를 볼 수 있어요.
-            <br />
-            작은 종목은 업종 확대 또는 검색으로 확인하세요.
-          </p>
+        <div className="flex items-center gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-400">
+            <MousePointer2 className="size-4" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-medium text-slate-700">
+              관심 있는 기업을 선택해 보세요
+            </p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              현재가·시가총액·거래량을 여기서 확인할 수 있어요.
+            </p>
+          </div>
         </div>
       )}
     </div>
@@ -65,9 +69,11 @@ export default function HeatmapStockDetail({
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-xs text-neutral-400">{label}</p>
-      <p className="mt-1 text-sm font-semibold tabular-nums">{value}</p>
+    <div className="min-w-0">
+      <p className="text-[11px] text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold break-keep text-slate-800 tabular-nums">
+        {value}
+      </p>
     </div>
   )
 }

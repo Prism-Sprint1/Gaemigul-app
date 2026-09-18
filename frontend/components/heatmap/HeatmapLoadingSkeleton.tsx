@@ -12,10 +12,7 @@ export default function HeatmapLoadingSkeleton() {
         <Skeleton className="h-7 w-28" />
         <Skeleton className="h-7 w-36" />
       </div>
-      <div
-        className="grid h-[490px] grid-cols-3 gap-2 sm:h-[540px] 2xl:h-[610px]"
-        aria-hidden="true"
-      >
+      <div className="grid h-[700px] grid-cols-3 gap-2" aria-hidden="true">
         {[0, 1, 2].map((column) => (
           <div
             key={column}
@@ -30,8 +27,8 @@ export default function HeatmapLoadingSkeleton() {
       </div>
       <div className="absolute top-1/2 right-4 left-4 flex justify-center">
         <span className="flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs text-neutral-500 shadow-sm">
-          <LoaderCircle className="size-3.5 animate-spin text-point" /> 히트맵을 불러오고
-          있어요
+          <LoaderCircle className="size-3.5 text-point motion-safe:animate-spin" />{" "}
+          히트맵을 불러오고 있어요
         </span>
       </div>
     </div>

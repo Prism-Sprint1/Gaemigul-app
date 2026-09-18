@@ -1,6 +1,10 @@
 # kis_client.py
-# 한국투자증권(KIS) API 호출 (전 도메인 공용). 토큰 발급·캐싱, 재시도, 시세·순위·휴장일·투자자 매매동향·기간별 시세 조회, 종목 마스터 파일.
-# 토큰은 계좌 단위라 KIS 호출은 반드시 이 파일을 거친다 (토큰을 새로 발급할 때마다 계좌 주인에게 알림이 간다).
+# 한국투자증권(KIS) API 직접 호출
+# 토큰 발급 및 캐싱
+# 국내/해외 지수, 환율 조회
+#
+# core에 있는 이유: 여러 도메인(timeline, heatmap 등)이 같이 쓸 수 있어야 하기 때문. 특히 토큰
+# 발급/캐싱은 계좌 단위라서, 도메인마다 따로 만들면 재발급이 겹치거나 중복돼서 여기 하나로 모아둔다.
 
 from __future__ import annotations
 
@@ -17,14 +21,8 @@ import httpx
 
 from backend.core.config import get_settings
 
-# 토큰 캐시 파일 위치: backend/.cache/kis_token.json (git에 올리지 않는다)
+# backend/src/backend/core/kis_client.py -> backend/ (프로젝트 최상위 폴더)
 _TOKEN_CACHE_PATH = Path(__file__).resolve().parents[3] / ".cache" / "kis_token.json"
-
-# KIS API별 주소(_ENDPOINT)와 거래 ID(_TR_ID). 아래 조회 함수들이 이 두 값으로 요청을 보낸다
-#   ENDPOINT  kis_base_url 뒤에 붙는 경로
-#   TR_ID     요청 헤더 tr_id에 넣는 코드. KIS가 이 값으로 어떤 조회인지 구분한다 (주소가 같아도 TR_ID가 다르면 다른 API)
-# 값은 KIS 개발자 문서에 적힌 그대로다. 임의로 바꾸면 에러가 난다
-# API를 추가하려면 두 줄을 추가하고, 함수에서 _get_with_retry(주소, headers=_headers(settings, TR_ID), params=...)로 부른다
 _TOKEN_ENDPOINT = "/oauth2/tokenP"
 _INDEX_PRICE_ENDPOINT = "/uapi/domestic-stock/v1/quotations/inquire-index-price"
 _INDEX_PRICE_TR_ID = "FHPUP02100000"
@@ -64,6 +62,56 @@ _TIMEOUT_SECONDS = 10.0
 _TOKEN_LOCK = threading.Lock()
 
 
+def _checked_settings():
+    settings = get_settings()
+    if not settings.kis_app_key or not settings.kis_app_secret:
+        raise RuntimeError("KIS_APP_KEY / KIS_APP_SECRET가 .env에 없습니다. backend/.env에 추가해주세요.")
+    return settings
+
+
+def _headers(settings, tr_id: str) -> dict[str, str]:
+    return {
+        "content-type": "application/json; charset=utf-8",
+        "authorization": f"Bearer {get_access_token()}",
+        "appkey": settings.kis_app_key,
+        "appsecret": settings.kis_app_secret,
+        "tr_id": tr_id,
+        "custtype": "P",
+    }
+
+
+def _get_with_retry(url: str, *, headers: dict, params: dict) -> dict:
+    """기존 timeline/market 호출 양식도 히트맵과 같은 속도 제한/재시도를 쓴다."""
+    return _send_with_retry(url, headers=headers, params=params).json()
+
+
+def _send_with_retry(url: str, *, headers: dict | None = None, params: dict | None = None) -> httpx.Response:
+    # 인증 API 조회만 계좌 속도 제한에 포함한다. 공개 종목 마스터는 토큰 없이 받는다.
+    # 토큰 재발급에는 적용하지 않아 불필요한 발급 알림을 막는다.
+    for attempt in range(_RETRY_COUNT):
+        if headers:
+            _wait_for_request_slot()
+        try:
+            response = _HTTP.get(url, headers=headers, params=params)
+            if response.status_code in (429, 500, 502, 503, 504) and attempt < _RETRY_COUNT - 1:
+                time.sleep(_RETRY_WAIT_SECONDS * 2**attempt)
+                continue
+            response.raise_for_status()
+            if headers:
+                body = response.json()
+                if body.get("rt_cd", "0") != "0":
+                    if body.get("msg_cd") == "EGW00201" and attempt < _RETRY_COUNT - 1:
+                        time.sleep(_RETRY_WAIT_SECONDS * 2**attempt)
+                        continue
+                    raise KISAPIError(f"KIS {headers.get('tr_id', 'unknown')}: {body.get('msg_cd', 'unknown')}")
+            return response
+        except httpx.TransportError:
+            if attempt == _RETRY_COUNT - 1:
+                raise
+            time.sleep(_RETRY_WAIT_SECONDS * 2**attempt)
+    raise KISAPIError("KIS: retry exhausted")
+
+
 # 캐시된 토큰 (없거나 만료됐으면 None). 중간에 끊긴 쓰기·옛 형식 캐시도 None으로 보고 새로 발급한다
 def _read_cached_token() -> str | None:
     if not _TOKEN_CACHE_PATH.exists():
@@ -86,7 +134,7 @@ def _write_cached_token(access_token: str, expires_in: int) -> None:
         json.dumps(
             {
                 "access_token": access_token,
-                "expires_at": time.time() + expires_in - 60,  # 만료 60초 전부터는 새로 발급
+                "expires_at": time.time() + expires_in - 60,  # 만료 60초 전까지는 캐시 재사용
             }
         ),
         encoding="utf-8",
@@ -94,58 +142,8 @@ def _write_cached_token(access_token: str, expires_in: int) -> None:
     temporary.replace(_TOKEN_CACHE_PATH)
 
 
-# 키 설정을 확인하고 설정값을 돌려준다. 키가 없으면 RuntimeError
-# 공개 함수는 모두 여기서 설정값을 받는다 (캐시된 토큰이 있어도 키 검사를 건너뛰지 않도록)
-def _checked_settings():
-    settings = get_settings()
-    if not settings.kis_app_key or not settings.kis_app_secret:
-        raise RuntimeError("KIS_APP_KEY / KIS_APP_SECRET가 .env에 없습니다. backend/.env에 추가해주세요.")
-    return settings
-
-
-# 조회 API 공통 헤더. API마다 tr_id만 다르다
-def _headers(settings, tr_id: str) -> dict[str, str]:
-    return {
-        "content-type": "application/json; charset=utf-8",
-        "authorization": f"Bearer {get_access_token()}",
-        "appkey": settings.kis_app_key,
-        "appsecret": settings.kis_app_secret,
-        "tr_id": tr_id,
-        "custtype": "P",
-    }
-
-
-# 조회 API 공통 GET (JSON 응답). 재시도 규칙은 _send_with_retry
-def _get_with_retry(url: str, *, headers: dict, params: dict) -> dict:
-    return _send_with_retry(url, headers=headers, params=params).json()
-
-
-# GET을 보내고 응답을 돌려준다 (JSON 조회와 마스터 파일 다운로드가 같이 쓴다)
-# 5xx(초당 한도 초과 EGW00201 포함)와 연결 오류는 _RETRY_COUNT번까지 재시도하고, 4xx는 바로 에러를 낸다
-# 토큰 발급에는 쓰지 않는다 (재시도하면 알림이 여러 번 간다)
-def _send_with_retry(url: str, *, headers: dict | None = None, params: dict | None = None) -> httpx.Response:
-    last_error = None
-
-    for attempt in range(_RETRY_COUNT):
-        try:
-            response = httpx.get(url, headers=headers, params=params, timeout=_TIMEOUT_SECONDS)
-            response.raise_for_status()
-            return response
-        except httpx.HTTPStatusError as error:
-            if error.response.status_code < 500:
-                raise
-            last_error = error
-        except httpx.TransportError as error:
-            last_error = error
-
-        if attempt < _RETRY_COUNT - 1:
-            time.sleep(_RETRY_WAIT_SECONDS * (attempt + 1))
-
-    raise last_error
-
-
-# 접근 토큰. 캐시가 유효하면 재사용하고 없을 때만 새로 발급한다
-# 토큰이 필요하면 반드시 이 함수를 쓴다 (따로 발급하면 계좌 주인에게 알림이 간다)
+# API 호출용 토큰 발급 (저장된 토큰 있으면 재사용, 없으면 새로 발급)
+# 주의: 토큰을 너무 자주 새로 발급받으면 계좌 주인한테 알림이 가니, 이 함수 안 거치고 따로 발급하지 말 것
 def get_access_token() -> str:
     settings = _checked_settings()
 
@@ -158,7 +156,7 @@ def _get_access_token_locked(settings) -> str:
     if cached_token:
         return cached_token
 
-    response = httpx.post(
+    response = _HTTP.post(
         f"{settings.kis_base_url}{_TOKEN_ENDPOINT}",
         json={
             "grant_type": "client_credentials",
@@ -173,9 +171,8 @@ def _get_access_token_locked(settings) -> str:
     return body["access_token"]
 
 
-# 국내 지수 현재가 (지표 바의 코스피·코스닥)
-# market_div_code "U"(업종), index_code 코스피 "0001" / 코스닥 "1001" / 개별 업종코드
-# 응답 output: bstp_nmix_prpr(지수) / bstp_nmix_prdy_ctrt(전일 대비 등락률)
+# 국내 지수(코스피/코스닥) 현재가 조회
+# index_code로 지수 변경 가능 - 코스피="0001", 코스닥="1001"
 def get_domestic_index_price(market_div_code: str, index_code: str) -> dict:
     settings = _checked_settings()
     return _get_with_retry(
@@ -188,9 +185,9 @@ def get_domestic_index_price(market_div_code: str, index_code: str) -> dict:
     )
 
 
-# 해외 지수·환율 현재가 (지표 바의 나스닥·S&P500·니케이·환율)
-# market_div_code 지수 "N" / 환율 "X", symbol 나스닥 "COMP" / S&P500 "SPX" / 니케이 "JP#NI225" / 원달러 "FX@KRW"
-# 응답 output1: ovrs_nmix_prpr(현재가) / prdy_ctrt(전일 대비 등락률)
+# 해외 지수/환율 현재가 조회
+# symbol로 대상 변경 가능 - S&P500="SPX", 나스닥="COMP", 니케이="JP#NI225", 달러환율="FX@KRW"
+# market_div_code는 지수면 "N", 환율이면 "X"
 def get_overseas_index_or_fx_price(market_div_code: str, symbol: str) -> dict:
     settings = _checked_settings()
     return _get_with_retry(
@@ -443,28 +440,14 @@ _KSD_DIVIDEND_TR_ID = "HHKDB669102C0"
 # 미구현이라 전체조회 시 일부만 옴 - 종목코드를 지정해서 쓰는 걸 권장)
 # gb1: "0"=배당전체(기본값), "1"=결산배당, "2"=중간배당
 def get_dividend_schedule(f_dt: str, t_dt: str, *, sht_cd: str = "", gb1: str = "0") -> list[dict]:
-    settings = get_settings()
-    response = httpx.get(
-        f"{settings.kis_base_url}{_KSD_DIVIDEND_ENDPOINT}",
-        headers={
-            "content-type": "application/json; charset=utf-8",
-            "authorization": f"Bearer {get_access_token()}",
-            "appkey": settings.kis_app_key,
-            "appsecret": settings.kis_app_secret,
-            "tr_id": _KSD_DIVIDEND_TR_ID,
-            "custtype": "P",
-        },
-        params={
+    body = _get(_KSD_DIVIDEND_ENDPOINT, _KSD_DIVIDEND_TR_ID, {
             "CTS": "",
             "GB1": gb1,
             "F_DT": f_dt,
             "T_DT": t_dt,
             "SHT_CD": sht_cd,
             "HIGH_GB": "",
-        },
-    )
-    response.raise_for_status()
-    body = response.json()
+        })
     return body.get("output1") or []
 
 
@@ -475,21 +458,7 @@ _KSD_PUB_OFFER_TR_ID = "HHKDB669108C0"
 # 예탁원정보(공모주청약일정, IPO) 조회. sht_cd를 비워두면 전체 시장(1년치가 100건 미만이라
 # 페이지 제한에 안 걸림 - 실제 라이브 호출로 확인함)
 def get_ipo_schedule(f_dt: str, t_dt: str, *, sht_cd: str = "") -> list[dict]:
-    settings = get_settings()
-    response = httpx.get(
-        f"{settings.kis_base_url}{_KSD_PUB_OFFER_ENDPOINT}",
-        headers={
-            "content-type": "application/json; charset=utf-8",
-            "authorization": f"Bearer {get_access_token()}",
-            "appkey": settings.kis_app_key,
-            "appsecret": settings.kis_app_secret,
-            "tr_id": _KSD_PUB_OFFER_TR_ID,
-            "custtype": "P",
-        },
-        params={"SHT_CD": sht_cd, "CTS": "", "F_DT": f_dt, "T_DT": t_dt},
-    )
-    response.raise_for_status()
-    body = response.json()
+    body = _get(_KSD_PUB_OFFER_ENDPOINT, _KSD_PUB_OFFER_TR_ID, {"SHT_CD": sht_cd, "CTS": "", "F_DT": f_dt, "T_DT": t_dt})
     return body.get("output1") or []
 
 
@@ -502,21 +471,7 @@ _KSD_PAIDIN_CAPIN_TR_ID = "HHKDB669100C0"
 def get_paidin_capital_increase_schedule(
     f_dt: str, t_dt: str, *, sht_cd: str = "", gb1: str = "1"
 ) -> list[dict]:
-    settings = get_settings()
-    response = httpx.get(
-        f"{settings.kis_base_url}{_KSD_PAIDIN_CAPIN_ENDPOINT}",
-        headers={
-            "content-type": "application/json; charset=utf-8",
-            "authorization": f"Bearer {get_access_token()}",
-            "appkey": settings.kis_app_key,
-            "appsecret": settings.kis_app_secret,
-            "tr_id": _KSD_PAIDIN_CAPIN_TR_ID,
-            "custtype": "P",
-        },
-        params={"CTS": "", "GB1": gb1, "F_DT": f_dt, "T_DT": t_dt, "SHT_CD": sht_cd},
-    )
-    response.raise_for_status()
-    body = response.json()
+    body = _get(_KSD_PAIDIN_CAPIN_ENDPOINT, _KSD_PAIDIN_CAPIN_TR_ID, {"CTS": "", "GB1": gb1, "F_DT": f_dt, "T_DT": t_dt, "SHT_CD": sht_cd})
     return body.get("output1") or []
 
 
@@ -527,21 +482,7 @@ _KSD_BONUS_ISSUE_TR_ID = "HHKDB669101C0"
 # 예탁원정보(무상증자일정) 조회. 전체 시장 조회 시 1년치가 100건에 걸릴 수 있어(실제 확인함)
 # sht_cd로 종목을 지정해서 쓰는 걸 권장
 def get_bonus_issue_schedule(f_dt: str, t_dt: str, *, sht_cd: str = "") -> list[dict]:
-    settings = get_settings()
-    response = httpx.get(
-        f"{settings.kis_base_url}{_KSD_BONUS_ISSUE_ENDPOINT}",
-        headers={
-            "content-type": "application/json; charset=utf-8",
-            "authorization": f"Bearer {get_access_token()}",
-            "appkey": settings.kis_app_key,
-            "appsecret": settings.kis_app_secret,
-            "tr_id": _KSD_BONUS_ISSUE_TR_ID,
-            "custtype": "P",
-        },
-        params={"CTS": "", "F_DT": f_dt, "T_DT": t_dt, "SHT_CD": sht_cd},
-    )
-    response.raise_for_status()
-    body = response.json()
+    body = _get(_KSD_BONUS_ISSUE_ENDPOINT, _KSD_BONUS_ISSUE_TR_ID, {"CTS": "", "F_DT": f_dt, "T_DT": t_dt, "SHT_CD": sht_cd})
     return body.get("output1") or []
 
 
@@ -552,31 +493,17 @@ _KSD_MERGER_SPLIT_TR_ID = "HHKDB669104C0"
 # 예탁원정보(합병_분할일정) 조회. sht_cd를 비워두면 전체 시장 대상(1년치가 30건 안팎이라
 # 배당일정과 달리 페이지 제한에 안 걸림 - 실제 라이브 호출로 확인함)
 def get_merger_split_schedule(f_dt: str, t_dt: str, *, sht_cd: str = "") -> list[dict]:
-    settings = get_settings()
-    response = httpx.get(
-        f"{settings.kis_base_url}{_KSD_MERGER_SPLIT_ENDPOINT}",
-        headers={
-            "content-type": "application/json; charset=utf-8",
-            "authorization": f"Bearer {get_access_token()}",
-            "appkey": settings.kis_app_key,
-            "appsecret": settings.kis_app_secret,
-            "tr_id": _KSD_MERGER_SPLIT_TR_ID,
-            "custtype": "P",
-        },
-        params={
+    body = _get(_KSD_MERGER_SPLIT_ENDPOINT, _KSD_MERGER_SPLIT_TR_ID, {
             "CTS": "",
             "F_DT": f_dt,
             "T_DT": t_dt,
             "SHT_CD": sht_cd,
-        },
-    )
-    response.raise_for_status()
-    body = response.json()
+        })
     return body.get("output1") or []
 
 
 # ---------------------------------------------------------------------------
-# heatmap 도메인용 공용 요청 (히트맵 담당 작성)
+# 전 도메인 공용 HTTP 연결과 계좌별 조회 속도 제한
 # ---------------------------------------------------------------------------
 
 _REQUEST_LOCK = threading.Lock()
@@ -590,7 +517,7 @@ class KISAPIError(RuntimeError):
 
 
 def _wait_for_request_slot() -> None:
-    # timeline과 heatmap의 호출을 함께 제한한다. 서버는 스케줄러 1개/worker 1개로 운영.
+    # timeline, market, calendar, heatmap의 호출을 함께 제한한다. 서버는 worker 1개로 운영.
     global _LAST_REQUEST_AT
     with _REQUEST_LOCK:
         interval = 1.0 / get_settings().heatmap_requests_per_second
@@ -602,39 +529,12 @@ def _wait_for_request_slot() -> None:
 
 def _get(endpoint: str, tr_id: str, params: dict[str, str]) -> dict:
     """공용 토큰, 연결 재사용, 속도 제한, 일시적 장애 재시도를 거치는 읽기 전용 GET."""
-    settings = get_settings()
-    for attempt in range(3):
-        _wait_for_request_slot()
-        try:
-            response = _HTTP.get(
-                f"{settings.kis_base_url}{endpoint}",
-                headers={
-                    "content-type": "application/json; charset=utf-8",
-                    "authorization": f"Bearer {get_access_token()}",
-                    "appkey": settings.kis_app_key,
-                    "appsecret": settings.kis_app_secret,
-                    "tr_id": tr_id,
-                    "custtype": "P",
-                },
-                params=params,
-            )
-            if response.status_code in (429, 500, 502, 503, 504) and attempt < 2:
-                time.sleep(0.5 * 2**attempt)
-                continue
-            response.raise_for_status()
-            body = response.json()
-            if body.get("rt_cd", "0") != "0":
-                # 초당 호출 제한은 HTTP 200의 업무 오류로도 전달된다.
-                if body.get("msg_cd") == "EGW00201" and attempt < 2:
-                    time.sleep(0.5 * 2**attempt)
-                    continue
-                raise KISAPIError(f"KIS {tr_id}: {body.get('msg_cd', 'unknown')}")
-            return body
-        except httpx.TransportError:
-            if attempt == 2:
-                raise
-            time.sleep(0.5 * 2**attempt)
-    raise KISAPIError(f"KIS {tr_id}: retry exhausted")
+    settings = _checked_settings()
+    return _get_with_retry(
+        f"{settings.kis_base_url}{endpoint}",
+        headers=_headers(settings, tr_id),
+        params=params,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -833,25 +733,11 @@ _FUTOPT_OPTION_LIST_TR_ID = "FHPIO056104C0"
 # 국내옵션전광판_옵션월물리스트[국내선물-020] - 만기 "년월"만 준다(mtrt_yymm_code/mtrt_yymm).
 # 정확한 만기일은 없다 - get_price()로 종목별 futs_last_tr_date를 따로 조회해야 한다.
 def get_option_month_list(fid_cond_scr_div_code: str = "509") -> list[dict]:
-    settings = get_settings()
-    response = httpx.get(
-        f"{settings.kis_base_url}{_FUTOPT_OPTION_LIST_ENDPOINT}",
-        headers={
-            "content-type": "application/json; charset=utf-8",
-            "authorization": f"Bearer {get_access_token()}",
-            "appkey": settings.kis_app_key,
-            "appsecret": settings.kis_app_secret,
-            "tr_id": _FUTOPT_OPTION_LIST_TR_ID,
-            "custtype": "P",
-        },
-        params={
+    body = _get(_FUTOPT_OPTION_LIST_ENDPOINT, _FUTOPT_OPTION_LIST_TR_ID, {
             "FID_COND_SCR_DIV_CODE": fid_cond_scr_div_code,
             "FID_COND_MRKT_DIV_CODE": "",
             "FID_COND_MRKT_CLS_CODE": "",
-        },
-    )
-    response.raise_for_status()
-    body = response.json()
+        })
     return body.get("output") or []
 
 
@@ -863,25 +749,11 @@ _FUTOPT_FUTURES_BOARD_TR_ID = "FHPIF05030200"
 # (분기월 3·6·9·12월만 존재), "MKI"면 미니 KOSPI200선물(월물 전체 존재) - 46번 사전조사에서
 # 실제 호출로 확인. 만기일 필드는 없다 - get_price()로 따로 조회해야 한다.
 def get_futures_board(market_cls_code: str = "") -> list[dict]:
-    settings = get_settings()
-    response = httpx.get(
-        f"{settings.kis_base_url}{_FUTOPT_FUTURES_BOARD_ENDPOINT}",
-        headers={
-            "content-type": "application/json; charset=utf-8",
-            "authorization": f"Bearer {get_access_token()}",
-            "appkey": settings.kis_app_key,
-            "appsecret": settings.kis_app_secret,
-            "tr_id": _FUTOPT_FUTURES_BOARD_TR_ID,
-            "custtype": "P",
-        },
-        params={
+    body = _get(_FUTOPT_FUTURES_BOARD_ENDPOINT, _FUTOPT_FUTURES_BOARD_TR_ID, {
             "FID_COND_MRKT_DIV_CODE": "F",
             "FID_COND_SCR_DIV_CODE": "20503",
             "FID_COND_MRKT_CLS_CODE": market_cls_code,
-        },
-    )
-    response.raise_for_status()
-    body = response.json()
+        })
     return body.get("output") or []
 
 
@@ -894,28 +766,14 @@ _FUTOPT_CALLPUT_BOARD_TR_ID = "FHPIF05030100"
 # 정규 선물이 없는 만기월(분기월이 아닌 달)의 만기일을 구하려면 이 종목코드로 get_price()를
 # 호출해야 한다. output1에는 100건까지만 온다(KIS 공식 제약).
 def get_option_callput_board(mtrt_yymm: str) -> list[dict]:
-    settings = get_settings()
-    response = httpx.get(
-        f"{settings.kis_base_url}{_FUTOPT_CALLPUT_BOARD_ENDPOINT}",
-        headers={
-            "content-type": "application/json; charset=utf-8",
-            "authorization": f"Bearer {get_access_token()}",
-            "appkey": settings.kis_app_key,
-            "appsecret": settings.kis_app_secret,
-            "tr_id": _FUTOPT_CALLPUT_BOARD_TR_ID,
-            "custtype": "P",
-        },
-        params={
+    body = _get(_FUTOPT_CALLPUT_BOARD_ENDPOINT, _FUTOPT_CALLPUT_BOARD_TR_ID, {
             "FID_COND_MRKT_DIV_CODE": "O",
             "FID_COND_SCR_DIV_CODE": "20503",
             "FID_MRKT_CLS_CODE": "CO",
             "FID_MTRT_CNT": mtrt_yymm,
             "FID_MRKT_CLS_CODE1": "PO",
             "FID_COND_MRKT_CLS_CODE": "",
-        },
-    )
-    response.raise_for_status()
-    body = response.json()
+        })
     return body.get("output1") or []
 
 
@@ -928,19 +786,5 @@ _FUTOPT_PRICE_TR_ID = "FHMIF10000000"
 # 응답의 futs_last_tr_date(YYYYMMDD)가 실제 최종거래일=만기일이다 - 46번 사전조사에서
 # "해당 결제월의 두 번째 목요일"이라는 공식 규칙과 실제 값이 정확히 일치하는 것을 확인했다.
 def get_price(market_div_code: str, iscd: str) -> dict:
-    settings = get_settings()
-    response = httpx.get(
-        f"{settings.kis_base_url}{_FUTOPT_PRICE_ENDPOINT}",
-        headers={
-            "content-type": "application/json; charset=utf-8",
-            "authorization": f"Bearer {get_access_token()}",
-            "appkey": settings.kis_app_key,
-            "appsecret": settings.kis_app_secret,
-            "tr_id": _FUTOPT_PRICE_TR_ID,
-            "custtype": "P",
-        },
-        params={"FID_COND_MRKT_DIV_CODE": market_div_code, "FID_INPUT_ISCD": iscd},
-    )
-    response.raise_for_status()
-    body = response.json()
+    body = _get(_FUTOPT_PRICE_ENDPOINT, _FUTOPT_PRICE_TR_ID, {"FID_COND_MRKT_DIV_CODE": market_div_code, "FID_INPUT_ISCD": iscd})
     return body.get("output1") or {}

@@ -1,4 +1,9 @@
-import { AlertCircle, ChartNoAxesCombined, LoaderCircle, RefreshCw } from "lucide-react"
+import {
+  AlertCircle,
+  ChartNoAxesCombined,
+  LoaderCircle,
+  RefreshCw,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { HeatmapResponse } from "@/lib/types/HeatmapType"
 
@@ -41,10 +46,11 @@ export default function HeatmapEmptyState({
       </h2>
       <p className="mt-2 max-w-80 text-xs leading-6 text-neutral-500">
         {error
-          ? "백엔드 연결을 확인한 뒤 다시 시도해 주세요."
+          ? "연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요."
           : collecting
-            ? "첫 수집에는 몇 분이 걸릴 수 있습니다. 수집이 완료되면 히트맵과 거래량 1위 업종이 자동으로 표시됩니다."
-            : message || "시세가 준비되면 이곳에서 업종별 흐름을 확인할 수 있습니다."}
+            ? "첫 수집에는 몇 분이 걸릴 수 있습니다. 수집이 완료되면 히트맵과 상승률 1위 업종이 자동으로 표시됩니다."
+            : message ||
+              "시세가 준비되면 이곳에서 업종별 흐름을 확인할 수 있습니다."}
       </p>
       {coverage && coverage.total_stocks > 0 && (
         <div className="mt-5 w-full max-w-60">
@@ -79,7 +85,9 @@ export default function HeatmapEmptyState({
           title="수동 업데이트는 1분에 한 번 가능합니다."
         >
           <RefreshCw />
-          {refreshWaitSeconds > 0 ? `${refreshWaitSeconds}초 후 다시 불러오기` : "다시 불러오기"}
+          {refreshWaitSeconds > 0
+            ? `${refreshWaitSeconds}초 후 다시 불러오기`
+            : "다시 불러오기"}
         </Button>
       )}
     </div>

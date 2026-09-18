@@ -35,6 +35,32 @@ class TopSector(BaseModel):
     change_rate: float | None
 
 
+class RelatedSector(BaseModel):
+    code: str
+    name: str
+    change_rate: float | None
+    reason: str
+    relationship_kind: Literal["industry", "market_trend"]
+    stocks: list[HeatmapStock]
+
+
+class HeatmapNewsItem(BaseModel):
+    title: str
+    url: str
+    source: str
+    published_at: str
+    summary: str
+
+
+class HeatmapNewsResponse(BaseModel):
+    sector_code: str | None = None
+    sector_name: str | None = None
+    updated_at: str | None = None
+    is_stale: bool = True
+    message: str | None = None
+    items: list[HeatmapNewsItem] = Field(default_factory=list)
+
+
 class Coverage(BaseModel):
     total_stocks: int = 0
     priced_stocks: int = 0
@@ -53,4 +79,5 @@ class HeatmapResponse(BaseModel):
     message: str | None = None
     coverage: Coverage = Field(default_factory=Coverage)
     top_sector: TopSector | None = None
+    related_sectors: list[RelatedSector] = Field(default_factory=list)
     sectors: list[HeatmapSector] = Field(default_factory=list)

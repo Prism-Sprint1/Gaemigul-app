@@ -1,14 +1,7 @@
 "use client"
 
-import {
-  Card,
-  CardContent,
-  ChartContainer,
-  Skeleton,
-  type ChartConfig,
-} from "@/components/ui"
-
-import { Area, AreaChart } from "recharts"
+import { Card, CardContent, Skeleton } from "@/components/ui"
+import IndicatorSparkline from "./IndicatorSparkline"
 
 import { Marquee } from "@/components/animations/marquee"
 
@@ -27,19 +20,7 @@ import {
   flatChartData,
 } from "@/lib/constant/indicatorChartData"
 
-const chartConfig = {
-  desktop: {
-    label: "Desktop",
-    color: "var(--chart-1)",
-  },
-} satisfies ChartConfig
-
-const IndexDataCard = ({
-  code,
-  name,
-  price,
-  change_rate,
-}: MarketIndicatorItem) => {
+const IndexDataCard = ({ name, price, change_rate }: MarketIndicatorItem) => {
   const direction: "up" | "down" | "flat" =
     change_rate > 0 ? "up" : change_rate < 0 ? "down" : "flat"
   const value = price.toLocaleString("ko-KR", {
@@ -62,7 +43,6 @@ const IndexDataCard = ({
     down: downtrendChartData,
     flat: flatChartData,
   }[direction]
-  const gradientId = `fill-${code}`
   return (
     <Card className="h-full rounded-lg border-border bg-card px-3.5 py-2.25 shadow-none">
       <CardContent className="flex min-w-42 gap-3 px-0">
@@ -73,36 +53,7 @@ const IndexDataCard = ({
           </p>
           <strong className="text-base font-semibold">{value}</strong>
         </div>
-        <ChartContainer
-          config={chartConfig}
-          className="h-10 w-20 **:outline-none [&_.recharts-cartesian-grid]:hidden"
-        >
-          <AreaChart
-            data={chartData}
-            margin={{
-              top: 2,
-              bottom: 2,
-              right: 2,
-            }}
-          >
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={chartColor} stopOpacity={0.8} />
-                <stop offset="95%" stopColor={chartColor} stopOpacity={0.1} />
-              </linearGradient>
-            </defs>
-            <Area
-              dataKey="desktop"
-              type="linear"
-              fill={`url(#${gradientId})`}
-              fillOpacity={0.4}
-              stroke={chartColor}
-              stackId="a"
-              dot={false}
-              activeDot={false}
-            />
-          </AreaChart>
-        </ChartContainer>
+        <IndicatorSparkline data={chartData} color={chartColor} />
       </CardContent>
     </Card>
   )
@@ -125,13 +76,12 @@ const SKELETON_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6"]
 export default function TestimonialMarqueeDemo() {
   const [items, setItems] = useState<MarketIndicatorItem[]>([])
 
-  const fetchTimelineIndicators = useCallback(async () => {
-    try {
-      const data = await getTimelineIndicators()
-      setItems(data.items)
-    } catch (error) {
-      console.error("[getTimelineIndicators] 실패", error)
-    }
+  const fetchTimelineIndicators = useCallback(() => {
+    return getTimelineIndicators()
+      .then((data) => setItems(data.items))
+      .catch((error: unknown) => {
+        console.error("[getTimelineIndicators] 실패", error)
+      })
   }, [])
 
   // 최초 진입 시 1회 실행
