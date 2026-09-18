@@ -2,6 +2,7 @@
 # KIS 접근 토큰을 DB 한 행에 보관한다 (전 도메인·전 기기 공용). kis_client만 사용한다.
 #   read    유효한 (토큰, 만료 시각) (없거나 만료면 None)
 #   write   발급받은 토큰 저장 (성공하면 True)
+#   invalidate  KIS가 거절한 토큰을 만료 처리 (저장된 토큰이 그 토큰일 때만)
 #
 # 토큰은 계좌 단위라 기기마다 따로 발급하면 계좌 주인에게 알림이 그만큼 간다.
 # DB에 두면 팀원 PC와 배포 서버가 같은 토큰을 쓰므로 하루 한 번만 발급된다 (배포로 파일이 지워져도 유지된다).
@@ -76,4 +77,23 @@ def write(access_token: str, expires_at: float) -> bool:
         return True
     except Exception as error:
         logger.warning("KIS 토큰 DB 저장 실패, 파일 캐시만 씁니다 - %s: %s", type(error).__name__, error)
+    return False
+
+
+# 저장된 토큰이 access_token과 같을 때만 만료 처리한다. 성공하면 True
+# 다른 기기가 이미 새 토큰으로 바꿔 놓았으면 그 토큰은 건드리지 않는다 (새 토큰까지 버리면 발급이 한 번 더 일어난다)
+def invalidate(access_token: str) -> bool:
+    dsn = _dsn()
+    if dsn is None:
+        return False
+    try:
+        with psycopg.connect(dsn, connect_timeout=5) as conn, conn.cursor() as cur:
+            cur.execute(_CREATE_SQL)
+            cur.execute(
+                f"UPDATE {_TABLE} SET expires_at = 0, updated_at = now() AT TIME ZONE 'Asia/Seoul' WHERE id = 1 AND access_token = %s",
+                (access_token,),
+            )
+        return True
+    except Exception as error:
+        logger.warning("KIS 토큰 DB 만료 처리 실패 - %s: %s", type(error).__name__, error)
     return False

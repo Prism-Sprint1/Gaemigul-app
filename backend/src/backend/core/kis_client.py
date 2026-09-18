@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import threading
 import time
 import zipfile
@@ -21,6 +22,8 @@ import httpx
 
 from backend.core import kis_token_store
 from backend.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 # 토큰 보관 순서: 이 프로세스 메모리 -> DB(kis_token_store, 전 기기 공용) -> 이 컴퓨터의 파일
 # DATABASE_URL이 없거나 DB를 못 읽을 때만 파일을 쓴다. 파일 위치: backend/.cache/kis_token.json (git에 올리지 않는다)
@@ -73,6 +76,17 @@ _TOKEN_LOCK = threading.Lock()
 
 # DB에서 읽은 토큰을 다시 확인하기까지 메모리에 두는 시간(초). 짧게 두면 다른 기기가 새로 발급한 토큰을 빨리 따라간다
 _MEMORY_TOKEN_SECONDS = 600.0
+
+# KIS가 토큰을 무효로 볼 때 주는 응답 코드("기간이 만료된 token"). 기록상 만료 전이어도 온다
+# (다른 곳에서 같은 키로 새 토큰을 발급하면 기존 토큰이 무효가 된다 - 9/19 배포 때 실제로 겪음)
+_EXPIRED_TOKEN_CODE = "EGW00123"
+
+# 만료 응답을 받고 새로 발급한 뒤 이 시간(초) 안에는 다시 발급하지 않는다
+# 다른 곳이 계속 새로 발급하면 서로 무효로 만들며 발급이 반복돼 계좌 주인에게 문자가 여러 번 가기 때문. 늘리면 재발급이 더 드물어진다
+_REISSUE_COOLDOWN_SECONDS = 600.0
+
+# 이 프로세스가 마지막으로 토큰을 발급한 시각 (epoch, 발급한 적 없으면 0)
+_LAST_ISSUED_AT = 0.0
 
 
 # 파일에 저장된 토큰 (없거나 만료됐으면 None). 중간에 끊긴 쓰기·옛 형식 캐시도 None으로 본다
@@ -159,11 +173,19 @@ def _get_with_retry(url: str, *, headers: dict, params: dict) -> dict:
 def _send_with_retry(url: str, *, headers: dict | None = None, params: dict | None = None) -> httpx.Response:
     # 인증 API 조회만 계좌 속도 제한에 포함한다. 공개 종목 마스터는 토큰 없이 받는다.
     # 토큰 재발급에는 적용하지 않아 불필요한 발급 알림을 막는다.
+    token_refreshed = False
     for attempt in range(_RETRY_COUNT):
         if headers:
             _wait_for_request_slot()
         try:
             response = _HTTP.get(url, headers=headers, params=params)
+            # 토큰이 거절되면 캐시를 버리고 새 토큰으로 한 번만 다시 보낸다 (HTTP 500과 함께 온다)
+            if headers and not token_refreshed and _is_expired_token(response):
+                token_refreshed = True
+                new_token = _refresh_rejected_token(headers["authorization"].removeprefix("Bearer "))
+                if new_token:
+                    headers["authorization"] = f"Bearer {new_token}"
+                    continue
             if response.status_code in (429, 500, 502, 503, 504) and attempt < _RETRY_COUNT - 1:
                 time.sleep(_RETRY_WAIT_SECONDS * 2**attempt)
                 continue
@@ -209,8 +231,43 @@ def _get_access_token_locked(settings) -> str:
     response.raise_for_status()
     body = response.json()
 
+    global _LAST_ISSUED_AT
+    _LAST_ISSUED_AT = time.time()
     _write_cached_token(body["access_token"], body["expires_in"])
     return body["access_token"]
+
+
+# 응답이 "만료된 토큰"(EGW00123)인지. JSON이 아니면 False
+def _is_expired_token(response: httpx.Response) -> bool:
+    try:
+        return response.json().get("msg_cd") == _EXPIRED_TOKEN_CODE
+    except ValueError:
+        return False
+
+
+# KIS가 거절한 토큰을 메모리·DB·파일에서 버리고 쓸 토큰을 돌려준다
+#   다른 기기가 이미 새 토큰을 DB에 올렸으면 그 토큰 (발급하지 않는다)
+#   아니면 한 번 새로 발급한다. 단 _REISSUE_COOLDOWN_SECONDS 안에 이 프로세스가 발급했으면 발급하지 않고 None (호출은 실패로 끝난다)
+def _refresh_rejected_token(rejected: str) -> str | None:
+    global _MEMORY_TOKEN
+    settings = _checked_settings()
+    with _TOKEN_LOCK:
+        if _MEMORY_TOKEN and _MEMORY_TOKEN[0] == rejected:
+            _MEMORY_TOKEN = None
+        kis_token_store.invalidate(rejected)
+        cached_file = _read_token_file(time.time())
+        if cached_file and cached_file[0] == rejected:
+            _TOKEN_CACHE_PATH.unlink(missing_ok=True)
+
+        cached = _read_cached_token()
+        if cached and cached != rejected:
+            logger.warning("KIS가 토큰을 만료로 거절 - 다른 기기가 올린 새 토큰으로 바꿉니다.")
+            return cached
+        if time.time() - _LAST_ISSUED_AT < _REISSUE_COOLDOWN_SECONDS:
+            logger.error("KIS가 방금 발급한 토큰도 거절했습니다 - 다른 곳에서 같은 키로 토큰을 발급하고 있는지 확인하세요. %d초 동안 재발급하지 않습니다.", _REISSUE_COOLDOWN_SECONDS)
+            return None
+        logger.warning("KIS가 토큰을 만료로 거절 - 새 토큰을 발급합니다 (계좌 주인에게 알림 1회).")
+        return _get_access_token_locked(settings)
 
 
 # 국내 지수(코스피/코스닥) 현재가 조회

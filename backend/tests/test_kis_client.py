@@ -87,8 +87,9 @@ class KISClientTests(unittest.TestCase):
             "_wait_for_request_slot": lambda: None,
             # 실제 공유 토큰 DB(kis_token 테이블)를 절대 읽거나 쓰지 않도록 가짜 저장소로 바꾼다
             # (바꾸지 않으면 테스트용 가짜 토큰이 운영 DB에 저장돼 모든 서버의 KIS 호출이 실패한다)
-            "kis_token_store": SimpleNamespace(read=lambda now: None, write=lambda token, expires_at: False),
+            "kis_token_store": SimpleNamespace(read=lambda now: None, write=lambda token, expires_at: False, invalidate=lambda token: False),
             "_MEMORY_TOKEN": None,
+            "_LAST_ISSUED_AT": 0.0,
         }
         for attribute, replacement in replacements.items():
             context = patch.object(kis, attribute, replacement)
@@ -239,6 +240,28 @@ class KISClientTests(unittest.TestCase):
                 for call in self.http.get.call_args_list:
                     self.assertEqual(call.kwargs["headers"]["authorization"], "Bearer cached-test-token")
                 self.http.post.assert_not_called()
+
+    def test_expired_token_response_reissues_once_and_retries(self):
+        kis._write_cached_token("rejected-token", 3600)
+        kis._LAST_ISSUED_AT = 0.0
+        self.http.get.side_effect = [
+            response({"rt_cd": "1", "msg_cd": "EGW00123", "msg1": "기간이 만료된 token 입니다."}, 500),
+            response({"rt_cd": "0", "output": []}),
+        ]
+        self.http.post.return_value = response({"access_token": "fresh-token", "expires_in": 86400})
+        self.assertEqual(kis._get("/test", "TEST_TR", {})["output"], [])
+        self.http.post.assert_called_once()
+        self.assertEqual(self.http.get.call_args_list[1].kwargs["headers"]["authorization"], "Bearer fresh-token")
+        self.assertEqual(kis._read_cached_token(), "fresh-token")
+
+    def test_expired_token_right_after_issuing_does_not_issue_again(self):
+        kis._write_cached_token("rejected-token", 3600)
+        kis._LAST_ISSUED_AT = time.time()
+        self.http.get.return_value = response({"rt_cd": "1", "msg_cd": "EGW00123"}, 500)
+        with patch.object(kis.time, "sleep"):
+            with self.assertRaises(httpx.HTTPStatusError):
+                kis._get("/test", "TEST_TR", {})
+        self.http.post.assert_not_called()
 
     def test_persistent_throttling_stops_after_bounded_retries(self):
         kis._write_cached_token("cached-test-token", 3600)
