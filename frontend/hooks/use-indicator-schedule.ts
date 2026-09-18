@@ -25,7 +25,10 @@ function formatRemaining(ms: number) {
 export function useIndicatorSchedule(onTick?: () => void) {
   const [remaining, setRemaining] = useState<string>("--:--")
   const onTickRef = useRef(onTick)
-  onTickRef.current = onTick
+
+  useEffect(() => {
+    onTickRef.current = onTick
+  }, [onTick])
 
   useEffect(() => {
     let boundary = Date.now() + getMsUntilNextBoundary()

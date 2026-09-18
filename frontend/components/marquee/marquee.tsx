@@ -134,10 +134,23 @@ export default function TestimonialMarqueeDemo() {
     }
   }, [])
 
-  // 최초 진입 시 1회 실행
   useEffect(() => {
-    fetchTimelineIndicators()
-  }, [fetchTimelineIndicators])
+    let cancelled = false
+
+    getTimelineIndicators()
+      .then((data) => {
+        if (!cancelled) {
+          setItems(data.items)
+        }
+      })
+      .catch((error) => {
+        console.error("[getTimelineIndicators] 실패", error)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // 정시 기준 30분 간격마다 실행
   useIndicatorSchedule(fetchTimelineIndicators)

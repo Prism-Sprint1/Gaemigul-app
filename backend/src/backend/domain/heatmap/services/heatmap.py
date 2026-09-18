@@ -142,8 +142,13 @@ def _persist() -> None:
         temporary = _CACHE_PATH.with_suffix(".tmp")
         temporary.write_text(encoded, encoding="utf-8")
         temporary.replace(_CACHE_PATH)
-    except OSError:
-        _LOGGER.warning("히트맵 파일 캐시 저장에 실패했습니다. 메모리 데이터는 유지합니다.")
+    except OSError as error:
+        _LOGGER.warning(
+            "히트맵 파일 캐시 저장에 실패했습니다. 메모리 데이터는 유지합니다. "
+            "path=%s error=%s",
+            _CACHE_PATH,
+            error,
+        )
 
 
 def _session_overrides() -> dict:

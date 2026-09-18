@@ -1,14 +1,13 @@
-import "./globals.css"
 import localFont from "next/font/local"
-// import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils"
+import "./globals.css"
 
 import {
-  Footer,
   Header,
-  MobileSidebarProvider,
+  Footer,
   Sidebar,
+  MobileSidebarProvider,
 } from "@/components/common"
+import { cn } from "@/lib/utils"
 
 const pretendard = localFont({
   src: "../public/fonts/pretendard/PretendardVariable.woff2",
