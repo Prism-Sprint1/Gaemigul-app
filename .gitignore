@@ -1,2 +1,13 @@
 # macOS
 .DS_Store
+
+# 환경 변수·자격 증명 (절대 커밋하지 말 것. 템플릿은 backend/.env.example)
+.env
+.env.*
+!.env.example
+
+# 로컬 캐시 (KIS 토큰·히트맵 마스터)
+.cache/
+
+# 로그
+logs/
