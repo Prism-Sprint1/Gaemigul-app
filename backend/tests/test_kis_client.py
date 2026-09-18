@@ -85,6 +85,10 @@ class KISClientTests(unittest.TestCase):
             "_TOKEN_CACHE_PATH": root / "token.json",
             "_MASTER_CACHE_PATH": root / "masters",
             "_wait_for_request_slot": lambda: None,
+            # 실제 공유 토큰 DB(kis_token 테이블)를 절대 읽거나 쓰지 않도록 가짜 저장소로 바꾼다
+            # (바꾸지 않으면 테스트용 가짜 토큰이 운영 DB에 저장돼 모든 서버의 KIS 호출이 실패한다)
+            "kis_token_store": SimpleNamespace(read=lambda now: None, write=lambda token, expires_at: False),
+            "_MEMORY_TOKEN": None,
         }
         for attribute, replacement in replacements.items():
             context = patch.object(kis, attribute, replacement)

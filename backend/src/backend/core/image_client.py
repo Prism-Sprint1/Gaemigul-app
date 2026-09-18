@@ -1,5 +1,8 @@
-# Pollinations 이미지 생성. 보고서 배너는 1200x400, 모델은 POLLINATIONS_IMAGE_MODEL에서 변경한다.
-# 402 잔액 부족은 재시도하지 않는다. 서버 키는 Authorization 헤더에만 보낸다.
+# image_client.py
+# 이미지 생성·가공 (전 도메인 공용). 지금은 timeline 보고서 배너(1200x400)에 쓴다.
+#   generate_image      영어 그림 설명 -> Pollinations 이미지 바이트 (모델은 .env의 POLLINATIONS_IMAGE_MODEL)
+#   add_korean_labels   이미지 위에 한글 제목 간판·키워드 명패를 합성해 JPEG로 (이미지 모델은 한글을 정확히 못 쓴다)
+#   image_format        바이트의 파일 형식 -> (확장자, Content-Type)
 
 import time
 from io import BytesIO
@@ -11,14 +14,24 @@ from PIL import Image, ImageDraw, ImageFont
 
 from backend.core.config import get_settings
 
+# Pollinations 이미지 주소. 프롬프트는 경로에 URL 인코딩해서 넣고, 키(sk_)는 Authorization 헤더로만 보낸다
+# 응답은 이미지 바이트 그대로 온다. 401 키 오류 / 402 잔액 부족 / 429 한도 초과(Retry-After 헤더)
 _POLLINATIONS_ENDPOINT = "https://gen.pollinations.ai/image/{prompt}"
+
+# 결과 크기. 프런트 보고서 이미지 영역이 3:1이다. 바꾸면 add_korean_labels의 간판·명패 좌표도 다시 맞춰야 한다
 _WIDTH, _HEIGHT = 1200, 400
+
+# 요청 타임아웃(초 - 생성에 수십 초 걸릴 수 있다), 재시도 횟수, 대기(초, 시도마다 배수로 늘어남)
+# 429는 Retry-After 헤더만큼, 없으면 _RATE_LIMIT_WAIT_SECONDS x 시도 번호만큼 기다린다
 _POLLINATIONS_TIMEOUT_SECONDS = 180.0
 _RETRY_COUNT = 3
 _RETRY_WAIT_SECONDS = 1.0
 _RATE_LIMIT_WAIT_SECONDS = 5.0
+
+# 합성 결과 JPEG 품질. 올리면 선명하지만 파일이 커진다 (88에서 장당 약 80~100KB)
 _JPEG_QUALITY = 88
 
+# 한글 합성 폰트 후보 (경로, ttc 안의 글꼴 번호). 앞에서부터 있는 파일을 쓴다. 서버 OS에 맞는 굵은 한글 폰트를 추가한다
 _FONT_CANDIDATES = (
     ("/System/Library/Fonts/AppleSDGothicNeo.ttc", 14),  # ExtraBold
     ("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", 0),
@@ -26,7 +39,7 @@ _FONT_CANDIDATES = (
 )
 
 
-# 파일 시그니처로 확장자와 Content-Type을 정한다. 지원하지 않는 응답은 업로드하지 않는다.
+# 바이트 앞부분(파일 시그니처)으로 (확장자, Content-Type)을 정한다. JPEG·PNG·WEBP가 아니면 ValueError (업로드하지 않게)
 def image_format(content: bytes) -> tuple[str, str]:
     if content.startswith(b"\xff\xd8\xff"):
         return "jpg", "image/jpeg"
@@ -37,6 +50,7 @@ def image_format(content: bytes) -> tuple[str, str]:
     raise ValueError("지원하지 않는 이미지 형식입니다")
 
 
+# 크기에 맞는 한글 폰트. 후보가 하나도 없으면 RuntimeError
 def _korean_font(size: int) -> ImageFont.FreeTypeFont:
     for candidate, index in _FONT_CANDIDATES:
         if Path(candidate).exists():
@@ -44,6 +58,7 @@ def _korean_font(size: int) -> ImageFont.FreeTypeFont:
     raise RuntimeError("한글 이미지 합성 폰트가 없습니다. Noto Sans CJK Bold를 설치해주세요.")
 
 
+# 글자가 width x height 안에 들어가는 가장 큰 폰트 (maximum부터 1씩 줄이고, 끝까지 안 들어가면 12)
 def _fit_font(draw: ImageDraw.ImageDraw, text: str, width: int, height: int, maximum: int) -> ImageFont.FreeTypeFont:
     for size in range(maximum, 11, -1):
         font = _korean_font(size)
@@ -53,6 +68,7 @@ def _fit_font(draw: ImageDraw.ImageDraw, text: str, width: int, height: int, max
     return _korean_font(12)
 
 
+# box 가운데에 글자를 그린다. 안쪽 여백을 뺀 크기에 맞춰 폰트를 줄인다
 def _draw_centered_text(
     draw: ImageDraw.ImageDraw,
     text: str,
@@ -71,8 +87,8 @@ def _draw_centered_text(
     draw.text((x, y), text, font=font, fill=ink)
 
 
+# box 자리에 목재 명패를 그린다 (그림자·테두리·나뭇결). pegs=True면 양쪽 위에 못 장식 (제목 간판용)
 def _draw_wood_plaque(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], *, radius: int, pegs: bool) -> None:
-    """제목과 키워드를 같은 계열의 입체 목재 명패로 그린다."""
     left, top, right, bottom = box
     draw.rounded_rectangle((left + 5, top + 7, right + 5, bottom + 7), radius=radius, fill=(72, 42, 25))
     draw.rounded_rectangle(box, radius=radius, fill=(228, 181, 121), outline=(137, 83, 43), width=3)
@@ -87,8 +103,9 @@ def _draw_wood_plaque(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int],
             draw.ellipse((x - 5, top + 10, x + 5, top + 20), fill=(114, 67, 38), outline=(82, 47, 28), width=1)
 
 
+# 제목 간판 위치 (왼쪽, 위, 오른쪽, 아래). 폭은 제목 길이에 맞추고(최소 300px), 화면 양끝 64px·글자 좌우 28px 여백을 둔다
+# 높이 58~72px, 위 12px. 바꾸면 prompts.IMAGE_STYLE의 "upper 82 pixels"(비워 둘 윗부분)도 같이 맞춘다
 def _title_box(draw: ImageDraw.ImageDraw, headline: str) -> tuple[int, int, int, int]:
-    """제목 길이에 맞추되 화면·글자 양쪽에 일정한 여백을 둔 작은 목재 간판을 계산한다."""
     side_margin = 64
     horizontal_padding = 28
     max_width = _WIDTH - side_margin * 2
@@ -102,8 +119,8 @@ def _title_box(draw: ImageDraw.ImageDraw, headline: str) -> tuple[int, int, int,
     return left, 12, left + width, 12 + height
 
 
+# 모델이 아래쪽에 흰 띠를 남기면(250px 아래에서 거의 흰 줄이 4줄 연속) 띠 위 장면만 잘라 전체 크기로 늘린다. 띠가 없으면 그대로
 def _fill_frame_with_scene(image: Image.Image) -> Image.Image:
-    """모델이 만든 흰 하단 띠를 감지하면 띠 위 장면을 세로로 확장해 프레임 전체를 채운다."""
     pixels = image.load()
     white_start = None
     consecutive = 0
@@ -119,8 +136,11 @@ def _fill_frame_with_scene(image: Image.Image) -> Image.Image:
     return image.crop((0, 0, _WIDTH, max(260, white_start))).resize((_WIDTH, _HEIGHT), Image.Resampling.LANCZOS)
 
 
+# 이미지 위에 한글 제목 간판(위)과 키워드 명패(아래, 최대 4개)를 합성해 JPEG 바이트로 돌려준다
+#   headline  제목 (길이에 맞춰 간판 폭·글자 크기가 바뀐다)
+#   labels    키워드. 빈 값은 건너뛰고 앞에서 4개만 쓴다. 명패는 가로 240px, y=332에 가운데 정렬
+# 이미지를 읽지 못하면 PIL 예외(OSError 계열)가 난다
 def add_korean_labels(content: bytes, *, headline: str, labels: list[str]) -> bytes:
-    """Pollinations 결과 위에 고정 레이아웃 한글 간판을 합성해 압축 JPEG로 반환한다."""
     image = Image.open(BytesIO(content)).convert("RGB")
     if image.size != (_WIDTH, _HEIGHT):
         image = image.resize((_WIDTH, _HEIGHT), Image.Resampling.LANCZOS)
@@ -149,7 +169,9 @@ def add_korean_labels(content: bytes, *, headline: str, labels: list[str]) -> by
     return output.getvalue()
 
 
-# 그림 설명으로 이미지 바이트를 만든다. 5xx·429·연결 오류만 재시도한다.
+# 영어 그림 설명으로 이미지를 만들어 바이트로 돌려준다 (글자는 넣지 않는다 - 한글은 add_korean_labels로 합성)
+# 5xx·429·연결 오류는 재시도하고 나머지 4xx(402 잔액 부족 포함)는 바로 에러를 낸다
+# 키가 없으면 RuntimeError, 응답이 이미지가 아니면 ValueError
 def generate_image(prompt: str) -> bytes:
     settings = get_settings()
     if not settings.pollinations_api_key:

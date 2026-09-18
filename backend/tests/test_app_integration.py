@@ -84,13 +84,15 @@ class AppIntegrationTests(unittest.IsolatedAsyncioTestCase):
             for collector in self.collectors:
                 collector.assert_not_called()
             for job in jobs.values():
-                self.assertEqual(str(job.trigger.timezone), "Asia/Seoul")
+                # OrTrigger(시장심리 09:00~15:00 + 15:35)는 하위 CronTrigger들의 시간대를 확인한다
+                for trigger in getattr(job.trigger, "triggers", [job.trigger]):
+                    self.assertEqual(str(trigger.timezone), "Asia/Seoul")
             for name in expected - {"timeline_reports", *(f"slot_{key}" for key in main.timeline_service.SLOT_COLLECT_TIMES)}:
                 self.assertIsNotNone(jobs[name].next_run_time)
             self.assertTrue(inspect.iscoroutinefunction(jobs["slot_1530"].func))
             self.assertTrue(inspect.iscoroutinefunction(jobs["timeline_reports"].func))
             base = datetime(2026, 9, 17, 0, 0, tzinfo=ZoneInfo("Asia/Seoul"))
-            for name, expected_time in (("slot_1530", (15, 34, 0)), ("timeline_reports", (20, 5, 0)), ("heatmap", (0, 0, 30))):
+            for name, expected_time in (("slot_1530", (15, 34, 0)), ("timeline_reports", (20, 10, 0)), ("heatmap", (0, 0, 30))):
                 when = jobs[name].trigger.get_next_fire_time(None, base)
                 self.assertEqual((when.hour, when.minute, when.second), expected_time)
         self.assertTrue(scheduler.stopped)

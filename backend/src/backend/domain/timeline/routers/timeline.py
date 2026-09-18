@@ -1,12 +1,15 @@
 # timeline.py
 # timeline 도메인의 API 엔드포인트. 실제 처리는 services에 있고 여기서는 연결만 한다.
+# GET은 누구나 부를 수 있고, 수집·보고서 생성 POST는 관리용 키가 있어야 한다 (require_admin_key)
 
+import secrets
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.config import get_settings
 from backend.core.database import get_db
 
 from backend.domain.timeline.schemas.market_indicator import IndicatorBarResponse
@@ -17,6 +20,18 @@ from backend.domain.timeline.services import glossary, market_indicator_service,
 _KST = ZoneInfo("Asia/Seoul")
 
 router = APIRouter(prefix="/timeline", tags=["timeline"])
+
+
+# 관리용 POST 앞에서 호출 권한을 확인한다 (한 번 부를 때마다 KIS·제미나이·이미지 생성 비용이 든다)
+#   요청 헤더 X-Admin-Key == .env의 ADMIN_API_KEY 여야 한다. 다르면 401
+#   서버에 키가 없으면 503으로 막는다 (배포 주소가 공개된 상태에서 열려 있는 것을 막기 위해)
+# 키를 바꾸려면 .env를 고치고 서버를 재시작한다
+def require_admin_key(x_admin_key: str = Header(default="", alias="X-Admin-Key")) -> None:
+    expected = get_settings().admin_api_key
+    if not expected:
+        raise HTTPException(status_code=503, detail="ADMIN_API_KEY가 서버에 없어 이 작업을 쓸 수 없습니다.")
+    if not secrets.compare_digest(x_admin_key, expected):
+        raise HTTPException(status_code=401, detail="X-Admin-Key 헤더가 올바르지 않습니다.")
 
 
 # GET /timeline/indicators - 최상단 지표 바. 캐시만 읽는다
@@ -40,7 +55,7 @@ async def get_day(date_: date | None = Query(default=None, alias="date"), sessio
 
 # POST /timeline/collect/{slot_key} - 슬롯을 수집해서 DB에 저장 (스케줄러 동작을 수동 실행)
 # 같은 날 같은 슬롯이 있으면 덮어쓴다. ?with_briefing=false면 LLM 생략, ?trade_date=로 날짜 지정
-@router.post("/collect/{slot_key}", response_model=TimelineSlotResponse)
+@router.post("/collect/{slot_key}", response_model=TimelineSlotResponse, dependencies=[Depends(require_admin_key)])
 async def collect_slot(slot_key: str, with_briefing: bool = True, trade_date: date | None = None, session: AsyncSession = Depends(get_db)) -> TimelineSlotResponse:
     try:
         return await timeline_service.collect_and_save(session, slot_key, trade_date=trade_date, with_briefing=with_briefing)
@@ -72,14 +87,14 @@ async def get_report_list(year: int = Query(ge=2000, le=2100), month: int = Quer
 # POST /timeline/report/daily?date=2026-09-14 - 일간 보고서 생성·저장 (스케줄러 동작을 수동 실행). date를 빼면 오늘
 # 같은 날 보고서가 있으면 고쳐 쓴다. LLM·이미지 포함 10~20초 걸린다
 # 주의: 섹터 카드의 상승 종목 수는 그날 다음 개장 전까지만 채워진다
-@router.post("/report/daily", response_model=ReportResponse)
+@router.post("/report/daily", response_model=ReportResponse, dependencies=[Depends(require_admin_key)])
 async def create_daily_report(date_: date | None = Query(default=None, alias="date"), session: AsyncSession = Depends(get_db)) -> ReportResponse:
     return report_service.to_response(await report_service.generate_daily(session, date_))
 
 
 # POST /timeline/report/weekly?date=2026-09-14 - date가 속한 주의 주간 보고서 생성·저장. date를 빼면 이번 주
 # 그 주 일간 보고서가 없으면 404
-@router.post("/report/weekly", response_model=ReportResponse)
+@router.post("/report/weekly", response_model=ReportResponse, dependencies=[Depends(require_admin_key)])
 async def create_weekly_report(date_: date | None = Query(default=None, alias="date"), session: AsyncSession = Depends(get_db)) -> ReportResponse:
     report = await report_service.generate_weekly(session, date_)
     if report is None:

@@ -1,11 +1,11 @@
 # report_service.py
 # 일간·주간 보고서를 만든다. 수치 수집(report_data_service) -> LLM 문구 -> 자동 검사(text_review) -> 이미지 -> 저장(report_repository).
-#   generate_daily           일간 보고서 생성·저장 (20:00 슬롯 직후, POST /timeline/report/daily)
+#   generate_daily           일간 보고서 생성·저장 (20:10 예약 작업, POST /timeline/report/daily)
 #   generate_weekly          주간 보고서 생성·저장 (그 주 마지막 거래일 일간 보고서 직후, POST /timeline/report/weekly)
 #   get_report               날짜로 보고서 조회 (GET /timeline/report)
 #   get_report_list          월별 보고서 목록 - 주 묶음 (GET /timeline/reports)
 #   to_response              DB 보고서 -> 응답 DTO (비율·증감률·VKOSPI 뱃지 계산 포함)
-#   run_scheduled_reports    20:05 전용 예약 작업이 부른다 (휴장일·마지막 거래일 판단 + 실패 로깅)
+#   run_scheduled_reports    20:10 예약 작업이 부른다. 일간을 만들고, 그 주 마지막 거래일이면 바로 이어서 주간 (휴장일 판단 + 실패 로깅)
 #
 # LLM 문구는 타임라인 브리핑과 같은 원칙으로 만든다
 #   먼저 수치를 저장하고, 그 수치를 [확정 수치]로, 타임라인 글·뉴스를 따로 나눠 넘겨 없는 숫자를 만들지 못하게 한다
@@ -299,27 +299,33 @@ def _generate_content(report_type: str, start_date: date, end_date: date, data: 
     content["terms"] = _pick_terms(content, answer.get("terms") or [])
     return {
         "content": content,
-        "main_scene": _image_scene(answer.get("main_image"), f"{report_type} {start_date} main", content["summary"], role="main", layout_index=start_date.toordinal()),
+        # 메인 이미지의 코스피 방향은 제목과 핵심 요약을 함께 보고 정한다 (요약에 방향 표현이 없고 제목에만 "약보합"이 있는 날이 있다)
+        "main_scene": _image_scene(answer.get("main_image"), f"{report_type} {start_date} main", f"{content['title']} {content['summary']}", role="main", layout_index=start_date.toordinal()),
         "section1_scene": _image_scene(answer.get("section1_image"), f"{report_type} {start_date} section1", content["sections"][0]["description"], role="section1", layout_index=start_date.toordinal()),
-        "main_annotations": _image_annotations(answer.get("main_image"), content["summary"], content["title"], role="main"),
+        "main_annotations": _image_annotations(answer.get("main_image"), f"{content['title']} {content['summary']}", content["title"], role="main"),
         "section1_annotations": _image_annotations(answer.get("section1_image"), content["sections"][0]["description"], content["sections"][0]["title"], role="section1"),
     }
 
 
-# 문구에서 코스피의 직접적인 등락 표현만 찾는다. 모호하거나 상반되면 방향을 그리지 않는다.
-# 한국어 원문·양방향 예시를 이미지 모델에 보내지 않고 확정한 영어 지시 하나만 보낸다.
+# 보고서 문구에서 코스피 방향을 찾는다 -> "up" / "down" / "flat" / None
+# "코스피(지수)가 … 하락/상승/보합" 처럼 코스피 바로 뒤(숫자·정도 표현만 사이에 허용)의 등락 표현만 본다
+# 보합(약보합·강보합 포함) 표현이 있으면 "flat"이 우선한다 ("약보합 … 0.04% 하락"처럼 작은 등락과 같이 쓰이기 때문)
+# 보합 없이 상승·하락이 둘 다 나오거나 하나도 없으면 None (이미지에 차트·코스피 명패를 넣지 않는다)
 def _image_market_direction(source_text: str) -> str | None:
     matches = re.findall(
         r"(?:코스피|KOSPI)(?:지수| 지수)?(?:가|는|은|도)?\s*"
         r"(?:[0-9.,%]+|포인트|넘게|넘는|이상|이하|가까이|약|대|큰\s*폭으로|소폭|크게|\s){0,30}"
-        r"(하락|급락|약세|내렸|떨어졌|상승|급등|강세|반등|회복|올랐)",
+        r"(약보합|강보합|보합|하락|급락|약세|내렸|떨어졌|상승|급등|강세|반등|회복|올랐)",
         source_text, re.IGNORECASE,
     )
-    directions = {"down" if value in {"하락", "급락", "약세", "내렸", "떨어졌"} else "up" for value in matches}
+    directions = {"flat" if "보합" in value else "down" if value in {"하락", "급락", "약세", "내렸", "떨어졌"} else "up" for value in matches}
+    if "flat" in directions:
+        return "flat"
     return next(iter(directions)) if len(directions) == 1 else None
 
 
-# 원문에 있는 표현만 짧은 한글 라벨로 쓴다. 근거가 없으면 방향 없는 소재명으로 둔다.
+# 섹션1 이미지의 원인 소재 이름 -> 짧은 한글 명패 문구
+# 금리·유가는 원문에 방향 표현이 있을 때만 "유가 상승"처럼 붙이고, 나머지는 소재명 앞부분만 쓴다 ("철강·금속" -> "철강")
 def _image_prop_label(name: str, source_text: str) -> str:
     if name == "금리·연준·중앙은행":
         if "금리 인상 우려" in source_text:
@@ -334,13 +340,16 @@ def _image_prop_label(name: str, source_text: str) -> str:
     return {"인공지능(AI)": "인공지능", "환율·달러": "환율", "국채·채권": "국채"}.get(name, name.split("·")[0])
 
 
+# 이미지에 합성할 한글 {headline: 간판 제목, labels: 명패 문구 최대 4개} (image_client.add_korean_labels 입력)
+#   main      제목 = 보고서 제목, 명패 = 코스피 방향(있을 때) + 외국인 매도/매수(LLM이 골랐을 때)
+#   section1  제목 = 섹션1 제목, 명패 = 원인 소재 (최대 _IMAGE_SYMBOL_COUNT개)
 def _image_annotations(plan, source_text: str, headline: str, *, role: str = "main") -> dict:
     plan = plan if isinstance(plan, dict) else {}
     names = list(dict.fromkeys(name for name in (plan.get("symbols") or []) if name in prompts.IMAGE_SYMBOLS))[:_IMAGE_SYMBOL_COUNT]
     labels = []
     direction = _image_market_direction(source_text)
     if role == "main" and direction:
-        labels.append("코스피 하락" if direction == "down" else "코스피 상승")
+        labels.append({"down": "코스피 하락", "up": "코스피 상승", "flat": "코스피 보합"}[direction])
     if role != "main":
         labels.extend(_image_prop_label(name, source_text) for name in names)
     flow = plan.get("flow")
@@ -349,7 +358,10 @@ def _image_annotations(plan, source_text: str, headline: str, *, role: str = "ma
     return {"headline": headline, "labels": list(dict.fromkeys(labels))[:4]}
 
 
-# 기존 LLM의 소재·흐름·분위기 키 유지. Pollinations에는 글자 없는 영어 장면만 보내며 추가 LLM 호출은 없다.
+# LLM이 고른 이미지 재료 {"symbols": [원인 소재 이름], "flow": 자금 흐름 이름, "mood": 분위기 이름} -> 영어 그림 설명 (글자 없음)
+#   role          "main" = 시장 결과·자금 흐름 장면 (원인 소품 없음, 코스피 방향 화살표) / "section1" = 원인 소품을 살펴보는 장면
+#   layout_index  공간 구성 순번. 날짜 서수를 넘겨 prompts.IMAGE_MAIN_LAYOUTS·IMAGE_SECTION_LAYOUTS를 날짜마다 돌려 쓴다 (연속 거래일에 같은 방이 반복되지 않게)
+# 목록에 없는 이름은 버리고(경고) 기본값을 쓴다. 메인 차트는 상승 빨강 화살표·하락 파랑 화살표·보합 회색 수평 직선
 def _image_scene(plan, label: str, source_text: str = "", *, role: str = "main", layout_index: int = 0) -> str:
     plan = plan if isinstance(plan, dict) else {}
     picked = [name for name in plan.get("symbols") or [] if isinstance(name, str)]
@@ -370,6 +382,8 @@ def _image_scene(plan, label: str, source_text: str = "", *, role: str = "main",
     direction = _image_market_direction(source_text) if role == "main" else None
     if direction == "down":
         scene += " On the wall behind the main person, one precisely drawn closed rectangular wooden frame contains exactly ONE thick BLUE zigzag arrow descending from upper left to lower right, ending at the bottom right. All four straight frame borders and all four corners must be fully visible and connected. Keep the entire arrow line and arrowhead inside the cream panel with generous inner padding on every side; it must never touch, overlap, cross or protrude beyond the rectangular border. The main person looks mildly worried. This single blue arrow is the only saturated color. The panel has a plain cream surface with no grid or writing."
+    elif direction == "flat":
+        scene += " On the wall behind the main person, one precisely drawn closed rectangular wooden frame of medium size, about one quarter of the image width with roughly 4:3 proportions, contains exactly ONE thick GRAY sculpted clay arrow pointing straight to the right, perfectly level across the middle of the panel, ending at the right side. All four straight frame borders and all four corners must be fully visible and connected. Keep the entire arrow line and arrowhead inside the cream panel with generous inner padding on every side; it must never touch, overlap, cross or protrude beyond the rectangular border. The arrow has no zigzag, no slope, no rise and no fall. The main person looks calm. This single gray arrow is the only chart accent, with no red or blue anywhere. The panel has a plain cream surface with no grid or writing."
     elif direction == "up":
         scene += " On the wall behind the main person, one precisely drawn closed rectangular wooden frame contains exactly ONE thick RED zigzag arrow ascending from lower left to upper right, ending at the top right. All four straight frame borders and all four corners must be fully visible and connected. Keep the entire arrow line and arrowhead inside the cream panel with generous inner padding on every side; it must never touch, overlap, cross or protrude beyond the rectangular border. The main person looks gently hopeful. This single red arrow is the only saturated color. The panel has a plain cream surface with no grid or writing."
     else:
@@ -387,8 +401,9 @@ def _image_scene(plan, label: str, source_text: str = "", *, role: str = "main",
     return scene
 
 
-# 그림 설명으로 이미지를 만들어 고정된 보고서 파일명으로 올리고 공개 URL을 돌려준다 (동기). 실패하면 None
-# 같은 파일을 교체할 때 DB URL의 버전 쿼리를 바꿔 CDN의 이전 이미지 캐시를 피한다.
+# 그림 설명으로 이미지를 만들고 한글을 합성해 올린 뒤 공개 URL을 돌려준다 (동기). 실패하면 None (OSError = 한글 합성 중 이미지 읽기 실패)
+# 파일명은 "{종류}/{날짜}/{main|section1}_{종류}_{YYYYMMDD}.jpg"로 고정하고, URL 끝에 ?v=생성시각을 붙인다
+#   같은 경로에 덮어쓰면 CDN 캐시 때문에 한동안 옛 이미지가 보이므로, 버전 쿼리가 바뀌어야 새 이미지가 보인다
 def _make_image(scene: str, report_type: str, start_date: date, name: str, annotations: dict | None = None) -> str | None:
     if not scene:
         logger.warning("%s %s %s 이미지 그림 설명이 없어 건너뜁니다.", report_type, start_date, name)
@@ -402,7 +417,7 @@ def _make_image(scene: str, report_type: str, start_date: date, name: str, annot
         path = f"{report_type.lower()}/{start_date}/{name}_{report_type.lower()}_{start_date:%Y%m%d}.{extension}"
         public_url = storage_client.upload_file(_IMAGE_BUCKET, path, image, content_type)
         return f"{public_url}?v={generated_at:%Y%m%d%H%M%S%f}"
-    except (RuntimeError, KeyError, ValueError, httpx.HTTPError) as error:
+    except (RuntimeError, KeyError, ValueError, OSError, httpx.HTTPError) as error:
         logger.warning("%s %s %s 이미지 생성·업로드 실패 - %s: %s", report_type, start_date, name, type(error).__name__, error)
         return None
 

@@ -10,8 +10,7 @@ _TOP_COUNT = 3
 # 슬롯별 조회 방식. slot_key -> 방식 (그 시간대에 거래되는 시장 중 종목이 가장 넓은 곳을 쓴다)
 #   "nxt"      : 넥스트레이드 등락률 순위 - 08:30 프리마켓 (KRX는 프리마켓이 없다)
 #   "krx"      : 한국거래소 등락률 순위 - 17:30·20:00 애프터마켓 (16:00~20:00, 코스피·코스닥 전 종목. NXT는 600여 종목)
-#   "expected" : KRX 장전 동시호가 예상체결 순위 (08:30 대체 수단)
-# 08:30 NXT 값이 비면 "0830"을 "expected"로 바꾼다. KRX 프리마켓이 열리면 "0830"도 "krx"로 옮길지 검토한다
+# KRX 프리마켓이 열리면 "0830"도 "krx"로 옮길지 검토한다
 # 여기 없는 슬롯은 급상승 종목을 넣지 않는다. 바꾸면 prompts.SLOT_FOCUS와 BRIEFING_PROMPT의 시장 이름도 같이 고친다
 SOURCE_BY_SLOT = {
     "0830": "nxt",
@@ -52,8 +51,5 @@ def collect(slot_key: str) -> list[dict]:
     source = SOURCE_BY_SLOT.get(slot_key)
     if source is None:
         return []
-
-    if source == "expected":
-        return _to_rows(kis_client.get_expected_ranking(market_open_code="0", rank_sort_code="0"))
 
     return _to_rows(kis_client.get_fluctuation_ranking(sector_code="0000", market_div_code=_MARKET_BY_SOURCE[source]))

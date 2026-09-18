@@ -31,10 +31,9 @@ _SLOT_KEYWORDS = {
     "20:00": ["증시 전망", "시황", "내일 증시", "코스피", "글로벌 증시"],
 }
 
-# 검색어 하나당 받아올 기사 수 (기본값 / 슬롯별 예외). 네이버 API 최대값이 100이다
+# 검색어 하나당 받아올 기사 수. 네이버 API 최대값이 100이다
 # 호출 1번에 받는 건수라 늘려도 호출 수(한도 기준)는 그대로다. 30건일 때 오후 슬롯은 구간 안 후보가 3~4건뿐이었다(9/15 15:30)
-_FETCH_PER_KEYWORD_DEFAULT = 100
-_FETCH_PER_KEYWORD: dict[str, int] = {}
+_FETCH_PER_KEYWORD = 100
 
 # 슬롯별 뉴스 구간 시작. (시작 시각, 전날인지) - 끝은 그 슬롯 시각이다
 # 구간은 [시작, 끝)이라 슬롯끼리 겹치지도 비지도 않는다 (07:30 슬롯 = 전날 20:00 ~ 07:29)
@@ -177,7 +176,7 @@ def collect(time_slot: str, *, limit: int = _PICK_MAX, trade_date: date | None =
     # 정렬은 sim(정확도순)이어야 한다. date(최신순)는 검색어와 무관한 기사가 섞인다
     collected: dict[str, dict] = {}
     for keyword in _SLOT_KEYWORDS[time_slot]:
-        for rank, item in enumerate(naver_client.search_news(keyword, display=_FETCH_PER_KEYWORD.get(time_slot, _FETCH_PER_KEYWORD_DEFAULT), sort="sim")["items"]):
+        for rank, item in enumerate(naver_client.search_news(keyword, display=_FETCH_PER_KEYWORD, sort="sim")["items"]):
             # 네이버 뉴스 주소(link)를 쓰고 없으면 언론사 원문(originallink)
             url = item["link"] or item["originallink"]
             if not url:
