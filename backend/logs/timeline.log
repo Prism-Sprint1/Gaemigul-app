@@ -1,0 +1,1572 @@
+2026-09-18 10:28:45 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 10:28:46 WARNING main                   | KIS 키가 없어 시세 수집을 시작하지 않습니다. 저장된 데이터와 API는 사용할 수 있습니다.
+2026-09-18 10:28:46 WARNING main                   | 등록된 예약 작업이 없습니다. .env의 KIS 키와 DATABASE_URL을 확인해주세요.
+2026-09-18 10:28:47 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 10:28:47 WARNING main                   | KIS 키가 없어 시세 수집을 시작하지 않습니다. 저장된 데이터와 API는 사용할 수 있습니다.
+2026-09-18 10:28:47 WARNING main                   | 등록된 예약 작업이 없습니다. .env의 KIS 키와 DATABASE_URL을 확인해주세요.
+2026-09-18 13:28:29 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 13:28:30 WARNING main                   | KIS 키가 없어 시세 수집을 시작하지 않습니다. 저장된 데이터와 API는 사용할 수 있습니다.
+2026-09-18 13:28:30 WARNING main                   | 등록된 예약 작업이 없습니다. .env의 KIS 키와 DATABASE_URL을 확인해주세요.
+2026-09-18 13:44:20 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 13:44:21 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 13:44:21 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 13:44:22 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 14:00:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 147, in refresh
+    await _save_snapshot(sampled_at, current)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 77, in _save_snapshot
+    existing = await session.scalar(
+               ^^^^^^^^^^^^^^^^^^^^^
+        select(ExchangeRateSnapshot).where(ExchangeRateSnapshot.sampled_at == sampled_at)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 504, in scalar
+    return await greenlet_spawn(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2421, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2261, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2113, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1191, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<22 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.InternalServerError: (EMAXCONNSESSION) max clients reached in session mode - max clients are limited to pool_size: 15
+2026-09-18 13:44:23 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-17 (14개)
+2026-09-18 13:44:25 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.4점 (2026-09-18)
+2026-09-18 13:44:30 WARNING base                   | Execution of job "refresh_all (trigger: cron[second='30'], next run at: 2026-09-18 13:44:30 KST)" skipped: maximum number of running instances reached (1)
+2026-09-18 13:45:25 INFO    main                   | 스케줄러 종료
+2026-09-18 13:45:30 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 13:45:30 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 13:45:30 INFO    main                   | 스케줄러 종료
+2026-09-18 13:45:31 ERROR   base                   | Error running job market_trading_value
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:45:31 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 13:45:31 ERROR   base                   | Error running job market_vix
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:45:31 ERROR   base                   | Error running job market_session
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:45:31 ERROR   base                   | Error running job indicator_bar
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:45:31 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 14:00:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 141, in refresh
+    raw_current = await asyncio.to_thread(kis_client.get_overseas_index_or_fx_price, _MARKET_DIV, _SYMBOL)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\threads.py", line 26, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+2026-09-18 13:45:31 ERROR   base                   | Error running job heatmap
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:45:32 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-17 (14개)
+2026-09-18 13:45:33 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.6점 (2026-09-18)
+2026-09-18 13:45:38 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 13:45:38 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 13:45:39 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 13:45:40 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-17 (14개)
+2026-09-18 13:45:41 INFO    exchange_rate_service  | 원/달러 환율 갱신 완료 - 1386.10 (오늘 8, 5일 8, 월간 8개)
+2026-09-18 13:45:47 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 13:45:48 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 13:45:48 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 13:45:49 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-17 (14개)
+2026-09-18 13:45:50 INFO    exchange_rate_service  | 원/달러 환율 갱신 완료 - 1386.10 (오늘 8, 5일 8, 월간 8개)
+2026-09-18 13:45:51 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.1점 (2026-09-18)
+2026-09-18 13:46:18 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 13:46:19 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 13:46:19 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 13:46:21 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-17 (14개)
+2026-09-18 13:46:21 INFO    exchange_rate_service  | 원/달러 환율 갱신 완료 - 1386.10 (오늘 8, 5일 8, 월간 8개)
+2026-09-18 13:46:22 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.0점 (2026-09-18)
+2026-09-18 13:47:09 INFO    main                   | 스케줄러 종료
+2026-09-18 13:47:14 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 13:47:14 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 13:47:15 INFO    main                   | 스케줄러 종료
+2026-09-18 13:47:15 ERROR   base                   | Error running job market_vix
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:47:15 ERROR   base                   | Error running job market_session
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:47:15 ERROR   base                   | Error running job indicator_bar
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:47:15 ERROR   base                   | Error running job heatmap
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:47:15 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 13:47:15 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 14:00:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 141, in refresh
+    raw_current = await asyncio.to_thread(kis_client.get_overseas_index_or_fx_price, _MARKET_DIV, _SYMBOL)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\threads.py", line 26, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+2026-09-18 13:47:15 ERROR   base                   | Error running job market_trading_value
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:47:16 INFO    investor_flow_service  | 투자자 수급 갱신 완료 - 개인 -2,684,762 / 기관 +1,045,253 / 외국인 +298,622백만원 (2026-09-18)
+2026-09-18 13:47:16 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-17 (14개)
+2026-09-18 13:47:18 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.7점 (2026-09-18)
+2026-09-18 13:47:21 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 13:47:22 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 13:47:23 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 13:47:24 INFO    investor_flow_service  | 투자자 수급 갱신 완료 - 개인 -2,684,762 / 기관 +1,045,253 / 외국인 +298,622백만원 (2026-09-18)
+2026-09-18 13:47:24 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-17 (14개)
+2026-09-18 13:47:24 INFO    exchange_rate_service  | 원/달러 환율 갱신 완료 - 1385.80 (오늘 8, 5일 8, 월간 8개)
+2026-09-18 13:47:26 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.7점 (2026-09-18)
+2026-09-18 13:51:08 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 13:51:09 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 13:51:09 INFO    main                   | 스케줄러 종료
+2026-09-18 13:51:09 ERROR   base                   | Error running job market_session
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 173, in startup
+    server = await loop.create_server(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 1638, in create_server
+    raise OSError(err.errno, msg) from None
+OSError: [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] 각 소켓 주소(프로토콜/네트워크 주소/포트)는 하나만 사용할 수 있습니다
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 707, in run_until_complete
+    self.run_forever()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 678, in run_forever
+    self._run_once()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 2057, in _run_once
+    handle._run()
+    ~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 81, in serve
+    await self._serve(sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 96, in _serve
+    await self.startup(sockets=sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 183, in startup
+    sys.exit(STARTUP_FAILURE)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+SystemExit: 3
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:51:09 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 13:51:09 ERROR   base                   | Error running job market_vix
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 173, in startup
+    server = await loop.create_server(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 1638, in create_server
+    raise OSError(err.errno, msg) from None
+OSError: [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] 각 소켓 주소(프로토콜/네트워크 주소/포트)는 하나만 사용할 수 있습니다
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 707, in run_until_complete
+    self.run_forever()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 678, in run_forever
+    self._run_once()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 2057, in _run_once
+    handle._run()
+    ~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 81, in serve
+    await self._serve(sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 96, in _serve
+    await self.startup(sockets=sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 183, in startup
+    sys.exit(STARTUP_FAILURE)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+SystemExit: 3
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:51:09 ERROR   base                   | Error running job heatmap
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 173, in startup
+    server = await loop.create_server(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 1638, in create_server
+    raise OSError(err.errno, msg) from None
+OSError: [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] 각 소켓 주소(프로토콜/네트워크 주소/포트)는 하나만 사용할 수 있습니다
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 707, in run_until_complete
+    self.run_forever()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 678, in run_forever
+    self._run_once()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 2057, in _run_once
+    handle._run()
+    ~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 81, in serve
+    await self._serve(sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 96, in _serve
+    await self.startup(sockets=sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 183, in startup
+    sys.exit(STARTUP_FAILURE)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+SystemExit: 3
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:51:09 ERROR   base                   | Error running job indicator_bar
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 173, in startup
+    server = await loop.create_server(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 1638, in create_server
+    raise OSError(err.errno, msg) from None
+OSError: [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] 각 소켓 주소(프로토콜/네트워크 주소/포트)는 하나만 사용할 수 있습니다
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 707, in run_until_complete
+    self.run_forever()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 678, in run_forever
+    self._run_once()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 2057, in _run_once
+    handle._run()
+    ~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 81, in serve
+    await self._serve(sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 96, in _serve
+    await self.startup(sockets=sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 183, in startup
+    sys.exit(STARTUP_FAILURE)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+SystemExit: 3
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:51:09 ERROR   base                   | Error running job market_trading_value
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 173, in startup
+    server = await loop.create_server(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 1638, in create_server
+    raise OSError(err.errno, msg) from None
+OSError: [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] 각 소켓 주소(프로토콜/네트워크 주소/포트)는 하나만 사용할 수 있습니다
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 707, in run_until_complete
+    self.run_forever()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 678, in run_forever
+    self._run_once()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 2057, in _run_once
+    handle._run()
+    ~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 81, in serve
+    await self._serve(sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 96, in _serve
+    await self.startup(sockets=sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 183, in startup
+    sys.exit(STARTUP_FAILURE)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+SystemExit: 3
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 35, in callback
+    events = f.result()
+asyncio.exceptions.CancelledError
+2026-09-18 13:51:09 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 14:00:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 173, in startup
+    server = await loop.create_server(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 1638, in create_server
+    raise OSError(err.errno, msg) from None
+OSError: [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] 각 소켓 주소(프로토콜/네트워크 주소/포트)는 하나만 사용할 수 있습니다
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 707, in run_until_complete
+    self.run_forever()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 678, in run_forever
+    self._run_once()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 2057, in _run_once
+    handle._run()
+    ~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 81, in serve
+    await self._serve(sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 96, in _serve
+    await self.startup(sockets=sockets)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\uvicorn\server.py", line 183, in startup
+    sys.exit(STARTUP_FAILURE)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+SystemExit: 3
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 141, in refresh
+    raw_current = await asyncio.to_thread(kis_client.get_overseas_index_or_fx_price, _MARKET_DIV, _SYMBOL)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\threads.py", line 26, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+2026-09-18 13:51:10 INFO    investor_flow_service  | 투자자 수급 갱신 완료 - 개인 -2,743,094 / 기관 +1,088,805 / 외국인 +294,245백만원 (2026-09-18)
+2026-09-18 13:51:11 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-17 (14개)
+2026-09-18 13:51:12 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.7점 (2026-09-18)
+2026-09-18 13:52:41 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 13:52:43 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 13:52:43 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 13:52:45 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-17 (14개)
+2026-09-18 13:52:45 INFO    investor_flow_service  | 투자자 수급 갱신 완료 - 개인 -2,768,869 / 기관 +1,107,530 / 외국인 +295,889백만원 (2026-09-18)
+2026-09-18 13:52:46 INFO    exchange_rate_service  | 원/달러 환율 갱신 완료 - 1385.50 (오늘 8, 5일 8, 월간 8개)
+2026-09-18 13:52:47 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.6점 (2026-09-18)
+2026-09-18 14:00:00 INFO    timeline_service       | [수집] 14:00 시작
+2026-09-18 14:00:00 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 14:00:01 INFO    investor_flow_service  | 투자자 수급 갱신 완료 - 개인 -2,870,609 / 기관 +1,194,572 / 외국인 +288,070백만원 (2026-09-18)
+2026-09-18 14:00:01 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 14:30:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 147, in refresh
+    await _save_snapshot(sampled_at, current)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 77, in _save_snapshot
+    existing = await session.scalar(
+               ^^^^^^^^^^^^^^^^^^^^^
+        select(ExchangeRateSnapshot).where(ExchangeRateSnapshot.sampled_at == sampled_at)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 504, in scalar
+    return await greenlet_spawn(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2421, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2261, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2113, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1191, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 717, in checkout
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 715, in checkout
+    dbapi_connection = rec.get_connection()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 866, in get_connection
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<22 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1059, in _connect_addr
+    return await __connect_addr(params_retry, False, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "postgres"
+2026-09-18 14:00:03 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.5점 (2026-09-18)
+2026-09-18 14:00:03 INFO    timeline_service       |   [주도 섹터] 3.8초
+2026-09-18 14:00:03 ERROR   timeline_service       | [스케줄러] 1400 수집 실패 - RuntimeError: NAVER_API_KEY_ID / NAVER_API_KEY가 .env에 없습니다. backend/.env에 추가해주세요.
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\timeline\services\timeline_service.py", line 262, in run_scheduled_collect
+    saved = await collect_and_save(session, slot_key)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\timeline\services\timeline_service.py", line 231, in collect_and_save
+    collected = await asyncio.to_thread(collect_slot, slot_key, with_briefing=with_briefing, intraday_changes=intraday)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\threads.py", line 26, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\MSHOME\AppData\Local\Python\pythoncore-3.14-64\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\timeline\services\timeline_service.py", line 141, in collect_slot
+    news = _timed("뉴스", news_service.collect, time_slot, limit=_NEWS_LIMIT, use_llm=with_briefing)
+           ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\timeline\services\timeline_service.py", line 73, in _timed
+    result = func(*args, **kwargs)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\timeline\services\news_service.py", line 180, in collect
+    for rank, item in enumerate(naver_client.search_news(keyword, display=_FETCH_PER_KEYWORD.get(time_slot, _FETCH_PER_KEYWORD_DEFAULT), sort="sim")["items"]):
+                                ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\core\naver_client.py", line 28, in search_news
+    raise RuntimeError("NAVER_API_KEY_ID / NAVER_API_KEY가 .env에 없습니다. backend/.env에 추가해주세요.")
+RuntimeError: NAVER_API_KEY_ID / NAVER_API_KEY가 .env에 없습니다. backend/.env에 추가해주세요.
+2026-09-18 14:30:00 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 14:30:01 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 15:00:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 147, in refresh
+    await _save_snapshot(sampled_at, current)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 77, in _save_snapshot
+    existing = await session.scalar(
+               ^^^^^^^^^^^^^^^^^^^^^
+        select(ExchangeRateSnapshot).where(ExchangeRateSnapshot.sampled_at == sampled_at)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 504, in scalar
+    return await greenlet_spawn(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2421, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2261, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2113, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1191, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 717, in checkout
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 715, in checkout
+    dbapi_connection = rec.get_connection()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 866, in get_connection
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<22 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1059, in _connect_addr
+    return await __connect_addr(params_retry, False, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "postgres"
+2026-09-18 14:30:02 INFO    investor_flow_service  | 투자자 수급 갱신 완료 - 개인 -3,142,069 / 기관 +1,328,760 / 외국인 +289,567백만원 (2026-09-18)
+2026-09-18 14:30:03 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 64.2점 (2026-09-18)
+2026-09-18 15:00:00 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 15:00:01 INFO    investor_flow_service  | 투자자 수급 갱신 완료 - 개인 -3,270,846 / 기관 +1,400,937 / 외국인 +202,363백만원 (2026-09-18)
+2026-09-18 15:00:01 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 15:30:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 147, in refresh
+    await _save_snapshot(sampled_at, current)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 77, in _save_snapshot
+    existing = await session.scalar(
+               ^^^^^^^^^^^^^^^^^^^^^
+        select(ExchangeRateSnapshot).where(ExchangeRateSnapshot.sampled_at == sampled_at)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 504, in scalar
+    return await greenlet_spawn(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2421, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2261, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2113, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1191, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 717, in checkout
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 715, in checkout
+    dbapi_connection = rec.get_connection()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 837, in get_connection
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<22 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1059, in _connect_addr
+    return await __connect_addr(params_retry, False, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "postgres"
+2026-09-18 15:00:02 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 64.1점 (2026-09-18)
+2026-09-18 15:30:00 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 15:30:00 INFO    investor_flow_service  | 투자자 수급 갱신 완료 - 개인 -3,328,252 / 기관 +1,557,014 / 외국인 +102,208백만원 (2026-09-18)
+2026-09-18 15:30:01 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 64.8점 (2026-09-18)
+2026-09-18 15:30:01 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 16:00:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 147, in refresh
+    await _save_snapshot(sampled_at, current)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 77, in _save_snapshot
+    existing = await session.scalar(
+               ^^^^^^^^^^^^^^^^^^^^^
+        select(ExchangeRateSnapshot).where(ExchangeRateSnapshot.sampled_at == sampled_at)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 504, in scalar
+    return await greenlet_spawn(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2421, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2261, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2113, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1191, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 717, in checkout
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 715, in checkout
+    dbapi_connection = rec.get_connection()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 837, in get_connection
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<22 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1059, in _connect_addr
+    return await __connect_addr(params_retry, False, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "postgres"
+2026-09-18 15:34:02 ERROR   timeline_service       | [스케줄러] 1530 수집 실패 - InvalidPasswordError: password authentication failed for user "postgres"
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\timeline\services\timeline_service.py", line 262, in run_scheduled_collect
+    saved = await collect_and_save(session, slot_key)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\timeline\services\timeline_service.py", line 228, in collect_and_save
+    intraday = await _intraday_rows(session, day, closing)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\timeline\services\timeline_service.py", line 96, in _intraday_rows
+    morning = await timeline_repository.load_slot(session, trade_date, "07:30")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\timeline\services\timeline_repository.py", line 132, in load_slot
+    return await session.scalar(select(TimelineSlot).where(TimelineSlot.trade_date == trade_date, TimelineSlot.time_slot == time_slot).options(*_EAGER_LOAD))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 504, in scalar
+    return await greenlet_spawn(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2421, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2261, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2113, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1191, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 717, in checkout
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 715, in checkout
+    dbapi_connection = rec.get_connection()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 837, in get_connection
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<22 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1059, in _connect_addr
+    return await __connect_addr(params_retry, False, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "postgres"
+2026-09-18 15:34:30 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-18 (14개)
+2026-09-18 16:00:00 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 16:00:01 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 16:30:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 147, in refresh
+    await _save_snapshot(sampled_at, current)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 77, in _save_snapshot
+    existing = await session.scalar(
+               ^^^^^^^^^^^^^^^^^^^^^
+        select(ExchangeRateSnapshot).where(ExchangeRateSnapshot.sampled_at == sampled_at)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 504, in scalar
+    return await greenlet_spawn(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2421, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2261, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2113, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1191, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 717, in checkout
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 715, in checkout
+    dbapi_connection = rec.get_connection()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 837, in get_connection
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<22 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1059, in _connect_addr
+    return await __connect_addr(params_retry, False, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "postgres"
+2026-09-18 16:11:28 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 16:11:29 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 16:11:29 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 16:11:30 INFO    investor_flow_service  | 투자자 수급 갱신 완료 - 개인 -3,574,901 / 기관 +1,531,087 / 외국인 +373,271백만원 (2026-09-18)
+2026-09-18 16:11:30 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-18 (14개)
+2026-09-18 16:11:31 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 16:30:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 147, in refresh
+    await _save_snapshot(sampled_at, current)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 77, in _save_snapshot
+    existing = await session.scalar(
+               ^^^^^^^^^^^^^^^^^^^^^
+        select(ExchangeRateSnapshot).where(ExchangeRateSnapshot.sampled_at == sampled_at)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 504, in scalar
+    return await greenlet_spawn(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2421, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2261, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2113, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1191, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<22 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1059, in _connect_addr
+    return await __connect_addr(params_retry, False, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "postgres"
+2026-09-18 16:11:32 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.6점 (2026-09-18)
+2026-09-18 16:12:12 INFO    main                   | 스케줄러 종료
+2026-09-18 16:13:21 INFO    logging_config         | 로그 설정 완료 - C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\logs\timeline.log (보관 14일)
+2026-09-18 16:13:21 INFO    main                   | 스케줄러 시작 - 작업 15개 (indicator_bar, market_vix, market_session, market_exchange_rate, market_trading_value, slot_0730, slot_0830, slot_0930, slot_1200, slot_1400, slot_1530, slot_1730, slot_2000, timeline_reports, heatmap)
+2026-09-18 16:13:21 INFO    vix_service            | VIX 갱신 완료 - 15.44 (-2.27)
+2026-09-18 16:13:22 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 16:30:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 147, in refresh
+    await _save_snapshot(sampled_at, current)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 77, in _save_snapshot
+    existing = await session.scalar(
+               ^^^^^^^^^^^^^^^^^^^^^
+        select(ExchangeRateSnapshot).where(ExchangeRateSnapshot.sampled_at == sampled_at)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 504, in scalar
+    return await greenlet_spawn(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2421, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2261, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2113, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1191, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<22 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.InternalServerError: (ECIRCUITBREAKER) too many authentication failures, new connections are temporarily blocked
+2026-09-18 16:13:22 INFO    investor_flow_service  | 투자자 수급 갱신 완료 - 개인 -3,574,478 / 기관 +1,531,054 / 외국인 +372,880백만원 (2026-09-18)
+2026-09-18 16:13:22 INFO    trading_value_service  | 시간대별 거래대금 갱신 완료 - 2026-09-18 (14개)
+2026-09-18 16:13:24 INFO    sentiment_service      | 개미굴 시장심리지수 갱신 완료 - 65.4점 (2026-09-18)
+2026-09-18 16:16:45 INFO    main                   | 스케줄러 종료
+2026-09-18 16:30:00 INFO    vix_service            | VIX 갱신 완료 - 15.01 (-0.43)
+2026-09-18 16:30:01 ERROR   base                   | Job "refresh (trigger: cron[minute='0,30'], next run at: 2026-09-18 17:00:00 KST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 147, in refresh
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\src\backend\domain\market\services\exchange_rate_service.py", line 77, in _save_snapshot
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 504, in scalar
+    return await greenlet_spawn(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2421, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2261, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2113, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1191, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 717, in checkout
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 715, in checkout
+    dbapi_connection = rec.get_connection()
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 837, in get_connection
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<22 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1059, in _connect_addr
+    return await __connect_addr(params_retry, False, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MSHOME\Desktop\풀스택\Gaemigul-app\backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "postgres"
