@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Environment variables (secrets — never commit; keep .env.example as the template)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Locally cached tokens
+.cache/
+
+# 로그
+logs/

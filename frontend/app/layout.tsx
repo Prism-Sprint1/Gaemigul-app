@@ -1,15 +1,31 @@
-import { Geist, Geist_Mono } from "next/font/google"
-
+import type { Metadata } from "next"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils";
+import localFont from "next/font/local"
+// import { ThemeProvider } from "@/components/theme-provider"
+import { cn } from "@/lib/utils"
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'})
+import {
+  Footer,
+  Header,
+  MobileSidebarProvider,
+  Sidebar,
+} from "@/components/common"
 
-const fontMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
+const pretendard = localFont({
+  src: "../public/fonts/pretendard/PretendardVariable.woff2",
+  display: "swap",
+  weight: "100 900",
+  variable: "--font-pretendard",
 })
+
+export const metadata: Metadata = {
+  title: "개미굴 | Gaemigul",
+  description:
+    "국내외 시세·뉴스·일정을 한 화면에서 확인하는 금융 뉴스 요약 및 시황 AI 인사이트 대시보드",
+  icons: {
+    icon: "/favicon.svg",
+  },
+}
 
 export default function RootLayout({
   children,
@@ -18,12 +34,25 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ko"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", geist.variable)}
+      className={cn("antialiased", pretendard.variable, "font-sans")}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <MobileSidebarProvider>
+          <Header />
+          <div className="flex">
+            <Sidebar />
+            <main className="w-full min-w-0 px-4 py-10 md:px-0 md:py-0">
+              {children}
+            </main>
+          </div>
+          <Footer
+            title="본 서비스가 제공하는 정보는 투자 판단을 돕기 위한 참고 자료이며, 특정 종목의 매수·매도를 권유하거나 투자를 조언하는 것이 아닙니다. 투자에 대한 최종 결정과 책임은 투자자 본인에게 있습니다."
+            description="시세: 한국투자증권 · 뉴스: finlight, 네이버 뉴스 · 일정: FRED 지수 15분 · 히트맵 10분 간격으로 자동 갱신됩니다."
+          />
+        </MobileSidebarProvider>
+        {/* <ThemeProvider></ThemeProvider> */}
       </body>
     </html>
   )
