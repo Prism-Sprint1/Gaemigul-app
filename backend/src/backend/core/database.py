@@ -8,6 +8,7 @@
 from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase
 
 from backend.core.config import get_settings
@@ -26,11 +27,21 @@ def get_engine() -> AsyncEngine:
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL이 .env에 없습니다. backend/.env에 추가해주세요.")
 
+    database_url = make_url(settings.database_url)
+    use_transaction_pooler = (
+        database_url.port == 5432 and "pooler.supabase.com" in (database_url.host or "")
+    )
+    if use_transaction_pooler:
+        database_url = database_url.set(port=6543)
+
     return create_async_engine(
-        settings.database_url,
+        database_url,
         echo=False,
         pool_pre_ping=True,  # 끊어진 연결을 쓰기 전에 감지해 다시 연결
         pool_recycle=300,  # 5분 넘은 연결은 새로 만든다 (Supabase 유휴 연결 끊김 대비)
+        pool_size=2,  # Supabase session pooler의 연결 한도를 넘기지 않도록 제한
+        max_overflow=0,
+        connect_args={"statement_cache_size": 0} if use_transaction_pooler else {},
     )
 
 

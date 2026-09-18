@@ -80,10 +80,10 @@ def refresh(raw: dict | None = None) -> dict:
     with _lock:
         _cache = parsed
     logger.info(
-        "투자자 수급 갱신 완료 - 개인 %+,d / 기관 %+,d / 외국인 %+,d백만원 (%s)",
-        parsed["individual"],
-        parsed["institution"],
-        parsed["foreign"],
+        "투자자 수급 갱신 완료 - 개인 %s / 기관 %s / 외국인 %s백만원 (%s)",
+        f"{parsed['individual']:+,}",
+        f"{parsed['institution']:+,}",
+        f"{parsed['foreign']:+,}",
         parsed["market_date"],
     )
     return source
