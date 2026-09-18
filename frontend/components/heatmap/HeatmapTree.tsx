@@ -208,7 +208,7 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
           ))}
         </div>
       </div>
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 hidden flex-wrap gap-2 sm:flex">
         <div className="relative min-w-40 flex-1">
           <Search
             className="pointer-events-none absolute top-3 left-3 size-4 text-slate-400"
@@ -293,6 +293,16 @@ export default function HeatmapTree({ sectors }: { sectors: HeatmapSector[] }) {
             "일치하는 기업이 없습니다. 검색어 또는 선택한 섹터를 확인해 주세요."
           )}
         </div>
+      )}
+      {query && (
+        <button
+          type="button"
+          onClick={() => setSearch("")}
+          className="mb-3 flex min-h-8 cursor-pointer items-center gap-1.5 rounded px-1 text-xs text-slate-600 sm:hidden"
+        >
+          <X className="size-3.5" aria-hidden="true" />
+          검색 해제
+        </button>
       )}
       <HeatmapStockDetail id={detailId} selected={selected} />
       {view === "map" ? (
